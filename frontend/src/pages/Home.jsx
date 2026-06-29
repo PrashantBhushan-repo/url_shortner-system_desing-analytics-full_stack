@@ -1,9 +1,9 @@
-import Navbar from "../components/Navbar";
-import Hero from "../components/Hero";
+import Navbar from "../components/url/Navbar";
+import Hero from "../components/url/Hero";
 import UrlForm from "../components/UrlForm";
-import Features from "../components/Features";
-import StatsCard from "../components/StatsCard";
-import Footer from "../components/Footer";
+// import Features from "../components/Features";
+// import StatsCard from "../components/StatsCard";
+import Footer from "../components/url/Footer";
 
 function Home() {
   return (
@@ -11,8 +11,8 @@ function Home() {
       <Navbar />
       <Hero />
       <UrlForm />
-      <StatsCard />
-      <Features />
+      {/* <StatsCard /> */}
+      {/* <Features /> */}
       <Footer />
     </div>
   );
