@@ -13,12 +13,16 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "geoip-lite": "^2.0.3",
     "mongoose": "^9.7.2",
     "nanoid": "^5.1.16",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "ua-parser-js": "^2.0.10",
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

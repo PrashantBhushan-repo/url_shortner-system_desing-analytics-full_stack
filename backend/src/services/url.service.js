@@ -1,5 +1,85 @@
 
-// Business logic.
+//  Business logic.
+
+
+//  old one 
+
+// import { randomUUID } from "crypto";
+
+// import {
+//   createUrl,
+//   findByShortCode,
+//   incrementClicks,
+// } from "../repositories/url.repository.js";
+
+// import { generateShortCode }
+// from "../utils/generateShortCode.js";
+
+
+//  Create URL
+
+
+// export const shortenUrl =
+//   async (longUrl) => {
+//     const id = randomUUID();
+
+//     const shortCode =
+//       generateShortCode();
+
+//     const url =
+//       await createUrl(
+//         id,
+//         longUrl,
+//         shortCode
+//       );
+
+//     return {
+//       ...url,
+//       shortUrl:
+//         `${process.env.BASE_URL}/${shortCode}`,
+//     };
+//   };
+
+
+
+
+
+// //   Redirect
+
+
+// export const getOriginalUrl =
+//   async (shortCode) => {
+
+//     const url =
+//       await findByShortCode(
+//         shortCode
+//       );
+
+//     if (!url) {
+//       throw new Error(
+//         "URL not found"
+//       );
+//     }
+
+//     await incrementClicks(
+//       shortCode
+//     );
+
+//     return url.long_url;
+//   };
+
+
+
+
+
+
+
+//    new code : 
+
+
+
+
+// Business Logic
 
 import { randomUUID } from "crypto";
 
@@ -9,43 +89,56 @@ import {
   incrementClicks,
 } from "../repositories/url.repository.js";
 
+import { trackClickAnalytics }
+from "./analytics.service.js";
+
 import { generateShortCode }
 from "../utils/generateShortCode.js";
 
 
-// Create URL
 
+// ========================================
+// Create Short URL
+// ========================================
 
-export const shortenUrl =
-  async (longUrl) => {
-    const id = randomUUID();
+export const shortenUrl = async (
+  longUrl
+) => {
 
-    const shortCode =
-      generateShortCode();
+  const id = randomUUID();
 
-    const url =
-      await createUrl(
-        id,
-        longUrl,
-        shortCode
-      );
+  const shortCode =
+    generateShortCode();
 
-    return {
-      ...url,
-      shortUrl:
-        `${process.env.BASE_URL}/${shortCode}`,
-    };
+  const url =
+    await createUrl(
+      id,
+      longUrl,
+      shortCode
+    );
+
+  return {
+
+    ...url,
+
+    shortUrl:
+      `${process.env.BASE_URL}/${shortCode}`,
+
   };
 
+};
 
 
 
-
-//   Redirect
-
+// ========================================
+// Redirect URL + Analytics
+// ========================================
 
 export const getOriginalUrl =
-  async (shortCode) => {
+  async (
+    shortCode,
+    req
+  ) => {
 
     const url =
       await findByShortCode(
@@ -53,14 +146,27 @@ export const getOriginalUrl =
       );
 
     if (!url) {
+
       throw new Error(
         "URL not found"
       );
+
     }
 
+    // Increment click count
     await incrementClicks(
       shortCode
     );
 
+    // Save analytics
+    await trackClickAnalytics(
+      req,
+      url.id
+    );
+
     return url.long_url;
+
   };
+
+
+

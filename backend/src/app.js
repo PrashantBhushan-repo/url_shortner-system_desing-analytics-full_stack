@@ -31,18 +31,33 @@ import {
 }
 from "./middlewares/error.middleware.js";
 
+import { analyticsMiddleware } from "./middlewares/analytics.middleware.js";
+import cookieParser from "cookie-parser";
+
+import analyticsRoutes
+
+from "./routes/analytics.routes.js";
+
 const app = express();
+
 
 app.use(cors());
 
 app.use(express.json());
-
+app.use(cookieParser());
+app.use(analyticsMiddleware);
 app.use(
   "/api/v1/urls",
   urlRoutes
 );
 
+app.use(
 
+    "/api/analytics",
+
+    analyticsRoutes
+
+);
 
 // pasted: 
 
