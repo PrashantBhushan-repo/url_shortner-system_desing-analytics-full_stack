@@ -197,3 +197,50 @@ backend/src
 │     url.routes.js
 │
 └── utils/
+
+
+
+
+
+
+#### file structure :
+
+
+
+backend/
+│
+├── src
+│
+├── config
+│      db.js
+│
+├── controllers
+│      url.controller.js
+│      analytics.controller.js          ⭐ NEW
+│
+├── middlewares
+│      error.middleware.js
+│
+├── models
+│      click.model.js                   ⭐ NEW (optional)
+│
+├── repositories
+│      url.repository.js
+│      analytics.repository.js          ⭐ NEW
+│
+├── routes
+│      url.routes.js
+│      analytics.routes.js              ⭐ NEW
+│
+├── services
+│      url.service.js
+│      analytics.service.js             ⭐ NEW
+│
+├── utils
+│      generateShortCode.js             (if already exists)
+│      userAgent.js                     ⭐ NEW
+│      geoLocation.js                   ⭐ NEW
+│      qrGenerator.js                   ⭐ NEW
+│
+├── app.js
+└── server.js
