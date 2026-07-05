@@ -14,6 +14,6 @@ function AppRoutes() {
     </Router>
   );
 }
-// Import other pages/components as needed
+
 
 export default AppRoutes;

@@ -1,96 +1,3 @@
-// import { useState } from "react";
-// import Result from "./Result";
-
-// function UrlForm() {
-//   const [longUrl, setLongUrl] = useState("");
-//   const [shortUrl, setShortUrl] = useState("");
-
-//   const handleShorten = () => {
-//     if (!longUrl.trim()) return;
-
-//     setShortUrl("https://snapurl.com/abc123");
-//   };
-
-//   return (
-//     <div className="max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-md">
-//       <h2 className="text-xl font-semibold mb-4">
-//         Enter Long URL
-//       </h2>
-
-//       <input
-//         type="text"
-//         placeholder="https://example.com/very-long-url"
-//         value={longUrl}
-//         onChange={(e) => setLongUrl(e.target.value)}
-//         className="w-full border p-3 rounded-lg mb-4"
-//       />
-
-//       <button
-//         onClick={handleShorten}
-//         className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700"
-//       >
-//         Shorten URL
-//       </button>
-
-//       {shortUrl && <Result shortUrl={shortUrl} />}
-//     </div>
-//   );
-// }
-
-// export default UrlForm;
-
-
-
-
-
-// import { useState } from "react";
-// import API from "../services/urlApi";
-
-// function UrlForm() {
-//   const [longUrl, setLongUrl] = useState("");
-//   const [shortUrl, setShortUrl] = useState("");
-
-//   const handleShorten = async () => {
-//     try {
-//       const response = await API.post(
-//         "/urls",
-//         {
-//           longUrl,
-//         }
-//       );
-
-//       setShortUrl(
-//         response.data.shortUrl
-//       );
-
-//     } catch (error) {
-//       console.error(error);
-//     }
-//   };
-
-//   return (
-//     <>
-//       <input
-//         value={longUrl}
-//         onChange={(e) =>
-//           setLongUrl(e.target.value)
-//         }
-//       />
-
-//       <button
-//         onClick={handleShorten}
-//       >
-//         Shorten
-//       </button>
-
-//       {shortUrl && (
-//         <p>{shortUrl}</p>
-//       )}
-//     </>
-//   );
-// }
-
-// export default UrlForm;
 
 
 
@@ -100,7 +7,8 @@
 
 
 import { useState } from "react";
-import API from "../services/urlApi";
+import API from "../../services/urlApi";
+
 
 function UrlForm() {
   const [longUrl, setLongUrl] = useState("");

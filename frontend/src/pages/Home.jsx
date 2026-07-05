@@ -1,6 +1,9 @@
 import Navbar from "../components/url/Navbar";
 import Hero from "../components/url/Hero";
-import UrlForm from "../components/UrlForm";
+
+import UrlForm from "../components/url/UrlForm";
+
+
 // import Features from "../components/Features";
 // import StatsCard from "../components/StatsCard";
 import Footer from "../components/url/Footer";
