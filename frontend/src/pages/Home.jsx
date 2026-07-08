@@ -1,21 +1,16 @@
 import Navbar from "../components/url/Navbar";
 import Hero from "../components/url/Hero";
-
 import UrlForm from "../components/url/UrlForm";
-
-
-// import Features from "../components/Features";
-// import StatsCard from "../components/StatsCard";
 import Footer from "../components/url/Footer";
 
 function Home() {
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 flex flex-col">
       <Navbar />
-      <Hero />
-      <UrlForm />
-      {/* <StatsCard /> */}
-      {/* <Features /> */}
+      <main className="flex-1">
+        <Hero />
+        <UrlForm />
+      </main>
       <Footer />
     </div>
   );

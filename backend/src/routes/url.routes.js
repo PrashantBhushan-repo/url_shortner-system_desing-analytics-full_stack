@@ -3,6 +3,7 @@ import express from "express";
 import {
   createShortUrl,
   fetchUrlStats,
+  deleteShortUrl,
 } from "../controllers/url.controller.js";
 
 import { validateCreateUrl } from "../middlewares/validate.middleware.js";
@@ -12,7 +13,7 @@ import { createUrlLimiter } from "../middlewares/rateLimit.middleware.js";
 const router = express.Router();
 
 router.post("/", createUrlLimiter, validateCreateUrl, createShortUrl);
-
 router.get("/:shortCode", validateShortCodeParam, fetchUrlStats);
+router.delete("/:shortCode", validateShortCodeParam, deleteShortUrl);
 
 export default router;

@@ -1,16 +1,15 @@
 import pg from "pg";
-import dotenv from "dotenv";
-
-dotenv.config();
+import { config } from "./config.js";
 
 const { Pool } = pg;
 
 const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  connectionString: config.db.connectionString || undefined,
+  host: config.db.connectionString ? undefined : config.db.host,
+  port: config.db.connectionString ? undefined : config.db.port,
+  database: config.db.connectionString ? undefined : config.db.name,
+  user: config.db.connectionString ? undefined : config.db.user,
+  password: config.db.connectionString ? undefined : config.db.password,
 });
 
 export default pool;

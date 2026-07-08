@@ -1,9 +1,7 @@
 function Footer() {
   return (
-    <footer className="bg-gray-900 text-white mt-16">
-      <div className="max-w-6xl mx-auto px-6 py-6 text-center">
-        <p>Built by viswa && Prashant</p>
-      </div>
+    <footer className="border-t border-white/10 py-6 text-center text-slate-500 text-sm">
+      <p>Built by Viswa &amp; Prashant</p>
     </footer>
   );
 }

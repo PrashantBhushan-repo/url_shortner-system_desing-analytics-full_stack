@@ -1,4 +1,4 @@
-const SHORT_CODE_REGEX = /^[A-Za-z0-9_-]{6,12}$/;
+const SHORT_CODE_REGEX = /^[A-Za-z0-9]{3,10}$/;
 
 export const validateShortCode = (shortCode) => {
   if (!shortCode || typeof shortCode !== "string") {

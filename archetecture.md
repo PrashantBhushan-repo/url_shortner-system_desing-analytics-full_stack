@@ -244,3 +244,123 @@ backend/
 │
 ├── app.js
 └── server.js
+
+
+
+
+
+// why config.js req : 
+
+.env
+      │
+      ▼
+config.js
+      │
+      ├──────────────► server.js
+      │
+      ├──────────────► redis.js
+      │
+      ├──────────────► rateLimiter.js
+      │
+      └──────────────► db.js
+                              │
+                              ▼
+                      PostgreSQL Pool
+
+
+
+
+A typical project structure looks like:
+
+src/
+│
+├── config/
+│      └── config.js      // Read environment variables
+│
+├── database/
+│      └── db.js          // Create PostgreSQL pool
+│
+├── redis/
+│      └── redis.js       // Create Redis client
+│
+├── routes/
+├── controllers/
+├── services/
+└── server.js
+
+Each file has one responsibility:
+
+config.js → Reads and validates configuration.
+db.js → Creates and exports the PostgreSQL pool.
+redis.js → Creates and exports the Redis client.
+server.js → Starts the Express server.
+Controllers/services → Implement business log
+
+
+
+
+// redis :
+
+
+Application Starts
+        │
+        ▼
+initRedis()
+        │
+        ▼
+getRedisClient()
+        │
+        ▼
+redisClient exists?
+        │
+   ┌────┴─────┐
+   │          │
+ No          Yes
+   │          │
+Create       Use existing
+Client       Client
+   │
+   ▼
+Status ready?
+   │
+ ┌─┴─────────────┐
+ │               │
+Yes             No
+ │               │
+Return true      │
+                 ▼
+          client.connect()
+                 │
+          ┌──────┴──────┐
+          │             │
+      Success        Failure
+          │             │
+     return true   return false
+
+
+
+
+
+
+express-rate-limit package.
+
+The library looks for properties like:
+
+{
+    windowMs,
+    max,
+    message,
+    handler,
+    standardHeaders,
+    legacyHeaders,
+    store,
+    keyGenerator,
+    skip,
+    skipSuccessfulRequests,
+    skipFailedRequests,
+    validate,
+    requestPropertyName,
+    identifier,
+    ipv6Subnet
+}
+

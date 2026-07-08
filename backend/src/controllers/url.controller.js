@@ -2,16 +2,17 @@ import {
   shortenUrl,
   getOriginalUrl,
   getUrlStats,
+  deactivateShortUrl,
 } from "../services/url.service.js";
 
 export const createShortUrl = async (req, res, next) => {
   try {
-    const { longUrl } = req.body;
-    const result = await shortenUrl(longUrl);
+    const { longUrl, customAlias, expiresAt } = req.body;
+    const result = await shortenUrl(longUrl, customAlias, expiresAt);
 
     res.status(201).json({
       success: true,
-      ...result,
+      data: result,
     });
   } catch (error) {
     next(error);
@@ -38,6 +39,17 @@ export const fetchUrlStats = async (req, res, next) => {
       success: true,
       data: stats,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteShortUrl = async (req, res, next) => {
+  try {
+    const { shortCode } = req.params;
+    const result = await deactivateShortUrl(shortCode);
+
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
