@@ -61,6 +61,23 @@ export const shortCodeExists = async (shortCode) => {
  * @param {string} shortCode - The short code to deactivate
  * @returns {Promise<boolean>} - True if the URL was deactivated
  */
+export const updateUrl = async (shortCode, longUrl, updatedShortCode, customAlias, expiresAt) => {
+  const result = await pool.query(
+    `
+      UPDATE urls
+      SET long_url = $2,
+          short_code = $3,
+          custom_alias = $4,
+          expires_at = $5
+      WHERE short_code = $1 AND is_active = true
+      RETURNING *
+    `,
+    [shortCode, longUrl, updatedShortCode, customAlias, expiresAt]
+  );
+
+  return result.rows[0] || null;
+};
+
 export const deactivateUrl = async (shortCode) => {
   const result = await pool.query(
     `

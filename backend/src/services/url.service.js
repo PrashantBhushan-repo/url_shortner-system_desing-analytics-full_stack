@@ -2,6 +2,7 @@ import {
   createUrl,
   findByShortCode,
   shortCodeExists,
+  updateUrl,
   deactivateUrl,
 } from "../repositories/url.repository.js";
 
@@ -84,6 +85,71 @@ export const getUrlStats = async (shortCode) => {
   }
 
   return formatUrlResponse(url);
+};
+
+export const updateShortUrl = async (shortCode, updates) => {
+  if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
+    throw new AppError("Invalid update payload", 400);
+  }
+
+  const normalizedUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([, value]) => value !== undefined)
+  );
+
+  if (Object.keys(normalizedUpdates).length === 0) {
+    throw new AppError("At least one field is required", 400);
+  }
+
+  const existingUrl = await findByShortCode(shortCode);
+
+  if (!existingUrl) {
+    throw new AppError("URL not found", 404);
+  }
+
+  if (existingUrl.is_active === false) {
+    throw new AppError("This short URL is no longer active", 410);
+  }
+
+  let nextLongUrl = existingUrl.long_url;
+  let nextShortCode = existingUrl.short_code;
+  let nextCustomAlias = existingUrl.custom_alias;
+  let nextExpiresAt = existingUrl.expires_at;
+
+  if (Object.prototype.hasOwnProperty.call(normalizedUpdates, "longUrl")) {
+    nextLongUrl = normalizedUpdates.longUrl;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(normalizedUpdates, "customAlias")) {
+    const alias = normalizedUpdates.customAlias?.trim();
+
+    if (!alias) {
+      throw new AppError("Custom alias must be at least 3 characters", 400);
+    }
+
+    if (alias !== existingUrl.short_code) {
+      const exists = await shortCodeExists(alias);
+      if (exists) {
+        throw new AppError("Custom alias already taken", 409);
+      }
+    }
+
+    nextShortCode = alias;
+    nextCustomAlias = true;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(normalizedUpdates, "expiresAt")) {
+    nextExpiresAt = normalizedUpdates.expiresAt ?? null;
+  }
+
+  const updatedUrl = await updateUrl(shortCode, nextLongUrl, nextShortCode, nextCustomAlias, nextExpiresAt);
+
+  if (!updatedUrl) {
+    throw new AppError("URL not found or is no longer active", 404);
+  }
+
+  await invalidateCache(shortCode);
+
+  return formatUrlResponse(updatedUrl);
 };
 
 export const deactivateShortUrl = async (shortCode) => {
