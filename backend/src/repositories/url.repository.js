@@ -1,6 +1,4 @@
-import { PrismaClient } from "../../generated/prisma/index.js";
-
-const prisma = new PrismaClient();
+import pool from "../config/db.js";
 
 /**
  * Create a new URL entry in the database
@@ -11,15 +9,14 @@ const prisma = new PrismaClient();
  * @returns {Promise<Object>} - The created URL record
  */
 export const createUrl = async (longUrl, shortCode, customAlias = false, expiresAt = null) => {
-  return prisma.url.create({
-    data: {
-      long_url: longUrl,
-      short_code: shortCode,
-      custom_alias: customAlias,
-      expires_at: expiresAt ? new Date(expiresAt) : null,
-      is_active: true,
-    },
-  });
+  const query = `
+    INSERT INTO "Url" (long_url, short_code, custom_alias, expires_at, is_active)
+    VALUES ($1, $2, $3, $4, true)
+    RETURNING *
+  `;
+
+  const result = await pool.query(query, [longUrl, shortCode, customAlias, expiresAt]);
+  return result.rows[0];
 };
 
 /**
@@ -28,9 +25,16 @@ export const createUrl = async (longUrl, shortCode, customAlias = false, expires
  * @returns {Promise<Object|null>} - The URL record or null if not found
  */
 export const findByShortCode = async (shortCode) => {
-  return prisma.url.findUnique({
-    where: { short_code: shortCode },
-  });
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM "Url"
+      WHERE short_code = $1
+    `,
+    [shortCode]
+  );
+
+  return result.rows[0];
 };
 
 /**
@@ -39,38 +43,60 @@ export const findByShortCode = async (shortCode) => {
  * @returns {Promise<boolean>} - True if the short code exists
  */
 export const shortCodeExists = async (shortCode) => {
-  const url = await prisma.url.findUnique({
-    where: { short_code: shortCode },
-  });
-  return !!url;
+  const result = await pool.query(
+    `
+      SELECT id
+      FROM "Url"
+      WHERE short_code = $1
+      LIMIT 1
+    `,
+    [shortCode]
+  );
+
+  return result.rows.length > 0;
+};
+
+/**
+ * Update a URL
+ * @param {string} shortCode - The short code to update
+ * @param {string} longUrl - New long URL
+ * @param {string} updatedShortCode - New short code
+ * @param {boolean} customAlias - Whether it's custom
+ * @param {string|null} expiresAt - Expiration date
+ * @returns {Promise<Object|null>} - Updated URL record
+ */
+export const updateUrl = async (shortCode, longUrl, updatedShortCode, customAlias, expiresAt) => {
+  const result = await pool.query(
+    `
+      UPDATE "Url"
+      SET long_url = $2,
+          short_code = $3,
+          custom_alias = $4,
+          expires_at = $5
+      WHERE short_code = $1 AND is_active = true
+      RETURNING *
+    `,
+    [shortCode, longUrl, updatedShortCode, customAlias, expiresAt]
+  );
+
+  return result.rows[0] || null;
 };
 
 /**
  * Deactivate a URL (soft delete)
  * @param {string} shortCode - The short code to deactivate
- * @returns {Promise<boolean>} - True if the URL was deactivated
+ * @returns {Promise<boolean>} - True if deactivated
  */
-export const updateUrl = async (shortCode, longUrl, updatedShortCode, customAlias, expiresAt) => {
-  return prisma.url.update({
-    where: { short_code: shortCode },
-    data: {
-      long_url: longUrl,
-      short_code: updatedShortCode,
-      custom_alias: customAlias,
-      expires_at: expiresAt ? new Date(expiresAt) : null,
-    },
-  });
-};
-
 export const deactivateUrl = async (shortCode) => {
-  const result = await prisma.url.updateMany({
-    where: {
-      short_code: shortCode,
-      is_active: true,
-    },
-    data: {
-      is_active: false,
-    },
-  });
-  return result.count > 0;
+  const result = await pool.query(
+    `
+      UPDATE "Url"
+      SET is_active = false
+      WHERE short_code = $1 AND is_active = true
+      RETURNING id
+    `,
+    [shortCode]
+  );
+
+  return result.rows.length > 0;
 };

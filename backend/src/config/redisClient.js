@@ -30,6 +30,30 @@ export const getRedisClient = () => {
   return redisClient;
 };
 
+const waitForRedisReady = (client) =>
+  new Promise((resolve, reject) => {
+    if (client.status === "ready") {
+      resolve(true);
+      return;
+    }
+
+    const onReady = () => {
+      cleanup();
+      resolve(true);
+    };
+    const onError = (err) => {
+      cleanup();
+      reject(err);
+    };
+    const cleanup = () => {
+      client.off("ready", onReady);
+      client.off("error", onError);
+    };
+
+    client.once("ready", onReady);
+    client.once("error", onError);
+  });
+
 export const initRedis = async () => {
   const client = getRedisClient();
   if (!client) {
@@ -42,7 +66,16 @@ export const initRedis = async () => {
   }
 
   try {
-    await client.connect();
+    if (client.status === "connecting") {
+      await waitForRedisReady(client);
+      return true;
+    }
+
+    if (client.status === "wait") {
+      await client.connect();
+    }
+
+    await waitForRedisReady(client);
     return true;
   } catch (err) {
     console.warn("Redis connection failed:", err.message);
