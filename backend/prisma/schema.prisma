@@ -1,5 +1,5 @@
 generator client {
-  provider = "@prisma/client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
@@ -11,17 +11,24 @@ datasource db {
 
 
 model Url {
-  id           BigInt    @id @default(autoincrement())
-  short_code   String    @unique @db.VarChar(10)
-  long_url     String
-  user_id      BigInt?
-  custom_alias Boolean?  @default(false)
-  is_active    Boolean?  @default(true)
-  expires_at   DateTime? @db.Timestamptz(6)
-  created_at   DateTime? @default(now()) @db.Timestamptz(6)
-  clicks       Click[]
+  id                     BigInt            @id @default(autoincrement())
+  short_code             String            @unique @db.VarChar(10)
+  long_url               String
+  user_id                String?
+  custom_alias           Boolean?          @default(false)
+  is_active              Boolean?          @default(true)
+  expires_at             DateTime?         @db.Timestamptz(6)
+  created_at             DateTime?         @default(now()) @db.Timestamptz(6)
+  last_checked_at        DateTime?         @db.Timestamptz(6)
+  is_alive               Boolean?          @default(true)
+  health_check_failures  Int               @default(0)
+  clicks                 Click[]
+  stats_hourly           UrlStatsHourly[]
+  stats_daily            UrlStatsDaily[]
+  user                   User?             @relation(fields: [user_id], references: [id], onDelete: SetNull)
 
   @@index([short_code], map: "idx_urls_short_code")
+  @@index([user_id])
 }
 
 model Click {
@@ -51,6 +58,7 @@ model Click {
   utm_campaign      String?
   is_qr_scan        Boolean  @default(false)
   is_unique         Boolean  @default(true)
+  is_bot            Boolean  @default(false)
   session_id        String?
   language          String?
   screen_resolution String?
@@ -58,4 +66,90 @@ model Click {
   url               Url      @relation(fields: [url_id], references: [id], onDelete: Cascade)
 
   @@index([url_id])
+}
+
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          Role     @default(USER)
+  emailVerified Boolean  @default(false)
+  tokenVersion  Int      @default(0)
+  phone         String?
+  timezone      String?
+  language      String?
+  bio           String?
+  profileImage       String?
+  twoFactorEnabled   Boolean  @default(false)
+  twoFactorSecret    String?
+  createdAt          DateTime @default(now())
+  refreshTokens RefreshToken[]
+  urls          Url[]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  tokenHash String
+  device    String?
+  ip        String?
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([tokenHash])
+  @@index([userId])
+}
+
+model LoginEvent {
+  id        String   @id @default(uuid())
+  userId    String?
+  ip        String?
+  device    String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model UrlStatsHourly {
+  id           BigInt   @id @default(autoincrement())
+  url_id       BigInt
+  bucket_start DateTime @db.Timestamptz(6)
+  total_clicks Int      @default(0)
+  unique_clicks Int     @default(0)
+  bot_clicks   Int      @default(0)
+  top_country  String?
+  top_referrer String?
+  top_device   String?
+  url          Url      @relation(fields: [url_id], references: [id], onDelete: Cascade)
+
+  @@unique([url_id, bucket_start])
+  @@index([url_id])
+  @@index([bucket_start])
+}
+
+model UrlStatsDaily {
+  id            BigInt   @id @default(autoincrement())
+  url_id        BigInt
+  bucket_date   DateTime @db.Date
+  total_clicks  Int      @default(0)
+  unique_clicks Int      @default(0)
+  bot_clicks    Int      @default(0)
+  top_country   String?
+  top_referrer  String?
+  top_device    String?
+  url           Url      @relation(fields: [url_id], references: [id], onDelete: Cascade)
+
+  @@unique([url_id, bucket_date])
+  @@index([url_id])
+  @@index([bucket_date])
 }

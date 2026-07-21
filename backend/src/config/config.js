@@ -8,9 +8,16 @@ const toNumber = (value, fallback) => {
 };
 
 export const config = {
+  nodeEnv: process.env.NODE_ENV || "development",
   port: toNumber(process.env.PORT, 5000),
   baseUrl: process.env.BASE_URL || "http://localhost:5000",
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
+
+  jwt: {
+    secret: process.env.JWT_SECRET || null,
+    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || "15m",
+    refreshExpiresDays: toNumber(process.env.JWT_REFRESH_EXPIRES_DAYS, 30),
+  },
 
   db: {
     connectionString: process.env.DATABASE_URL || null,
@@ -23,10 +30,17 @@ export const config = {
 
   redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
 
+  smtp: {
+    host: process.env.SMTP_HOST || "smtp.example.com",
+    port: toNumber(process.env.SMTP_PORT, 587),
+    user: process.env.SMTP_USER || "",
+    password: process.env.SMTP_PASS || "",
+    emailFrom: process.env.FROM_EMAIL || "",
+  },
   rateLimit: {
     createUrl: {
       windowMs: toNumber(process.env.CREATE_URL_RATE_LIMIT_WINDOW_MS, 24 * 60 * 60 * 1000),
-      max: toNumber(process.env.CREATE_URL_RATE_LIMIT_MAX, 5),
+      max: toNumber(process.env.CREATE_URL_RATE_LIMIT_MAX, 100),
     },
     redirect: {
       windowMs: toNumber(process.env.REDIRECT_RATE_LIMIT_WINDOW_MS, 60 * 1000),

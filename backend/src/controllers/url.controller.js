@@ -4,12 +4,12 @@ import {
   getUrlStats,
   deactivateShortUrl,
   updateShortUrl as updateShortUrlService,
+  listUserUrls,
 } from "../services/url.service.js";
-
 export const createShortUrl = async (req, res, next) => {
   try {
     const { longUrl, customAlias, expiresAt } = req.body;
-    const result = await shortenUrl(longUrl, customAlias, expiresAt);
+    const result = await shortenUrl(longUrl, customAlias, expiresAt, req.user);
 
     res.status(201).json({
       success: true,
@@ -34,7 +34,7 @@ export const redirectUrl = async (req, res, next) => {
 export const fetchUrlStats = async (req, res, next) => {
   try {
     const { shortCode } = req.params;
-    const stats = await getUrlStats(shortCode);
+    const stats = await getUrlStats(shortCode, req.user);
 
     res.status(200).json({
       success: true,
@@ -48,7 +48,7 @@ export const fetchUrlStats = async (req, res, next) => {
 export const updateShortUrl = async (req, res, next) => {
   try {
     const { shortCode } = req.params;
-    const result = await updateShortUrlService(shortCode, req.body);
+    const result = await updateShortUrlService(shortCode, req.body, req.user);
 
     res.status(200).json({
       success: true,
@@ -62,9 +62,22 @@ export const updateShortUrl = async (req, res, next) => {
 export const deleteShortUrl = async (req, res, next) => {
   try {
     const { shortCode } = req.params;
-    const result = await deactivateShortUrl(shortCode);
+    const result = await deactivateShortUrl(shortCode, req.user);
 
     res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const fetchUserUrls = async (req, res, next) => {
+  try {
+    const urls = await listUserUrls(req.user);
+
+    res.status(200).json({
+      success: true,
+      data: urls,
+    });
   } catch (error) {
     next(error);
   }
