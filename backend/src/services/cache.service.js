@@ -12,14 +12,20 @@ export const getCachedUrl = async (shortCode) => {
   const cacheKey = `${CACHE_PREFIX}${shortCode}`;
 
   try {
-    return await redis.get(cacheKey);
+    const cached = await redis.get(cacheKey);
+    if (!cached) return null;
+    try {
+      return JSON.parse(cached);
+    } catch {
+      return { id: null, longUrl: cached };
+    }
   } catch (error) {
     console.error("Redis GET error:", error.message);
     return null;
   }
 };
 
-export const setCachedUrl = async (shortCode, longUrl, ttl = config.cacheTtl) => {
+export const setCachedUrl = async (shortCode, urlData, ttl = config.cacheTtl) => {
   if (!isRedisReady()) {
     return;
   }
@@ -28,7 +34,8 @@ export const setCachedUrl = async (shortCode, longUrl, ttl = config.cacheTtl) =>
   const cacheKey = `${CACHE_PREFIX}${shortCode}`;
 
   try {
-    await redis.set(cacheKey, longUrl, "EX", ttl);
+    const dataString = typeof urlData === "object" ? JSON.stringify(urlData) : JSON.stringify({ id: null, longUrl: urlData });
+    await redis.set(cacheKey, dataString, "EX", ttl);
   } catch (error) {
     console.error("Redis SET error:", error.message);
   }

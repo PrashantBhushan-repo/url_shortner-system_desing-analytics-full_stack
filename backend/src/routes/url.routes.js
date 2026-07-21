@@ -6,6 +6,8 @@ import {
   deleteShortUrl,
   updateShortUrl,
   fetchUserUrls,
+  fetchUrlHealth,
+  fetchUrlById,
 } from "../controllers/url.controller.js";
 
 import { validateCreateUrl, validateUpdateUrl } from "../middlewares/validate.middleware.js";
@@ -17,6 +19,8 @@ const router = express.Router();
 
 router.get("/me", authMiddleware, fetchUserUrls);
 router.post("/", createUrlLimiter, validateCreateUrl, authMiddleware, createShortUrl);
+router.get("/:id/health", authMiddleware, fetchUrlHealth);
+router.get("/id/:id", authMiddleware, fetchUrlById);
 router.get("/:shortCode", validateShortCodeParam, authMiddleware, fetchUrlStats);
 router.patch("/:shortCode", validateShortCodeParam, validateUpdateUrl, authMiddleware, updateShortUrl);
 router.put("/:shortCode", validateShortCodeParam, validateUpdateUrl, authMiddleware, updateShortUrl);

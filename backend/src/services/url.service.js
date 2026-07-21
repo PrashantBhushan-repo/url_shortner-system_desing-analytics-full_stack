@@ -6,6 +6,7 @@ import {
   updateUrl,
   deactivateUrl,
   listUrlsForUser,
+  findById,
 } from "../repositories/url.repository.js";
 
 import { generateShortCode } from "../utils/generateShortCode.js";
@@ -22,6 +23,9 @@ const formatUrlResponse = (url) => ({
   shortUrl: `${config.baseUrl}/${url.short_code}`,
   customAlias: url.custom_alias,
   isActive: url.is_active,
+  isAlive: url.is_alive ?? true,
+  lastCheckedAt: url.last_checked_at,
+  healthCheckFailures: url.health_check_failures ?? 0,
   expiresAt: url.expires_at,
   createdAt: url.created_at,
 });
@@ -56,7 +60,7 @@ export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null, 
 
 export const getOriginalUrl = async (shortCode) => {
   const cachedUrl = await getCachedUrl(shortCode);
-  if (cachedUrl) {
+  if (cachedUrl && cachedUrl.longUrl) {
     return cachedUrl;
   }
 
@@ -74,9 +78,14 @@ export const getOriginalUrl = async (shortCode) => {
     throw new AppError("This short URL has expired", 410);
   }
 
-  await setCachedUrl(shortCode, url.long_url);
+  const urlData = {
+    id: url.id.toString(),
+    longUrl: url.long_url,
+  };
 
-  return url.long_url;
+  await setCachedUrl(shortCode, urlData);
+
+  return urlData;
 };
 
 export const getUrlStats = async (shortCode, user = null) => {
@@ -87,6 +96,21 @@ export const getUrlStats = async (shortCode, user = null) => {
   }
 
   return formatUrlResponse(url);
+};
+
+export const getUrlHealthStatus = async (id) => {
+  const url = await findById(id);
+
+  if (!url) {
+    throw new AppError("URL not found", 404);
+  }
+
+  return {
+    shortCode: url.short_code,
+    isAlive: url.is_alive ?? true,
+    lastCheckedAt: url.last_checked_at,
+    healthCheckFailures: url.health_check_failures ?? 0,
+  };
 };
 
 export const updateShortUrl = async (shortCode, updates, user = null) => {
@@ -169,4 +193,15 @@ export const deactivateShortUrl = async (shortCode, user = null) => {
 export const listUserUrls = async (user = null) => {
   const urls = await listUrlsForUser(user?.id ?? null, user?.role ?? "USER");
   return urls.map(formatUrlResponse);
+};
+
+export const getUrlById = async (id, user = null) => {
+  const url = await findById(id);
+  if (!url) {
+    throw new AppError("URL not found", 404);
+  }
+  if (url.user_id !== user?.id && user?.role !== "ADMIN") {
+    throw new AppError("Unauthorized access to this URL", 403);
+  }
+  return formatUrlResponse(url);
 };

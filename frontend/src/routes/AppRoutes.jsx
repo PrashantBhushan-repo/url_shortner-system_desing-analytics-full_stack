@@ -4,6 +4,7 @@ import Home from "../pages/Home";
 import AuthPage from "../pages/AuthPage";
 import DashboardPage from "../pages/DashboardPage";
 import SettingsPage from "../pages/SettingsPage";
+import AnalyticsPage from "../pages/Analytics";
 import ProtectedRoute from "../components/auth/ProtectedRoute";
 
 function AppRoutes() {
@@ -14,6 +15,7 @@ function AppRoutes() {
         <Route path="/auth" element={<AuthPage />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/analytics/:urlId" element={<AnalyticsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>

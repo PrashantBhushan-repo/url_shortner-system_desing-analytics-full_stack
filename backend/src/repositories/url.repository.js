@@ -50,6 +50,19 @@ export const findByShortCodeForUser = async (shortCode, userId, role) => {
   return result.rows[0];
 };
 
+export const findById = async (id) => {
+  const result = await pool.query(
+    `
+      SELECT *
+      FROM "Url"
+      WHERE id = $1
+    `,
+    [id]
+  );
+
+  return result.rows[0];
+};
+
 /**
  * Check if a short code already exists (for custom alias validation)
  * @param {string} shortCode - The short code to check

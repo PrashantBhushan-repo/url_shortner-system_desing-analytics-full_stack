@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import urlRoutes from "./routes/url.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import securityRoutes from "./routes/security.routes.js";
+import analyticsRoutes from "./routes/analytics.routes.js";
 import { redirectUrl } from "./controllers/url.controller.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import { notFoundHandler } from "./middlewares/notFound.middleware.js";
@@ -53,6 +54,7 @@ app.get("/health", (req, res) => {
 app.use("/api/urls", urlRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/security", securityRoutes);
+app.use("/api/analytics", analyticsRoutes);
 app.get("/:shortCode", redirectLimiter, validateShortCodeParam, redirectUrl);
 
 app.use(notFoundHandler);

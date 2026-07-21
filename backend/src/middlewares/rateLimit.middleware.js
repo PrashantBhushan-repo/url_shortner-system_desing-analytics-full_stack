@@ -17,7 +17,7 @@ export const createLimiter = (options) => {
   };
 
   const client = getRedisClient();
-  if (client) {
+  if (client && client.status === "ready") {
     try {
       limiterOptions.store = new RedisStore({
         sendCommand: (command, ...args) => client.call(command, ...args),

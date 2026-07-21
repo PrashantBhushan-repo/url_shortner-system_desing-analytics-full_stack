@@ -1,5 +1,6 @@
 import { config } from "./src/config/config.js";
 import { initRedis, closeRedisConnection } from "./src/config/redisClient.js";
+import { initSocket } from "./src/config/socket.js";
 
 const startServer = async () => {
   await initRedis();
@@ -9,6 +10,8 @@ const startServer = async () => {
   const server = app.listen(config.port, () => {
     console.log(`Server running on port ${config.port}`);
   });
+
+  initSocket(server);
 
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {

@@ -66,8 +66,8 @@ model Click {
   url               Url      @relation(fields: [url_id], references: [id], onDelete: Cascade)
 
   @@index([url_id])
+  @@index([clicked_at])
 }
-
 
 model User {
   id            String   @id @default(uuid())
@@ -109,28 +109,17 @@ model RefreshToken {
   @@index([userId])
 }
 
-model LoginEvent {
-  id        String   @id @default(uuid())
-  userId    String?
-  ip        String?
-  device    String?
-  success   Boolean
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-}
-
 model UrlStatsHourly {
-  id           BigInt   @id @default(autoincrement())
-  url_id       BigInt
-  bucket_start DateTime @db.Timestamptz(6)
-  total_clicks Int      @default(0)
-  unique_clicks Int     @default(0)
-  bot_clicks   Int      @default(0)
-  top_country  String?
-  top_referrer String?
-  top_device   String?
-  url          Url      @relation(fields: [url_id], references: [id], onDelete: Cascade)
+  id            BigInt   @id @default(autoincrement())
+  url_id        BigInt
+  bucket_start  DateTime @db.Timestamptz(6)
+  total_clicks  Int      @default(0)
+  unique_clicks Int      @default(0)
+  bot_clicks    Int      @default(0)
+  top_country   String?
+  top_referrer  String?
+  top_device    String?
+  url           Url      @relation(fields: [url_id], references: [id], onDelete: Cascade)
 
   @@unique([url_id, bucket_start])
   @@index([url_id])
@@ -142,7 +131,7 @@ model UrlStatsDaily {
   url_id        BigInt
   bucket_date   DateTime @db.Date
   total_clicks  Int      @default(0)
-  unique_clicks Int      @default(0)
+  unique_clicks  Int      @default(0)
   bot_clicks    Int      @default(0)
   top_country   String?
   top_referrer  String?
@@ -153,3 +142,15 @@ model UrlStatsDaily {
   @@index([url_id])
   @@index([bucket_date])
 }
+
+model LoginEvent {
+  id        String   @id @default(uuid())
+  userId    String?
+  ip        String?
+  device    String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+

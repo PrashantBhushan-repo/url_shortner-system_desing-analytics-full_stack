@@ -5,7 +5,11 @@ import {
   deactivateShortUrl,
   updateShortUrl as updateShortUrlService,
   listUserUrls,
+  getUrlHealthStatus,
+  getUrlById,
 } from "../services/url.service.js";
+import { addClickJob } from "../queues/clickQueue.js";
+
 export const createShortUrl = async (req, res, next) => {
   try {
     const { longUrl, customAlias, expiresAt } = req.body;
@@ -23,9 +27,30 @@ export const createShortUrl = async (req, res, next) => {
 export const redirectUrl = async (req, res, next) => {
   try {
     const { shortCode } = req.params;
-    const longUrl = await getOriginalUrl(shortCode);
+    const { id: urlId, longUrl } = await getOriginalUrl(shortCode);
 
     res.redirect(302, longUrl);
+
+    // Queue click ingestion asynchronously (non-blocking)
+    const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket.remoteAddress || req.ip || "unknown";
+    const userAgent = req.headers["user-agent"] || "";
+    const referrer = req.headers["referer"] || "";
+    const sessionId = req.cookies?.session_id || "";
+    const isQrScan = req.query.qr === "true";
+
+    if (urlId) {
+      addClickJob({
+        urlId,
+        ip,
+        userAgent,
+        referrer,
+        sessionId,
+        isQrScan,
+        timestamp: new Date().toISOString(),
+      }).catch((err) => {
+        console.error("Failed to enqueue click job:", err.message);
+      });
+    }
   } catch (error) {
     next(error);
   }
@@ -77,6 +102,32 @@ export const fetchUserUrls = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: urls,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const fetchUrlHealth = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const url = await getUrlHealthStatus(id);
+    res.status(200).json({
+      success: true,
+      data: url,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const fetchUrlById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const url = await getUrlById(id, req.user);
+    res.status(200).json({
+      success: true,
+      data: url,
     });
   } catch (error) {
     next(error);
