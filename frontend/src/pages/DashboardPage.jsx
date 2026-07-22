@@ -20,7 +20,9 @@ import {
   Zap, 
   Check, 
   AlertTriangle,
-  User
+  User,
+  Trash2,
+  X
 } from "lucide-react";
 
 const RECENT_LINKS_STORAGE_KEY = "snapurl_recent_links";
@@ -74,6 +76,7 @@ function DashboardPage() {
   const [error, setError] = useState("");
   const [copiedCode, setCopiedCode] = useState(null);
   const [activeQrUrl, setActiveQrUrl] = useState(null);
+  const [deletingCode, setDeletingCode] = useState(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -130,6 +133,17 @@ function DashboardPage() {
 
   const handleLinkDeleted = (shortCode) => {
     setUrls((prevLinks) => prevLinks.filter((link) => link.shortCode !== shortCode));
+  };
+
+  const handleDeleteUrl = async (shortCode) => {
+    try {
+      setError("");
+      await API.delete(`/urls/${shortCode}`);
+      handleLinkDeleted(shortCode);
+      setDeletingCode(null);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to delete link.");
+    }
   };
 
   const copyToClipboard = async (shortUrl, shortCode) => {
@@ -310,6 +324,33 @@ function DashboardPage() {
                             >
                               <BarChart3 className="w-4 h-4" />
                             </button>
+                            
+                            {deletingCode === item.shortCode ? (
+                              <div className="flex gap-1 animate-fadeIn">
+                                <button
+                                  onClick={() => handleDeleteUrl(item.shortCode)}
+                                  className="px-2.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold transition duration-150 cursor-pointer"
+                                  title="Confirm Delete"
+                                >
+                                  Confirm?
+                                </button>
+                                <button
+                                  onClick={() => setDeletingCode(null)}
+                                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition duration-150 cursor-pointer"
+                                  title="Cancel"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setDeletingCode(item.shortCode)}
+                                className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-400 border border-transparent hover:border-rose-500/20 transition duration-150 cursor-pointer"
+                                title="Delete Link"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
 
                         </div>
