@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import prisma from "../config/prismaClient.js";
 import {
   createLoginEvent,
   createRefreshToken,
@@ -28,6 +29,7 @@ import {
   hashOtp,
   hashToken,
   toAuthError,
+  parseRequestMeta,
 } from "../utils/auth.utils.js";
 import { verifyTwoFactorLogin } from "./twoFactor.service.js";
 
@@ -117,20 +119,23 @@ const verifyOtp = async (purpose, userId, otp) => {
   return true;
 };
 
-const createRefreshTokenRecord = async ({ userId, token, device, ip }) => {
+const createRefreshTokenRecord = async ({ userId, token, device, ip, browser, os, location }) => {
   const expiresAt = new Date(Date.now() + config.jwt.refreshExpiresDays * 24 * 60 * 60 * 1000);
   return createRefreshToken({
     userId,
     tokenHash: hashToken(token),
     device: device || null,
     ip: ip || null,
+    browser: browser || null,
+    os: os || null,
+    location: location || null,
     expiresAt,
   });
 };
 
 const issueTokenPair = async (user, req = {}) => {
   const refreshTokenValue = crypto.randomBytes(32).toString("hex");
-  const meta = getRequestMeta(req);
+  const meta = await parseRequestMeta(req);
 
   await withAuthErrorHandling(
     () =>
@@ -149,10 +154,18 @@ const issueTokenPair = async (user, req = {}) => {
   };
 };
 
-const recordLoginAttempt = async (userId, req, success) => {
-  const meta = getRequestMeta(req);
+const recordLoginAttempt = async (userId, req, success, reason = null, riskLevel = null) => {
   try {
-    await createLoginEvent({ userId, ...meta, success });
+    const meta = await parseRequestMeta(req);
+    await createLoginEvent({
+      userId,
+      ip: meta.ip,
+      device: meta.device,
+      success,
+      location: meta.location,
+      reason,
+      riskLevel,
+    });
   } catch (err) {
     console.warn("Failed to record login event:", err.message);
   }
@@ -263,21 +276,20 @@ export const loginUser = async ({ email, password }, req = {}) => {
     () => findUserByEmail(normalizedEmail),
     "We couldn't check your account right now. Please try again later.",
   );
-  const meta = getRequestMeta(req);
 
   if (!user) {
-    await recordLoginAttempt(null, req, false);
+    await recordLoginAttempt(null, req, false, "Email not registered", "high");
     throw toAuthError("Invalid credentials", 401);
   }
 
   const passwordValid = await bcrypt.compare(password, user.passwordHash);
   if (!passwordValid) {
-    await recordLoginAttempt(user.id, req, false);
+    await recordLoginAttempt(user.id, req, false, "Invalid password entered", "medium");
     throw toAuthError("Invalid credentials", 401);
   }
 
   if (!user.emailVerified) {
-    await recordLoginAttempt(user.id, req, false);
+    await recordLoginAttempt(user.id, req, false, "Unverified email login blocked", "low");
 
     // Auto re-send OTP if they try to log in but are unverified, for convenience
     try {
@@ -291,7 +303,7 @@ export const loginUser = async ({ email, password }, req = {}) => {
   }
 
   if (user.twoFactorEnabled) {
-    await recordLoginAttempt(user.id, req, true);
+    await recordLoginAttempt(user.id, req, true, "Password verified, 2FA required", "low");
     return { twoFactorRequired: true, userId: user.id };
   }
 
@@ -302,7 +314,7 @@ export const loginUser = async ({ email, password }, req = {}) => {
     throw err;
   }
 
-  await recordLoginAttempt(user.id, req, true);
+  await recordLoginAttempt(user.id, req, true, "Password verified, OTP required", "low");
 
   return { otpRequired: true, userId: user.id };
 };
@@ -361,17 +373,134 @@ export const resetPasswordUser = async ({ userId, otp, password }) => {
   return true;
 };
 
+const verifyBackupCode = async (user, code) => {
+  if (!user.twoFactorBackupCodes) {
+    throw toAuthError("Invalid authenticator code or backup code", 400);
+  }
+
+  const backupCodes = JSON.parse(user.twoFactorBackupCodes);
+  const normalizedCode = code.trim().toLowerCase().replace(/\s/g, "").replace(/-/g, "");
+
+  let matchedIndex = -1;
+  for (let i = 0; i < backupCodes.length; i++) {
+    const codeHash = crypto.createHash("sha256").update(normalizedCode).digest("hex");
+    if (backupCodes[i] === codeHash) {
+      matchedIndex = i;
+      break;
+    }
+  }
+
+  if (matchedIndex === -1) {
+    throw toAuthError("Invalid authenticator code or backup code", 400);
+  }
+
+  // Remove the matched code
+  backupCodes.splice(matchedIndex, 1);
+  await updateUserProfile(user.id, {
+    twoFactorBackupCodes: JSON.stringify(backupCodes),
+  });
+
+  return true;
+};
+
+const checkAndNotifyNewDeviceLogin = async (user, meta) => {
+  if (!user.securityEmailAlerts) return;
+
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const existingLogins = await prisma.loginEvent.findMany({
+      where: {
+        userId: user.id,
+        success: true,
+        createdAt: { gte: thirtyDaysAgo },
+      },
+      select: {
+        device: true,
+        ip: true,
+      },
+      take: 20,
+    });
+
+    const isNew = !existingLogins.some(
+      (login) => login.device === meta.device || (login.ip === meta.ip && login.device === meta.device)
+    );
+
+    if (isNew) {
+      await sendEmail({
+        to: user.email,
+        subject: "🔒 Security Alert: New Device Sign-in",
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 24px; color: #0f172a; background-color: #f8fafc; border-radius: 16px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <span style="font-size: 40px;">🛡️</span>
+              <h2 style="color: #0f172a; margin-top: 12px; font-weight: 800; tracking-tight: -0.025em;">New Login Detected</h2>
+            </div>
+            <p style="font-size: 15px; line-height: 1.6; color: #334155;">Hello <strong>${user.name}</strong>,</p>
+            <p style="font-size: 15px; line-height: 1.6; color: #334155;">We detected a new successful sign-in to your SnapURL account from a device or location we don't recognize.</p>
+            
+            <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin: 24px 0;">
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding: 6px 0; font-weight: 600; color: #64748b; font-size: 14px; width: 100px;">Browser/OS</td>
+                  <td style="padding: 6px 0; color: #0f172a; font-size: 14px;">${meta.browser} on ${meta.os}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; font-weight: 600; color: #64748b; font-size: 14px;">Location</td>
+                  <td style="padding: 6px 0; color: #0f172a; font-size: 14px;">${meta.location}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; font-weight: 600; color: #64748b; font-size: 14px;">IP Address</td>
+                  <td style="padding: 6px 0; color: #0f172a; font-size: 14px; font-family: monospace;">${meta.ip}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; font-weight: 600; color: #64748b; font-size: 14px;">Timestamp</td>
+                  <td style="padding: 6px 0; color: #0f172a; font-size: 14px;">${new Date().toLocaleString()}</td>
+                </tr>
+              </table>
+            </div>
+            
+            <p style="font-size: 14px; line-height: 1.6; color: #475569;">If this was you, you can safely ignore this email.</p>
+            <p style="font-size: 14px; line-height: 1.6; color: #b91c1c; font-weight: bold;">If you did not authorize this login, please change your password immediately and revoke all other sessions in your account settings.</p>
+            
+            <div style="border-top: 1px solid #e2e8f0; margin-top: 32px; padding-top: 16px; text-align: center;">
+              <p style="font-size: 12px; color: #94a3b8; margin: 0;">SnapURL Security Operations Center</p>
+            </div>
+          </div>
+        `,
+      });
+    }
+  } catch (err) {
+    console.warn("Failed to check and notify new device login:", err.message);
+  }
+};
+
 export const verifyLoginOtp = async ({ userId, otp }, req = {}) => {
   const user = await findUserById(userId);
   if (!user || !user.emailVerified) {
+    await recordLoginAttempt(userId, req, false, "Invalid login credentials", "high");
     throw toAuthError("Invalid credentials", 401);
   }
 
-  if (user.twoFactorEnabled) {
-    await verifyTwoFactorLogin(userId, otp);
-  } else {
-    await verifyOtp("login_otp", userId, otp);
+  const meta = await parseRequestMeta(req);
+
+  try {
+    if (user.twoFactorEnabled) {
+      const isBackupCode = otp.includes("-") || otp.trim().length !== 6;
+      if (isBackupCode) {
+        await verifyBackupCode(user, otp);
+      } else {
+        await verifyTwoFactorLogin(userId, otp);
+      }
+    } else {
+      await verifyOtp("login_otp", userId, otp);
+    }
+  } catch (err) {
+    await recordLoginAttempt(user.id, req, false, err.message || "OTP/MFA verification failed", "medium");
+    throw err;
   }
+
+  await recordLoginAttempt(user.id, req, true, "Successful MFA verification", "low");
+  await checkAndNotifyNewDeviceLogin(user, meta);
 
   return issueTokenPair(user, req);
 };

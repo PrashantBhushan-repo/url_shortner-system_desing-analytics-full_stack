@@ -84,6 +84,8 @@ model User {
   profileImage       String?
   twoFactorEnabled   Boolean  @default(false)
   twoFactorSecret    String?
+  twoFactorBackupCodes String?
+  securityEmailAlerts Boolean @default(true)
   createdAt          DateTime @default(now())
   refreshTokens RefreshToken[]
   urls          Url[]
@@ -101,6 +103,9 @@ model RefreshToken {
   tokenHash String
   device    String?
   ip        String?
+  browser   String?
+  os        String?
+  location  String?
   expiresAt DateTime
   revoked   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -150,6 +155,9 @@ model LoginEvent {
   device    String?
   success   Boolean
   createdAt DateTime @default(now())
+  location  String?
+  reason    String?
+  riskLevel String?
 
   @@index([userId])
 }

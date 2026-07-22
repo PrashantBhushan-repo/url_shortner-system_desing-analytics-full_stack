@@ -8,9 +8,19 @@ import { queueConnectionOptions } from "../src/queues/clickQueue.js";
 
 const prisma = new PrismaClient();
 
-// Helper to hash IP and User Agent to create a consistent visitor ID
-const getVisitorId = (ip, ua) => {
-  return crypto.createHash("sha256").update(`${ip || ""}-${ua || ""}`).digest("hex");
+// Helper to build a stable visitor fingerprint based on session, IP, and User Agent
+const getVisitorKey = (visitorId, sessionId, ip, ua) => {
+  if (visitorId) {
+    return `cookie:${visitorId}`;
+  }
+  if (sessionId) {
+    return `session:${sessionId}`;
+  }
+  return `ipua:${ip || "unknown"}:${ua || "unknown"}`;
+};
+
+const getVisitorId = (visitorKey) => {
+  return crypto.createHash("sha256").update(visitorKey).digest("hex");
 };
 
 // Heuristic to check if a user-agent represents a search bot or crawler
@@ -134,7 +144,8 @@ const processClickEvent = async (job) => {
   const isBot = isUaBot || isRateBot;
 
   // 4. Calculate Unique Visitor status (Daily HyperLogLog in Redis)
-  const visitorId = getVisitorId(ip, userAgent);
+  const visitorKey = getVisitorKey(job.data.visitorId, sessionId, ip, userAgent);
+  const visitorId = getVisitorId(visitorKey);
   const dateBucketStr = clickTime.toISOString().split("T")[0]; // YYYY-MM-DD
   const hllKey = `hll:${urlId}:${dateBucketStr}`;
   

@@ -10,6 +10,8 @@ import {
 } from "../services/url.service.js";
 import { addClickJob } from "../queues/clickQueue.js";
 import { normalizeIpAddress } from "../utils/location.js";
+import { randomUUID } from "crypto";
+import { config } from "../config/config.js";
 
 export const createShortUrl = async (req, res, next) => {
   try {
@@ -30,9 +32,6 @@ export const redirectUrl = async (req, res, next) => {
     const { shortCode } = req.params;
     const { id: urlId, longUrl } = await getOriginalUrl(shortCode);
 
-    res.redirect(302, longUrl);
-
-    // Queue click ingestion asynchronously (non-blocking)
     const forwardedIps = req.headers["x-forwarded-for"]?.split(",").map((item) => item.trim()).filter(Boolean) || [];
     const realIp = req.headers["x-real-ip"] || req.headers["cf-connecting-ip"] || req.headers["true-client-ip"] || forwardedIps[0] || req.socket.remoteAddress || req.ip || "unknown";
     const ip = normalizeIpAddress(realIp) || "unknown";
@@ -42,18 +41,33 @@ export const redirectUrl = async (req, res, next) => {
     const isQrScan = req.query.qr === "true";
 
     if (urlId) {
+      const existingVisitorId = req.cookies?.visitor_id;
+      const visitorId = existingVisitorId || randomUUID();
+
+      if (!existingVisitorId) {
+        res.cookie("visitor_id", visitorId, {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: config.nodeEnv === "production",
+          maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
+        });
+      }
+
       addClickJob({
         urlId,
         ip,
         userAgent,
         referrer,
         sessionId,
+        visitorId,
         isQrScan,
         timestamp: new Date().toISOString(),
       }).catch((err) => {
         console.error("Failed to enqueue click job:", err.message);
       });
     }
+
+    res.redirect(302, longUrl);
   } catch (error) {
     next(error);
   }

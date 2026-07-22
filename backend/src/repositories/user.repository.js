@@ -65,9 +65,17 @@ export const incrementTokenVersion = async (userId) =>
     data: { tokenVersion: { increment: 1 } },
   });
 
-export const createLoginEvent = async ({ userId, ip, device, success }) =>
+export const createLoginEvent = async ({ userId, ip, device, success, location, reason, riskLevel }) =>
   prisma.loginEvent.create({
-    data: { userId: userId || null, ip, device, success },
+    data: {
+      userId: userId || null,
+      ip,
+      device,
+      success,
+      location: location || null,
+      reason: reason || null,
+      riskLevel: riskLevel || null,
+    },
   });
 
 export const revokeRefreshTokenByIdAndUser = async (id, userId) => {

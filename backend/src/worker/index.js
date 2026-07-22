@@ -5,6 +5,7 @@ import { getRedisClient } from "../config/redisClient.js";
 import { UAParser } from "ua-parser-js";
 import { randomUUID } from "crypto";
 import { resolveGeoLocation } from "../src/utils/location.js";
+import { parseReferrer } from "../utils/referrerParser.js";
 
 const connection = {
   host: new URL(config.redisUrl).hostname,
@@ -151,6 +152,7 @@ const worker = new Worker("analytics", async (job) => {
   const isBot = await detectBot({ userAgent, ip, urlId });
   const geo = await resolveGeoLocation(ip);
   const ua = new UAParser(userAgent || "").getResult();
+  const referrerData = parseReferrer(referrer, userAgent);
 
   const clickPayload = {
     url_id: Number(urlId),
@@ -171,11 +173,11 @@ const worker = new Worker("analytics", async (job) => {
     latitude: geo?.ll?.[0] ?? null,
     longitude: geo?.ll?.[1] ?? null,
     timezone: null,
-    referrer: normalize(referrer),
-    referer_host: null,
-    utm_source: null,
-    utm_medium: null,
-    utm_campaign: null,
+    referrer: referrerData.referrer || "Direct",
+    referer_host: referrerData.referer_host || "Direct",
+    utm_source: referrerData.utm_source,
+    utm_medium: referrerData.utm_medium,
+    utm_campaign: referrerData.utm_campaign,
     is_qr_scan: false,
     is_unique: true,
     is_bot: Boolean(isBot),

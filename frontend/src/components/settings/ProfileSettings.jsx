@@ -42,9 +42,30 @@ const resizeImage = (file) =>
     reader.readAsDataURL(file);
   });
 
-function ProfileSettings({ user, profileForm, setProfileForm, onSubmit, saving, message, error }) {
+function ProfileSettings({
+  user,
+  profileForm,
+  setProfileForm,
+  onSubmit,
+  saving,
+  message,
+  error,
+  // Email change props
+  emailForm,
+  setEmailForm,
+  emailOtp,
+  setEmailOtp,
+  emailStep,
+  setEmailStep,
+  emailMessage,
+  emailError,
+  loadingEmailChange,
+  onEmailRequest,
+  onEmailConfirm
+}) {
   const fileInputRef = useRef(null);
   const [imageError, setImageError] = useState("");
+  const [showEmailForm, setShowEmailForm] = useState(false);
 
   const profileImagePreview = useMemo(() => {
     if (profileForm.profileImage) return profileForm.profileImage;
@@ -173,15 +194,116 @@ function ProfileSettings({ user, profileForm, setProfileForm, onSubmit, saving, 
             <label htmlFor="profile-email" className="mb-2 block text-sm font-medium text-slate-300">
               Email address
             </label>
-            <input
-              id="profile-email"
-              type="email"
-              value={user?.email || ""}
-              disabled
-              className="w-full max-w-xl cursor-not-allowed rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-slate-400"
-            />
-            <p className="mt-2 text-xs text-slate-500">Email changes are managed from account security settings.</p>
+            <div className="flex flex-col sm:flex-row gap-3 max-w-xl">
+              <input
+                id="profile-email"
+                type="email"
+                value={user?.email || ""}
+                disabled
+                className="flex-1 rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-slate-400 cursor-not-allowed outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowEmailForm(!showEmailForm)}
+                className="rounded-xl border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm font-medium text-blue-300 hover:bg-blue-500/10 transition shrink-0"
+              >
+                {showEmailForm ? "Cancel" : "Change Email"}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">Updating your email address changes your login credentials.</p>
           </div>
+
+          {showEmailForm && (
+            <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-5 max-w-xl space-y-4 animate-fade-in">
+              <div className="border-b border-white/5 pb-3">
+                <h3 className="text-sm font-semibold text-slate-200">Change Email Address</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {emailStep === 1 
+                    ? "Enter your new email address and password to request verification." 
+                    : "Enter the 6-digit confirmation code sent to your new email."
+                  }
+                </p>
+              </div>
+
+              {emailMessage && (
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-300">
+                  {emailMessage}
+                </div>
+              )}
+              {emailError && (
+                <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-300">
+                  {emailError}
+                </div>
+              )}
+
+              {emailStep === 1 ? (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-300">New Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      value={emailForm.newEmail}
+                      onChange={(e) => setEmailForm(prev => ({ ...prev, newEmail: e.target.value }))}
+                      placeholder="e.g. new-email@example.com"
+                      className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-2.5 text-xs text-white outline-none focus:border-blue-500 transition"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-300">Current Password</label>
+                    <input
+                      type="password"
+                      required
+                      value={emailForm.currentPassword}
+                      onChange={(e) => setEmailForm(prev => ({ ...prev, currentPassword: e.target.value }))}
+                      placeholder="Enter password to confirm"
+                      className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-2.5 text-xs text-white outline-none focus:border-blue-500 transition"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onEmailRequest}
+                    disabled={loadingEmailChange || !emailForm.newEmail || !emailForm.currentPassword}
+                    className="w-full rounded-xl bg-blue-600 py-2.5 text-xs font-semibold text-white hover:bg-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loadingEmailChange ? "Sending verification..." : "Send Verification Code"}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-300">Verification Code (OTP)</label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      value={emailOtp}
+                      onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
+                      placeholder="e.g. 123456"
+                      className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-2.5 text-xs text-center font-mono text-white outline-none focus:border-blue-500 transition tracking-[0.5em] text-lg font-bold"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEmailStep(1)}
+                      className="flex-1 rounded-xl border border-white/10 bg-slate-800 py-2.5 text-xs font-medium text-white hover:bg-slate-700 transition"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onEmailConfirm}
+                      disabled={loadingEmailChange || emailOtp.length !== 6}
+                      className="flex-1 rounded-xl bg-blue-600 py-2.5 text-xs font-semibold text-white hover:bg-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loadingEmailChange ? "Confirming..." : "Confirm & Update"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {memberSince ? (
             <div className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-400">
