@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { getAccessToken } from "../services/urlApi";
@@ -55,16 +55,16 @@ function Analytics() {
   const [timeseries, setTimeseries] = useState([]);
   const [geo, setGeo] = useState({ countries: [], cities: [] });
   const [devices, setDevices] = useState({ devices: [], browsers: [], platforms: [] });
-  const [referrers, setReferrers] = useState({ referrers: [], sources: [] });
+  const [referrers, setReferrers] = useState({ referrers: [], siteLocations: [], sources: [] });
   
   // Real-time states
   const [liveTicks, setLiveTicks] = useState([]);
   const [liveClicks, setLiveClicks] = useState(0);
 
   // Fetch function
-  const fetchAnalyticsData = async () => {
+  const fetchAnalyticsData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError("");
 
       const [infoRes, overviewRes, timeseriesRes, geoRes, devicesRes, referrersRes] = await Promise.all([
@@ -78,17 +78,23 @@ function Analytics() {
 
       setUrlInfo(infoRes.data?.data);
       setOverview(overviewRes.data?.data);
+      if (overviewRes.data?.data?.liveClicks !== undefined) {
+        setLiveClicks(overviewRes.data?.data.liveClicks);
+      }
+      if (overviewRes.data?.data?.recentClicks) {
+        setLiveTicks(overviewRes.data?.data.recentClicks);
+      }
       setTimeseries(timeseriesRes.data?.data || []);
       setGeo(geoRes.data?.data || { countries: [], cities: [] });
       setDevices(devicesRes.data?.data || { devices: [], browsers: [], platforms: [] });
-      setReferrers(referrersRes.data?.data || { referrers: [], sources: [] });
+      setReferrers(referrersRes.data?.data || { referrers: [], siteLocations: [], sources: [] });
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.message || "Failed to synchronise analytics statistics.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [urlId, range]);
 
   // Trigger load when range/ID changes
   useEffect(() => {
@@ -120,6 +126,8 @@ function Analytics() {
       setLiveTicks((prev) => [data, ...prev].slice(0, 10));
       // Increment live clicks ticker
       setLiveClicks((prev) => prev + 1);
+      // Silently refresh analytics to keep charts and tables in sync without flashing spinners
+      fetchAnalyticsData(true);
     });
 
     socket.on("connect_error", (err) => {
@@ -130,7 +138,7 @@ function Analytics() {
       socket.emit("leave-url", urlId);
       socket.disconnect();
     };
-  }, [urlId, token]);
+  }, [urlId, token, fetchAnalyticsData]);
 
   const handleExport = async () => {
     try {
@@ -149,6 +157,63 @@ function Analytics() {
     } catch (err) {
       alert("Failed to export clicks: " + (err.response?.data?.message || err.message));
     }
+  };
+
+  const renderPieChart = (title, icon, data, colorOffset = 0) => {
+    const total = data ? data.reduce((sum, item) => sum + item.count, 0) : 0;
+
+    return (
+      <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-white/5">
+          <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+            {icon} {title}
+          </h3>
+          <span className="text-[10px] font-semibold text-slate-500 font-mono">{total} Total</span>
+        </div>
+        
+        {!data || data.length === 0 ? (
+          <div className="h-44 flex items-center justify-center text-slate-500 text-xs">No {title.toLowerCase()} data available</div>
+        ) : (
+          <div className="h-44 w-full flex items-center justify-center text-xs">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={40}
+                  outerRadius={55}
+                  paddingAngle={3}
+                  dataKey="count"
+                  nameKey="name"
+                >
+                  {data.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[(index + colorOffset) % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #ffffff10", borderRadius: "12px", color: "#fff" }} 
+                  formatter={(value, name) => {
+                    const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                    return [`${value} (${percentage}%)`, name];
+                  }}
+                />
+                <Legend 
+                  iconType="circle" 
+                  wrapperStyle={{ fontSize: "9px" }} 
+                  formatter={(value) => {
+                    const item = data.find(d => d.name === value);
+                    const count = item ? item.count : 0;
+                    const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+                    return `${value} (${percentage}%)`;
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -294,11 +359,11 @@ function Analytics() {
               <Activity className="w-4 h-4 text-blue-400 animate-pulse" />
             </div>
             <div>
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider block">Live Session Clicks</span>
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider block">Live Clicks (15m)</span>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-3xl font-black font-mono text-blue-400">{liveClicks}</span>
               </div>
-              <span className="text-[10px] text-slate-400 block mt-1">Clicks registered this session</span>
+              <span className="text-[10px] text-blue-400 block mt-1 font-semibold animate-pulse">Real-time tracking active</span>
             </div>
           </div>
 
@@ -356,56 +421,139 @@ function Analytics() {
                 )}
               </div>
 
-              {/* Chart 2: Grid of Locations and Referrers */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                
-                {/* Geo / Countries breakdown */}
-                <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 space-y-4">
-                  <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-white/5">
-                    <Globe className="w-4 h-4 text-emerald-400" /> Geography breakdown
+              {/* Location Detection (Country & City Lists, no graph) */}
+              <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 space-y-6">
+                <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                  <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <Globe className="w-4.5 h-4.5 text-emerald-400" /> Geography breakdown
                   </h3>
-                  
-                  {geo.countries.length === 0 ? (
-                    <div className="h-60 flex items-center justify-center text-slate-500 text-xs">No location logs available</div>
-                  ) : (
-                    <div className="h-60 w-full text-xs">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={geo.countries} layout="vertical" margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0a" horizontal={false} />
-                          <XAxis type="number" stroke="#94a3b860" tickLine={false} />
-                          <YAxis dataKey="country" type="category" stroke="#94a3b860" tickLine={false} width={45} />
-                          <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #ffffff10", borderRadius: "12px" }} />
-                          <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                            {geo.countries.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
+                  <span className="text-[10px] font-semibold text-slate-500 font-mono">Location Ingestion</span>
                 </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Top Countries */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top Countries</h4>
+                    {!geo.countries || geo.countries.length === 0 ? (
+                      <div className="h-48 flex items-center justify-center text-slate-500 text-xs bg-slate-950/20 border border-white/5 rounded-2xl">No country logs available</div>
+                    ) : (
+                      <div className="space-y-3 max-h-72 overflow-y-auto pr-1 text-xs">
+                        {(() => {
+                          const totalCountryClicks = geo.countries.reduce((sum, c) => sum + c.count, 0);
+                          return geo.countries.map((c, idx) => {
+                            const percentage = totalCountryClicks > 0 ? Math.round((c.count / totalCountryClicks) * 100) : 0;
+                            return (
+                              <div key={idx} className="bg-slate-950/30 border border-white/5 p-3 rounded-2xl hover:border-emerald-500/20 transition duration-150">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-semibold text-slate-300 flex items-center gap-2">
+                                    <span className="text-slate-500 font-mono">#{idx + 1}</span>
+                                    {c.country || "Unknown Country"}
+                                  </span>
+                                  <span className="font-bold text-emerald-400">{c.count} clicks ({percentage}%)</span>
+                                </div>
+                                <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden mt-2">
+                                  <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+                  </div>
 
-                {/* Referrers table */}
-                <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 space-y-4">
-                  <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-white/5">
+                  {/* Top Cities */}
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Top Cities</h4>
+                    {!geo.cities || geo.cities.length === 0 ? (
+                      <div className="h-48 flex items-center justify-center text-slate-500 text-xs bg-slate-950/20 border border-white/5 rounded-2xl">No city logs available</div>
+                    ) : (
+                      <div className="space-y-3 max-h-72 overflow-y-auto pr-1 text-xs">
+                        {(() => {
+                          const totalCityClicks = geo.cities.reduce((sum, c) => sum + c.count, 0);
+                          return geo.cities.map((c, idx) => {
+                            const percentage = totalCityClicks > 0 ? Math.round((c.count / totalCityClicks) * 100) : 0;
+                            return (
+                              <div key={idx} className="bg-slate-950/30 border border-white/5 p-3 rounded-2xl hover:border-blue-500/20 transition duration-150">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-semibold text-slate-300 flex items-center gap-2">
+                                    <span className="text-slate-500 font-mono">#{idx + 1}</span>
+                                    {c.city || "Unknown City"}, {c.country || "Unknown"}
+                                  </span>
+                                  <span className="font-bold text-blue-400">{c.count} clicks ({percentage}%)</span>
+                                </div>
+                                <div className="w-full h-1 bg-slate-950 rounded-full overflow-hidden mt-2">
+                                  <div className="h-full bg-blue-500 rounded-full transition-all duration-500" style={{ width: `${percentage}%` }} />
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Referrers table */}
+              <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                  <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-widest flex items-center gap-2">
                     <Compass className="w-4 h-4 text-indigo-400" /> Traffic Referrers
                   </h3>
-                  
-                  {referrers.referrers.length === 0 ? (
-                    <div className="h-60 flex items-center justify-center text-slate-500 text-xs">No referrer links detected</div>
-                  ) : (
-                    <div className="h-60 overflow-y-auto space-y-3 pr-1 text-xs">
-                      {referrers.referrers.map((r, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-slate-950/40 border border-white/5 p-3 rounded-xl">
-                          <span className="font-mono text-slate-300 truncate max-w-[190px]">{r.host}</span>
-                          <span className="font-bold text-indigo-300">{r.count} clicks</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <span className="text-[10px] font-semibold text-slate-500 font-mono font-bold">Referrer Sites</span>
                 </div>
+                
+                {referrers.referrers.length === 0 ? (
+                  <div className="h-44 flex items-center justify-center text-slate-500 text-xs bg-slate-950/20 border border-white/5 rounded-2xl">No referrer links detected</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    {referrers.referrers.map((r, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-slate-950/40 border border-white/5 p-3 rounded-2xl hover:border-indigo-500/20 transition duration-150">
+                        <span className="font-mono text-slate-300 truncate max-w-[190px]">{r.host}</span>
+                        <span className="font-bold text-indigo-300">{r.count} clicks</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
+              {/* Clicks by Site & Country Table */}
+              <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                  <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                    <Compass className="w-4 h-4 text-emerald-400" /> Clicks by Site & Country
+                  </h3>
+                  <span className="text-[10px] font-semibold text-slate-500 font-mono">Referral Geo-Distribution</span>
+                </div>
+                
+                {!referrers.siteLocations || referrers.siteLocations.length === 0 ? (
+                  <div className="h-44 flex items-center justify-center text-slate-500 text-xs bg-slate-950/20 border border-white/5 rounded-2xl">No referral geo data available</div>
+                ) : (
+                  <div className="overflow-x-auto text-xs">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/10 text-slate-400 font-bold">
+                          <th className="py-2.5 px-3">Referrer Site</th>
+                          <th className="py-2.5 px-3 text-center">Country</th>
+                          <th className="py-2.5 px-3 text-right">Clicks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {referrers.siteLocations.map((item, idx) => (
+                          <tr key={idx} className="border-b border-white/5 hover:bg-slate-950/20 transition duration-150">
+                            <td className="py-3 px-3 font-semibold text-slate-200 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              {item.site}
+                            </td>
+                            <td className="py-3 px-3 text-center text-slate-300 font-mono font-semibold">{item.country}</td>
+                            <td className="py-3 px-3 text-right font-bold text-indigo-300">{item.count} clicks</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -413,38 +561,10 @@ function Analytics() {
             {/* Right Column (4 cols): Secondary charts & Live Activity */}
             <div className="lg:col-span-4 space-y-8">
               
-              {/* Pie Charts: OS / Platform breakdown */}
-              <div className="bg-slate-900/60 border border-white/5 rounded-3xl p-6 space-y-4">
-                <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-white/5">
-                  <Laptop className="w-4 h-4 text-indigo-400" /> Device & Browser split
-                </h3>
-                
-                {devices.devices.length === 0 ? (
-                  <div className="h-44 flex items-center justify-center text-slate-500 text-xs">No device data available</div>
-                ) : (
-                  <div className="h-44 w-full flex items-center justify-center text-xs">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={devices.devices}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={45}
-                          outerRadius={70}
-                          paddingAngle={3}
-                          dataKey="count"
-                        >
-                          {devices.devices.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #ffffff10", borderRadius: "12px" }} />
-                        <Legend iconType="circle" wrapperStyle={{ fontSize: "10px" }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
+              {/* Distinct Pie Charts */}
+              {renderPieChart("Device Types", <Smartphone className="w-4 h-4 text-indigo-400" />, devices.devices, 0)}
+              {renderPieChart("Browsers", <Compass className="w-4 h-4 text-blue-400" />, devices.browsers, 2)}
+              {renderPieChart("Operating Systems", <Laptop className="w-4 h-4 text-purple-400" />, devices.platforms, 4)}
 
               {/* Live WebSocket click activity ticker */}
               <div className="bg-slate-900/60 border border-blue-500/20 rounded-3xl p-6 space-y-4 shadow-xl">

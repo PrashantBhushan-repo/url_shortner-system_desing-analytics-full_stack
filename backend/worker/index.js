@@ -42,17 +42,93 @@ const processClickEvent = async (job) => {
   const redis = getRedisClient();
   const clickTime = new Date(timestamp);
   
-  // 1. Parse User Agent
+  // 1. Parse User Agent & Device Type
   const uaParser = new UAParser(userAgent);
   const parsedUa = uaParser.getResult();
   const device = parsedUa.device || {};
   const browser = parsedUa.browser || {};
   const os = parsedUa.os || {};
 
-  // 2. Parse GeoIP Location
-  const geo = geoip.lookup(ip) || {};
+  let deviceType = device.type || "desktop";
+  let browserName = browser.name || "Unknown";
+  let osName = os.name || "Unknown";
 
-  // 3. Bot Detection Heuristics
+  if (userAgent) {
+    const uaLower = userAgent.toLowerCase();
+    
+    // Check for API clients / CLIs / Dev tools
+    if (uaLower.includes("postman") || uaLower.includes("postmanruntime")) {
+      deviceType = "Postman";
+      browserName = "Postman Client";
+      osName = osName !== "Unknown" ? osName : "API Environment";
+    } else if (uaLower.includes("curl")) {
+      deviceType = "CLI Client";
+      browserName = "curl";
+    } else if (uaLower.includes("wget")) {
+      deviceType = "CLI Client";
+      browserName = "wget";
+    } else if (uaLower.includes("http")) {
+      if (uaLower.includes("python-requests")) {
+        deviceType = "CLI Client";
+        browserName = "Python Requests";
+      } else if (uaLower.includes("axios") || uaLower.includes("node-fetch")) {
+        deviceType = "API Client";
+        browserName = "Node.js App";
+      }
+    }
+    
+    // Map standard mobile/tablet devices
+    if (deviceType === "mobile") {
+      deviceType = "smartphone";
+    } else if (deviceType === "tablet") {
+      deviceType = "tablet";
+    } else if (deviceType === "desktop") {
+      if (uaLower.includes("ipad")) {
+        deviceType = "tablet";
+      } else if (uaLower.includes("iphone") || (uaLower.includes("android") && !uaLower.includes("tablet"))) {
+        deviceType = "smartphone";
+      }
+    }
+  }
+
+  // 2. Parse GeoIP Location
+  let geo = geoip.lookup(ip) || {};
+
+  // If local or private IP, try fetching public IP location as a fallback for local testing
+  if (!geo.country || ip === "127.0.0.1" || ip === "::1" || ip === "localhost" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip.includes("127.0.0.1")) {
+    try {
+      const response = await fetch("https://ipapi.co/json/", { signal: AbortSignal.timeout(3000) });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.country_code && !data.error) {
+          geo = {
+            country: data.country_code || "Unknown",
+            region: data.region_code || "Unknown",
+            city: data.city || "Unknown",
+            ll: [data.latitude, data.longitude],
+            timezone: data.timezone || "Unknown"
+          };
+          console.log(`[GeoIP] Resolved local IP fallback to public location: ${geo.city}, ${geo.country}`);
+        } else {
+          throw new Error(data?.reason || "Invalid location payload");
+        }
+      } else {
+        throw new Error(`HTTP status ${response.status}`);
+      }
+    } catch (err) {
+      console.warn("[GeoIP] Fallback GeoIP fetch failed, defaulting to Nagpur:", err.message);
+      // Fallback default for local testing (Nagpur, Maharashtra, India)
+      geo = {
+        country: "IN",
+        region: "MH",
+        city: "Nagpur",
+        ll: [21.1458, 79.0882],
+        timezone: "Asia/Kolkata"
+      };
+    }
+  }
+
+  // 3. Bot Detection Heuristics (Exclude API clients if intended for dev testing, but count rate limit if needed)
   const isUaBot = isUserAgentBot(userAgent, parsedUa);
   const isRateBot = await checkRateLimitBot(redis, ip, urlId);
   const isBot = isUaBot || isRateBot;
@@ -73,13 +149,69 @@ const processClickEvent = async (job) => {
     console.error("Redis HyperLogLog error:", err.message);
   }
 
-  // Parse Referrer Host
+  // Parse Referrer Host and Map to friendly names
   let referrerHost = "Direct";
-  if (referrer) {
+  if (referrer && referrer !== "Direct") {
     try {
-      referrerHost = new URL(referrer).hostname;
+      const parsedUrl = new URL(referrer);
+      const hostLower = parsedUrl.hostname.toLowerCase();
+      if (hostLower.includes("instagram.com")) {
+        referrerHost = "Instagram";
+      } else if (hostLower.includes("linkedin.com") || hostLower.includes("lnkd.in")) {
+        referrerHost = "LinkedIn";
+      } else if (hostLower.includes("twitter.com") || hostLower.includes("t.co") || hostLower.includes("x.com")) {
+        referrerHost = "Twitter/X";
+      } else if (hostLower.includes("facebook.com") || hostLower.includes("fb.com") || hostLower.includes("messenger.com")) {
+        referrerHost = "Facebook";
+      } else if (hostLower.includes("reddit.com")) {
+        referrerHost = "Reddit";
+      } else if (hostLower.includes("youtube.com") || hostLower.includes("youtu.be")) {
+        referrerHost = "YouTube";
+      } else if (hostLower.includes("google.com")) {
+        referrerHost = "Google Search";
+      } else if (hostLower.includes("naukri.com")) {
+        referrerHost = "Naukri";
+      } else if (hostLower.includes("yahoo.com")) {
+        referrerHost = "Yahoo";
+      } else if (hostLower.includes("bing.com")) {
+        referrerHost = "Bing";
+      } else if (hostLower.includes("github.com")) {
+        referrerHost = "GitHub";
+      } else if (hostLower.includes("pinterest.com")) {
+        referrerHost = "Pinterest";
+      } else if (hostLower.includes("quora.com")) {
+        referrerHost = "Quora";
+      } else if (hostLower.includes("whatsapp.com") || hostLower.includes("wa.me")) {
+        referrerHost = "WhatsApp";
+      } else if (hostLower.includes("telegram.org") || hostLower.includes("t.me")) {
+        referrerHost = "Telegram";
+      } else if (hostLower.includes("slack.com")) {
+        referrerHost = "Slack";
+      } else {
+        let hostname = parsedUrl.hostname;
+        if (hostname.startsWith("www.")) {
+          hostname = hostname.substring(4);
+        }
+        referrerHost = hostname;
+      }
     } catch {
       referrerHost = "Unknown";
+    }
+  } else {
+    // If no referrer, check if it's an API/CLI client UA and classify under that client name
+    const uaLower = userAgent ? userAgent.toLowerCase() : "";
+    if (uaLower.includes("postman") || uaLower.includes("postmanruntime")) {
+      referrerHost = "Postman";
+    } else if (uaLower.includes("curl")) {
+      referrerHost = "curl";
+    } else if (uaLower.includes("wget")) {
+      referrerHost = "wget";
+    } else if (uaLower.includes("python-requests")) {
+      referrerHost = "Python Requests";
+    } else if (uaLower.includes("axios") || uaLower.includes("node-fetch")) {
+      referrerHost = "Node.js API";
+    } else {
+      referrerHost = "Direct";
     }
   }
 
@@ -91,13 +223,13 @@ const processClickEvent = async (job) => {
       visitor_id: visitorId,
       ip_address: ip,
       clicked_at: clickTime,
-      browser: browser.name || "Unknown",
+      browser: browserName,
       browser_version: browser.version || "Unknown",
-      operating_system: os.name || "Unknown",
+      operating_system: osName,
       os_version: os.version || "Unknown",
-      device_type: device.type || "desktop",
+      device_type: deviceType,
       device_name: device.model || "Unknown",
-      platform: os.name || "Unknown",
+      platform: osName,
       user_agent: userAgent,
       country: geo.country || "Unknown",
       state: geo.region || "Unknown",
@@ -135,7 +267,7 @@ const processClickEvent = async (job) => {
   };
   if (geo.country && geo.country !== "Unknown") hourlyUpdate.top_country = geo.country;
   if (referrerHost && referrerHost !== "Direct" && referrerHost !== "Unknown") hourlyUpdate.top_referrer = referrerHost;
-  if (device.type) hourlyUpdate.top_device = device.type;
+  if (deviceType) hourlyUpdate.top_device = deviceType;
 
   await prisma.urlStatsHourly.upsert({
     where: {
@@ -152,7 +284,7 @@ const processClickEvent = async (job) => {
       bot_clicks: incrementBot,
       top_country: geo.country || "Unknown",
       top_referrer: referrerHost,
-      top_device: device.type || "desktop",
+      top_device: deviceType,
     },
     update: hourlyUpdate,
   });
@@ -165,7 +297,7 @@ const processClickEvent = async (job) => {
   };
   if (geo.country && geo.country !== "Unknown") dailyUpdate.top_country = geo.country;
   if (referrerHost && referrerHost !== "Direct" && referrerHost !== "Unknown") dailyUpdate.top_referrer = referrerHost;
-  if (device.type) dailyUpdate.top_device = device.type;
+  if (deviceType) dailyUpdate.top_device = deviceType;
 
   await prisma.urlStatsDaily.upsert({
     where: {
@@ -182,7 +314,7 @@ const processClickEvent = async (job) => {
       bot_clicks: incrementBot,
       top_country: geo.country || "Unknown",
       top_referrer: referrerHost,
-      top_device: device.type || "desktop",
+      top_device: deviceType,
     },
     update: dailyUpdate,
   });
@@ -204,13 +336,24 @@ const processClickEvent = async (job) => {
   const tickPayload = {
     urlId: urlId.toString(),
     country: geo.country || "Unknown",
-    device: device.type || "desktop",
+    device: deviceType,
     timestamp: clickTime.toISOString(),
   };
   try {
     await redis.publish(wsChannel, JSON.stringify(tickPayload));
   } catch (err) {
     console.error("Redis publish error:", err.message);
+  }
+
+  // 9. Invalidate cached dashboard overview stats for this URL to ensure real-time updates
+  try {
+    const keys = await redis.keys(`dash_cache:${urlId}:overview:*`);
+    if (keys.length > 0) {
+      await redis.del(keys);
+      console.log(`[Cache] Invalidated ${keys.length} overview cache keys for URL ${urlId}`);
+    }
+  } catch (err) {
+    console.error("Cache invalidation error:", err.message);
   }
 };
 
@@ -243,37 +386,47 @@ const checkLinkHealth = async (longUrl) => {
   }
 };
 
-// Health Check Repeater Task
+// Health Check Repeater Task (processes URLs concurrently in chunks of 5 to avoid blocking/stalling)
 const processHealthCheck = async () => {
   console.log("Checking URLs health...");
   const urls = await prisma.url.findMany({
     where: { is_active: true },
   });
 
-  for (const url of urls) {
-    const isAlive = await checkLinkHealth(url.long_url);
-    const lastChecked = new Date();
-    
-    if (isAlive) {
-      await prisma.url.update({
-        where: { id: url.id },
-        data: {
-          is_alive: true,
-          health_check_failures: 0,
-          last_checked_at: lastChecked,
-        },
-      });
-    } else {
-      const newFailures = url.health_check_failures + 1;
-      await prisma.url.update({
-        where: { id: url.id },
-        data: {
-          health_check_failures: newFailures,
-          is_alive: newFailures >= 3 ? false : url.is_alive,
-          last_checked_at: lastChecked,
-        },
-      });
-    }
+  const chunkSize = 5;
+  for (let i = 0; i < urls.length; i += chunkSize) {
+    const chunk = urls.slice(i, i + chunkSize);
+    await Promise.all(
+      chunk.map(async (url) => {
+        try {
+          const isAlive = await checkLinkHealth(url.long_url);
+          const lastChecked = new Date();
+          
+          if (isAlive) {
+            await prisma.url.update({
+              where: { id: url.id },
+              data: {
+                is_alive: true,
+                health_check_failures: 0,
+                last_checked_at: lastChecked,
+              },
+            });
+          } else {
+            const newFailures = url.health_check_failures + 1;
+            await prisma.url.update({
+              where: { id: url.id },
+              data: {
+                health_check_failures: newFailures,
+                is_alive: newFailures >= 3 ? false : url.is_alive,
+                last_checked_at: lastChecked,
+              },
+            });
+          }
+        } catch (err) {
+          console.error(`Error checking health for URL ID ${url.id}:`, err.message);
+        }
+      })
+    );
   }
   console.log(`Processed health checks for ${urls.length} URLs.`);
 };
@@ -302,9 +455,10 @@ const startWorker = async () => {
     console.error(`❌ Click ingestion job failed: ${job?.id}. Error: ${err.message}`);
   });
 
-  // 2. Health Check Worker
+  // 2. Health Check Worker (configured with 2 mins lock duration to prevent stalls)
   const healthWorker = new Worker("health-queue", processHealthCheck, {
     connection: queueConnectionOptions,
+    lockDuration: 120000,
   });
 
   healthWorker.on("completed", () => {

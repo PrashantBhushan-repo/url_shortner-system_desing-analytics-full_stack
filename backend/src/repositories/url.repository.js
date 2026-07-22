@@ -40,9 +40,9 @@ export const findByShortCode = async (shortCode) => {
 export const findByShortCodeForUser = async (shortCode, userId, role) => {
   const result = await pool.query(
     `
-      SELECT *
-      FROM "Url"
-      WHERE short_code = $1 AND ($2 = 'ADMIN' OR user_id = $3)
+      SELECT u.*, COALESCE((SELECT COUNT(*)::integer FROM "Click" WHERE url_id = u.id), 0) as clicks_count
+      FROM "Url" u
+      WHERE u.short_code = $1 AND ($2 = 'ADMIN' OR u.user_id = $3)
     `,
     [shortCode, role, userId]
   );
@@ -53,9 +53,9 @@ export const findByShortCodeForUser = async (shortCode, userId, role) => {
 export const findById = async (id) => {
   const result = await pool.query(
     `
-      SELECT *
-      FROM "Url"
-      WHERE id = $1
+      SELECT u.*, COALESCE((SELECT COUNT(*)::integer FROM "Click" WHERE url_id = u.id), 0) as clicks_count
+      FROM "Url" u
+      WHERE u.id = $1
     `,
     [id]
   );
@@ -130,10 +130,10 @@ export const deactivateUrl = async (shortCode, userId = null, role = "USER") => 
 export const listUrlsForUser = async (userId = null, role = "USER") => {
   const result = await pool.query(
     `
-      SELECT *
-      FROM "Url"
-      WHERE $2 = 'ADMIN' OR user_id = $1
-      ORDER BY created_at DESC
+      SELECT u.*, COALESCE((SELECT COUNT(*)::integer FROM "Click" WHERE url_id = u.id), 0) as clicks_count
+      FROM "Url" u
+      WHERE $2 = 'ADMIN' OR u.user_id = $1
+      ORDER BY u.created_at DESC
     `,
     [userId, role]
   );

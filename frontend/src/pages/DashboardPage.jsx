@@ -35,8 +35,7 @@ const normalizeLink = (item) => {
     customAlias: item.customAlias || item.custom_alias || null,
     createdAt: item.createdAt || item.created_at || new Date().toISOString(),
     isAlive: item.isAlive ?? item.is_alive ?? true,
-    // Generate a realistic, deterministic clicks count for mockup visual realism
-    clicksCount: item.clicksCount || (Math.abs(shortCode.toString().split("").reduce((acc, c) => acc + c.charCodeAt(0), 0)) % 180) + 12,
+    clicksCount: (item.clicksCount !== undefined && item.clicksCount !== null) ? Number(item.clicksCount) : 0,
   };
 };
 

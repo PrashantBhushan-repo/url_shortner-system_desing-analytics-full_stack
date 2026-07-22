@@ -2,9 +2,9 @@ import { Worker } from "bullmq";
 import { config } from "../config/config.js";
 import prisma from "../config/prismaClient.js";
 import { getRedisClient } from "../config/redisClient.js";
-import geoip from "geoip-lite";
 import { UAParser } from "ua-parser-js";
 import { randomUUID } from "crypto";
+import { resolveGeoLocation } from "../src/utils/location.js";
 
 const connection = {
   host: new URL(config.redisUrl).hostname,
@@ -149,7 +149,7 @@ const worker = new Worker("analytics", async (job) => {
   const { urlId, ip, userAgent, referrer, timestamp, sessionId } = job.data;
 
   const isBot = await detectBot({ userAgent, ip, urlId });
-  const geo = geoip.lookup(ip || "127.0.0.1") || {};
+  const geo = await resolveGeoLocation(ip);
   const ua = new UAParser(userAgent || "").getResult();
 
   const clickPayload = {
@@ -165,11 +165,11 @@ const worker = new Worker("analytics", async (job) => {
     device_name: normalize(ua.device?.model),
     platform: normalize(ua.os?.name),
     user_agent: normalize(userAgent),
-    country: normalize(geo.country),
-    state: normalize(geo.region),
-    city: normalize(geo.city),
-    latitude: geo.ll?.[0] ?? null,
-    longitude: geo.ll?.[1] ?? null,
+    country: geo?.country ? normalize(geo.country) : null,
+    state: geo?.region ? normalize(geo.region) : null,
+    city: geo?.city ? normalize(geo.city) : null,
+    latitude: geo?.ll?.[0] ?? null,
+    longitude: geo?.ll?.[1] ?? null,
     timezone: null,
     referrer: normalize(referrer),
     referer_host: null,

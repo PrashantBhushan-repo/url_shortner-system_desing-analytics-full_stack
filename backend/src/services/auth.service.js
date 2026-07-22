@@ -175,11 +175,24 @@ const sendOtpEmail = async ({ userId, email, purpose, otp }) => {
 
 const issueOtp = async ({ purpose, userId, email }) => {
   const otp = generateOtp();
+  
+  // Log OTP to terminal console so developer can read it instantly without checking email inbox
+  console.log(`🔑 [OTP Code] Purpose: ${purpose}, Email: ${email}, Code: ${otp}`);
+
   await withAuthErrorHandling(
     async () => {
       await storeOtp(purpose, userId, otp, OTP_TTL_SECONDS);
       await markOtpResent(purpose, userId);
-      await sendOtpEmail({ userId, email, purpose, otp });
+      try {
+        await sendOtpEmail({ userId, email, purpose, otp });
+      } catch (err) {
+        console.error(`❌ Email dispatch failed for ${email}:`, err.message);
+        if (config.nodeEnv !== "production") {
+          console.log("⚠️ Development mode: bypassing email dispatch failure so you can verify with the code logged above.");
+        } else {
+          throw err;
+        }
+      }
     },
     purpose === "login_otp"
       ? "We couldn't send the sign-in code right now. Please try again later."

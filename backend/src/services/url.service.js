@@ -28,6 +28,7 @@ const formatUrlResponse = (url) => ({
   healthCheckFailures: url.health_check_failures ?? 0,
   expiresAt: url.expires_at,
   createdAt: url.created_at,
+  clicksCount: url.clicks_count !== undefined ? Number(url.clicks_count) : 0,
 });
 
 export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null, user = null) => {

@@ -3,10 +3,10 @@ import { getRedisClient, isRedisReady } from "../config/redisClient.js";
 
 const prisma = new PrismaClient();
 
-// Helper to convert BigInts to string or numbers recursively
+// Helper to convert BigInts to numbers recursively (safe up to 9 quadrillion)
 const serialize = (obj) => {
   if (obj === null || obj === undefined) return obj;
-  if (typeof obj === "bigint") return obj.toString();
+  if (typeof obj === "bigint") return Number(obj);
   if (Array.isArray(obj)) return obj.map(serialize);
   if (typeof obj === "object") {
     return Object.fromEntries(
@@ -98,10 +98,42 @@ export const getUrlOverview = async (urlId, range = "7d") => {
   const totalGrowth = prevTotal === 0 ? (total > 0 ? 100 : 0) : ((total - prevTotal) / prevTotal) * 100;
   const uniqueGrowth = prevUnique === 0 ? (unique > 0 ? 100 : 0) : ((unique - prevUnique) / prevUnique) * 100;
 
+  // Query live click volume in the last 15 minutes
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+  const liveClicksCount = await prisma.click.count({
+    where: {
+      url_id: urlBigIntId,
+      clicked_at: {
+        gte: fifteenMinutesAgo,
+      },
+    },
+  });
+
+  const recentClicks = await prisma.click.findMany({
+    where: {
+      url_id: urlBigIntId,
+    },
+    select: {
+      country: true,
+      device_type: true,
+      clicked_at: true,
+    },
+    orderBy: {
+      clicked_at: "desc",
+    },
+    take: 10,
+  });
+
   const result = serialize({
     totalClicks: total,
     uniqueClicks: unique,
     botClicks: bot,
+    liveClicks: liveClicksCount,
+    recentClicks: recentClicks.map(rc => ({
+      country: rc.country || "Unknown",
+      device: rc.device_type || "desktop",
+      timestamp: rc.clicked_at.toISOString(),
+    })),
     growth: {
       total: Math.round(totalGrowth * 10) / 10,
       unique: Math.round(uniqueGrowth * 10) / 10,
@@ -179,7 +211,6 @@ export const getUrlGeo = async (urlId, range = "7d") => {
     by: ["country"],
     where: {
       url_id: urlBigIntId,
-      is_bot: false,
       clicked_at: { gte: start, lte: end },
     },
     _count: { id: true },
@@ -191,9 +222,7 @@ export const getUrlGeo = async (urlId, range = "7d") => {
     by: ["city", "country"],
     where: {
       url_id: urlBigIntId,
-      is_bot: false,
       clicked_at: { gte: start, lte: end },
-      city: { not: "Unknown" },
     },
     _count: { id: true },
     orderBy: { _count: { id: "desc" } },
@@ -215,7 +244,6 @@ export const getUrlDevices = async (urlId, range = "7d") => {
     by: ["device_type"],
     where: {
       url_id: urlBigIntId,
-      is_bot: false,
       clicked_at: { gte: start, lte: end },
     },
     _count: { id: true },
@@ -226,7 +254,6 @@ export const getUrlDevices = async (urlId, range = "7d") => {
     by: ["browser"],
     where: {
       url_id: urlBigIntId,
-      is_bot: false,
       clicked_at: { gte: start, lte: end },
     },
     _count: { id: true },
@@ -238,7 +265,6 @@ export const getUrlDevices = async (urlId, range = "7d") => {
     by: ["operating_system"],
     where: {
       url_id: urlBigIntId,
-      is_bot: false,
       clicked_at: { gte: start, lte: end },
     },
     _count: { id: true },
@@ -262,7 +288,6 @@ export const getUrlReferrers = async (urlId, range = "7d") => {
     by: ["referer_host"],
     where: {
       url_id: urlBigIntId,
-      is_bot: false,
       clicked_at: { gte: start, lte: end },
     },
     _count: { id: true },
@@ -270,11 +295,21 @@ export const getUrlReferrers = async (urlId, range = "7d") => {
     take: 10,
   });
 
+  const siteLocations = await prisma.click.groupBy({
+    by: ["referer_host", "country"],
+    where: {
+      url_id: urlBigIntId,
+      clicked_at: { gte: start, lte: end },
+    },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 20,
+  });
+
   const utmSources = await prisma.click.groupBy({
     by: ["utm_source"],
     where: {
       url_id: urlBigIntId,
-      is_bot: false,
       utm_source: { not: null },
       clicked_at: { gte: start, lte: end },
     },
@@ -284,6 +319,11 @@ export const getUrlReferrers = async (urlId, range = "7d") => {
 
   return serialize({
     referrers: referrers.map(r => ({ host: r.referer_host || "Direct", count: r._count.id })),
+    siteLocations: siteLocations.map(sl => ({
+      site: sl.referer_host || "Direct",
+      country: sl.country || "Unknown",
+      count: sl._count.id
+    })),
     sources: utmSources.map(s => ({ source: s.utm_source, count: s._count.id })),
   });
 };

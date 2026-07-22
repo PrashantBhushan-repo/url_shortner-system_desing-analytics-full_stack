@@ -9,6 +9,7 @@ import {
   getUrlById,
 } from "../services/url.service.js";
 import { addClickJob } from "../queues/clickQueue.js";
+import { normalizeIpAddress } from "../utils/location.js";
 
 export const createShortUrl = async (req, res, next) => {
   try {
@@ -32,7 +33,9 @@ export const redirectUrl = async (req, res, next) => {
     res.redirect(302, longUrl);
 
     // Queue click ingestion asynchronously (non-blocking)
-    const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket.remoteAddress || req.ip || "unknown";
+    const forwardedIps = req.headers["x-forwarded-for"]?.split(",").map((item) => item.trim()).filter(Boolean) || [];
+    const realIp = req.headers["x-real-ip"] || req.headers["cf-connecting-ip"] || req.headers["true-client-ip"] || forwardedIps[0] || req.socket.remoteAddress || req.ip || "unknown";
+    const ip = normalizeIpAddress(realIp) || "unknown";
     const userAgent = req.headers["user-agent"] || "";
     const referrer = req.headers["referer"] || "";
     const sessionId = req.cookies?.session_id || "";
