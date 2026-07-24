@@ -72,3 +72,11 @@ export const authGeneralLimiter = createLimiter({
   prefix: "auth_general",
   message: "Too many requests. Please try again later.",
 });
+
+export const adminRateLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  prefix: "admin",
+  message: "Too many admin requests. Please try again later.",
+});
+

@@ -17,12 +17,13 @@ import {
   changeEmailConfirm,
   deleteAccount,
 } from "../services/authApi";
-import { User, Key, Shield, ShieldCheck, ArrowLeft, LogOut, Palette } from "lucide-react";
+import { User, Key, Shield, ShieldCheck, ArrowLeft, LogOut, Palette, CreditCard } from "lucide-react";
 import ProfileSettings from "../components/settings/ProfileSettings.jsx";
 import PasswordSettings from "../components/settings/PasswordSettings.jsx";
 import SecuritySettings from "../components/settings/SecuritySettings.jsx";
 import TwoFactorSettings from "../components/settings/TwoFactorSettings.jsx";
 import ThemeSettings from "../components/settings/ThemeSettings.jsx";
+import SubscriptionSettings from "../components/settings/SubscriptionSettings.jsx";
 
 const initialProfileState = {
   name: "",
@@ -281,6 +282,7 @@ function SettingsPage() {
     { id: "password", label: "Password" },
     { id: "security", label: "Security" },
     { id: "twoFactor", label: "Two-factor" },
+    { id: "subscription", label: "Billing & Plans" },
     { id: "theme", label: "Appearance" },
   ];
 
@@ -435,6 +437,7 @@ function SettingsPage() {
               if (tab.id === "password") Icon = Key;
               if (tab.id === "security") Icon = Shield;
               if (tab.id === "twoFactor") Icon = ShieldCheck;
+              if (tab.id === "subscription") Icon = CreditCard;
               if (tab.id === "theme") Icon = Palette;
 
               return (
@@ -540,6 +543,10 @@ function SettingsPage() {
 
             {activeTab === "theme" && (
               <ThemeSettings />
+            )}
+
+            {activeTab === "subscription" && (
+              <SubscriptionSettings />
             )}
           </div>
 

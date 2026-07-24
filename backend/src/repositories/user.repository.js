@@ -1,7 +1,22 @@
 import prisma from "../config/prismaClient.js";
 
 export const createUser = async (data) => {
-  return await prisma.user.create({ data });
+  const freePlan = await prisma.plan.findUnique({ where: { key: "free" } });
+  if (!freePlan) {
+    throw new Error("Free plan not found in database.");
+  }
+  return await prisma.user.create({
+    data: {
+      ...data,
+      subscriptions: {
+        create: {
+          plan_id: freePlan.id,
+          billing_cycle: "MONTHLY",
+          status: "ACTIVE",
+        }
+      }
+    }
+  });
 };
 
 export const findUserByEmail = async (email) => {

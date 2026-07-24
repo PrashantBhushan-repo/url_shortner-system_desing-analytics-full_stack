@@ -37,6 +37,12 @@ export const config = {
     password: process.env.SMTP_PASS || "",
     emailFrom: process.env.FROM_EMAIL || "",
   },
+  razorpay: {
+    keyId: process.env.RAZORPAY_KEY_ID || "",
+    keySecret: process.env.RAZORPAY_KEY_SECRET || "",
+    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || "",
+  },
+
   rateLimit: {
     createUrl: {
       windowMs: toNumber(process.env.CREATE_URL_RATE_LIMIT_WINDOW_MS, 24 * 60 * 60 * 1000),

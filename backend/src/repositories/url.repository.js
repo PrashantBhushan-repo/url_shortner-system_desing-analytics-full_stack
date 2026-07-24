@@ -8,14 +8,15 @@ import pool from "../config/db.js";
  * @param {string|null} expiresAt - Optional expiration timestamp
  * @returns {Promise<Object>} - The created URL record
  */
-export const createUrl = async (longUrl, shortCode, customAlias = false, expiresAt = null, userId = null) => {
+export const createUrl = async (longUrl, shortCode, customAlias = false, expiresAt = null, userId = null, passwordHash = null, customDomainId = null) => {
   const query = `
-    INSERT INTO "Url" (long_url, short_code, custom_alias, expires_at, is_active, user_id)
-    VALUES ($1, $2, $3, $4, true, $5)
+    INSERT INTO "Url" (long_url, short_code, custom_alias, expires_at, is_active, user_id, password_hash, custom_domain_id)
+    VALUES ($1, $2, $3, $4, true, $5, $6, $7)
     RETURNING *
   `;
 
-  const result = await pool.query(query, [longUrl, shortCode, customAlias, expiresAt, userId]);
+  const domainId = customDomainId ? BigInt(customDomainId) : null;
+  const result = await pool.query(query, [longUrl, shortCode, customAlias, expiresAt, userId, passwordHash, domainId]);
   return result.rows[0];
 };
 
@@ -91,18 +92,21 @@ export const shortCodeExists = async (shortCode) => {
  * @param {string|null} expiresAt - Expiration date
  * @returns {Promise<Object|null>} - Updated URL record
  */
-export const updateUrl = async (shortCode, longUrl, updatedShortCode, customAlias, expiresAt, userId = null, role = "USER") => {
+export const updateUrl = async (shortCode, longUrl, updatedShortCode, customAlias, expiresAt, userId = null, role = "USER", passwordHash = null, customDomainId = null) => {
+  const domainId = customDomainId ? BigInt(customDomainId) : null;
   const result = await pool.query(
     `
       UPDATE "Url"
       SET long_url = $2,
           short_code = $3,
           custom_alias = $4,
-          expires_at = $5
+          expires_at = $5,
+          password_hash = $8,
+          custom_domain_id = $9
       WHERE short_code = $1 AND is_active = true AND ($6 = 'ADMIN' OR user_id = $7)
       RETURNING *
     `,
-    [shortCode, longUrl, updatedShortCode, customAlias, expiresAt, role, userId]
+    [shortCode, longUrl, updatedShortCode, customAlias, expiresAt, role, userId, passwordHash, domainId]
   );
 
   return result.rows[0] || null;

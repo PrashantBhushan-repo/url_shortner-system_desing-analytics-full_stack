@@ -17,7 +17,7 @@ const serialize = (obj) => {
 };
 
 // Parse date range into start/end dates
-const parseRange = (range) => {
+const parseRange = (range, cutoff = null) => {
   const end = new Date();
   let start = new Date();
   
@@ -31,13 +31,18 @@ const parseRange = (range) => {
     // Default to 7 days
     start.setDate(end.getDate() - 7);
   }
+
+  if (cutoff && start < cutoff) {
+    start = new Date(cutoff);
+  }
+
   return { start, end };
 };
 
 // 1. Overview stats: total, unique, bot clicks + growth comparison
-export const getUrlOverview = async (urlId, range = "7d") => {
+export const getUrlOverview = async (urlId, range = "7d", cutoff = null) => {
   const redis = getRedisClient();
-  const cacheKey = `dash_cache:${urlId}:overview:${range}`;
+  const cacheKey = `dash_cache:${urlId}:overview:${range}:${cutoff ? cutoff.getTime() : "unlimited"}`;
 
   // Check cache
   if (isRedisReady()) {
@@ -49,7 +54,7 @@ export const getUrlOverview = async (urlId, range = "7d") => {
     }
   }
 
-  const { start, end } = parseRange(range);
+  const { start, end } = parseRange(range, cutoff);
   const duration = end.getTime() - start.getTime();
   const prevStart = new Date(start.getTime() - duration);
 
@@ -153,8 +158,8 @@ export const getUrlOverview = async (urlId, range = "7d") => {
 };
 
 // 2. Time-series chart: hourly or daily logs
-export const getUrlTimeseries = async (urlId, range = "7d") => {
-  const { start, end } = parseRange(range);
+export const getUrlTimeseries = async (urlId, range = "7d", cutoff = null) => {
+  const { start, end } = parseRange(range, cutoff);
   const urlBigIntId = BigInt(urlId);
 
   let data = [];
@@ -203,8 +208,8 @@ export const getUrlTimeseries = async (urlId, range = "7d") => {
 };
 
 // 3. Location breakdown (from raw clicks in range)
-export const getUrlGeo = async (urlId, range = "7d") => {
-  const { start, end } = parseRange(range);
+export const getUrlGeo = async (urlId, range = "7d", cutoff = null) => {
+  const { start, end } = parseRange(range, cutoff);
   const urlBigIntId = BigInt(urlId);
 
   const countries = await prisma.click.groupBy({
@@ -236,8 +241,8 @@ export const getUrlGeo = async (urlId, range = "7d") => {
 };
 
 // 4. Device and browser breakdown
-export const getUrlDevices = async (urlId, range = "7d") => {
-  const { start, end } = parseRange(range);
+export const getUrlDevices = async (urlId, range = "7d", cutoff = null) => {
+  const { start, end } = parseRange(range, cutoff);
   const urlBigIntId = BigInt(urlId);
 
   const devices = await prisma.click.groupBy({
@@ -280,8 +285,8 @@ export const getUrlDevices = async (urlId, range = "7d") => {
 };
 
 // 5. Referrer and UTM breakdown
-export const getUrlReferrers = async (urlId, range = "7d") => {
-  const { start, end } = parseRange(range);
+export const getUrlReferrers = async (urlId, range = "7d", cutoff = null) => {
+  const { start, end } = parseRange(range, cutoff);
   const urlBigIntId = BigInt(urlId);
 
   const referrers = await prisma.click.groupBy({
@@ -366,8 +371,8 @@ export const getUserTopLinks = async (userId, limit = 5) => {
 };
 
 // 7. Stream clicks as CSV format
-export const exportClicksToCsv = async (urlId, range = "30d") => {
-  const { start, end } = parseRange(range);
+export const exportClicksToCsv = async (urlId, range = "30d", cutoff = null) => {
+  const { start, end } = parseRange(range, cutoff);
   const urlBigIntId = BigInt(urlId);
 
   const clicks = await prisma.click.findMany({

@@ -170,6 +170,14 @@ function DashboardPage() {
             <h1 className="text-3xl font-extrabold tracking-tight">Welcome, {user?.name || "there"}</h1>
           </div>
           <div className="flex gap-3">
+            {user?.role === "ADMIN" && (
+              <button 
+                onClick={() => navigate("/admin")} 
+                className="flex items-center gap-2 rounded-xl border border-red-500/20 px-4 py-2 text-sm font-bold text-red-400 bg-red-950/20 hover:bg-red-900/20 transition duration-200 cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-red-400" /> Admin Center
+              </button>
+            )}
             <button 
               onClick={() => navigate("/settings")} 
               className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm font-medium bg-slate-900 hover:bg-slate-800 hover:text-white transition duration-200 cursor-pointer"
@@ -183,6 +191,7 @@ function DashboardPage() {
               <LogOut className="w-4 h-4 text-slate-400" /> Logout
             </button>
           </div>
+
         </header>
 
         {/* Dashboard Grid Workspace */}

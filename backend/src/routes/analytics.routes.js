@@ -11,6 +11,8 @@ import {
 } from "../controllers/analytics.controller.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 
+import { requireFeature } from "../middlewares/planLimit.middleware.js";
+
 const router = express.Router();
 
 // Apply auth middleware to protect all analytics routes
@@ -21,9 +23,9 @@ router.get("/platform", fetchPlatformStats); // Additional verification in contr
 
 router.get("/:urlId/overview", fetchOverview);
 router.get("/:urlId/timeseries", fetchTimeseries);
-router.get("/:urlId/geo", fetchGeo);
-router.get("/:urlId/devices", fetchDevices);
+router.get("/:urlId/geo", requireFeature("geo_analytics"), fetchGeo);
+router.get("/:urlId/devices", requireFeature("device_browser_analytics"), fetchDevices);
 router.get("/:urlId/referrers", fetchReferrers);
-router.get("/:urlId/export", exportClicks);
+router.get("/:urlId/export", requireFeature("csv_export"), exportClicks);
 
 export default router;

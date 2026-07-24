@@ -5,6 +5,8 @@ import crypto from "crypto";
 import { PrismaClient } from "../src/generated/prisma/index.js";
 import { initRedis, getRedisClient } from "../src/config/redisClient.js";
 import { queueConnectionOptions } from "../src/queues/clickQueue.js";
+import { sendEmail } from "../src/utils/mailer.js";
+import { invalidateSubscriptionCache } from "../src/services/planLimitService.js";
 
 const prisma = new PrismaClient();
 
@@ -442,6 +444,124 @@ const processHealthCheck = async () => {
   console.log(`Processed health checks for ${urls.length} URLs.`);
 };
 
+// Billing & Dunning scan: repeatable daily task
+const processBillingAndDunning = async () => {
+  console.log("⏳ Processing daily billing and dunning scans...");
+  const now = new Date();
+  
+  // 1. Renewal warning emails (3 days before current_period_end)
+  const threeDaysFromNow = new Date();
+  threeDaysFromNow.setDate(now.getDate() + 3);
+  const twoDaysFromNow = new Date();
+  twoDaysFromNow.setDate(now.getDate() + 2);
+
+  const expiringSubs = await prisma.subscription.findMany({
+    where: {
+      status: "ACTIVE",
+      cancel_at_period_end: false,
+      current_period_end: {
+        gte: twoDaysFromNow,
+        lte: threeDaysFromNow,
+      },
+      user: {
+        securityEmailAlerts: true
+      }
+    },
+    include: {
+      user: true,
+      plan: true,
+    },
+  });
+
+  for (const sub of expiringSubs) {
+    try {
+      await sendEmail({
+        to: sub.user.email,
+        subject: "🔔 Subscription Renewal Reminder",
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 24px; color: #0f172a; background-color: #f8fafc; border-radius: 16px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0;">
+            <h2 style="color: #0f172a; margin-top: 12px; font-weight: 800;">Renewal Reminder</h2>
+            <p>Hello <strong>${sub.user.name}</strong>,</p>
+            <p>Your subscription to the <strong>${sub.plan.name}</strong> plan is set to auto-renew on <strong>${new Date(sub.current_period_end).toLocaleDateString()}</strong>.</p>
+            <p>Amount: <strong>INR ${(sub.plan.price_monthly / 100).toFixed(2)}</strong>.</p>
+            <p style="color: #64748b; font-size: 14px; margin-top: 20px;">To update your payment details or cancel, please check your account settings.</p>
+          </div>
+        `,
+      });
+      console.log(`Sent renewal reminder email to ${sub.user.email}`);
+    } catch (err) {
+      console.error(`Failed to send renewal reminder email to ${sub.user.email}:`, err.message);
+    }
+  }
+
+  // 2. Expiration and grace-period dunning checking
+  const expiredSubs = await prisma.subscription.findMany({
+    where: {
+      status: { in: ["ACTIVE", "PAST_DUE"] },
+      current_period_end: {
+        lt: now,
+      },
+    },
+    include: {
+      user: true,
+      plan: true,
+    },
+  });
+
+  const freePlan = await prisma.plan.findUnique({
+    where: { key: "free" },
+  });
+
+  if (!freePlan) {
+    console.error("Free plan not found in database. Expiration downgrades halted.");
+    return;
+  }
+
+  for (const sub of expiredSubs) {
+    const gracePeriodEnd = new Date(sub.current_period_end);
+    gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 3); // 3 days grace period default
+
+    if (now < gracePeriodEnd) {
+      // Within grace period. Shift to PAST_DUE if not already.
+      if (sub.status !== "PAST_DUE") {
+        await prisma.subscription.update({
+          where: { id: sub.id },
+          data: { status: "PAST_DUE" },
+        });
+        await invalidateSubscriptionCache(sub.user_id);
+        console.log(`Subscription ${sub.id} set to PAST_DUE (inside 3-day grace period)`);
+      }
+    } else {
+      // Grace period exceeded! Downgrade to free.
+      console.log(`Subscription ${sub.id} grace period exceeded. Downgrading user ${sub.user_id} to Free plan.`);
+      
+      await prisma.$transaction(async (tx) => {
+        // Cancel old subscription
+        await tx.subscription.update({
+          where: { id: sub.id },
+          data: {
+            status: "EXPIRED",
+            canceled_at: new Date(),
+          },
+        });
+
+        // Create new free subscription
+        await tx.subscription.create({
+          data: {
+            user_id: sub.user_id,
+            plan_id: freePlan.id,
+            billing_cycle: "MONTHLY",
+            status: "ACTIVE",
+            started_at: new Date(),
+          },
+        });
+      });
+
+      await invalidateSubscriptionCache(sub.user_id);
+    }
+  }
+};
+
 // Start background worker
 const startWorker = async () => {
   console.log("Starting background ingestion worker process...");
@@ -480,8 +600,22 @@ const startWorker = async () => {
     console.error(`❌ Health check job failed: ${err.message}`);
   });
 
+  // 3. Billing & Dunning Worker
+  const billingWorker = new Worker("billing-queue", processBillingAndDunning, {
+    connection: queueConnectionOptions,
+  });
+
+  billingWorker.on("completed", (job) => {
+    console.log(`✅ Billing/Dunning job completed: ${job.id}`);
+  });
+
+  billingWorker.on("failed", (job, err) => {
+    console.error(`❌ Billing/Dunning job failed: ${job?.id}. Error: ${err.message}`);
+  });
+
   // Schedule repeatable job
   const healthQueue = new Queue("health-queue", { connection: queueConnectionOptions });
+  const billingQueue = new Queue("billing-queue", { connection: queueConnectionOptions });
   
   // Clean old repeatable triggers and insert freshly
   const repeatableJobs = await healthQueue.getRepeatableJobs();
@@ -489,15 +623,28 @@ const startWorker = async () => {
     await healthQueue.removeRepeatableByKey(job.key);
   }
 
-  // Run every 6 hours
+  const repeatableBillingJobs = await billingQueue.getRepeatableJobs();
+  for (const job of repeatableBillingJobs) {
+    await billingQueue.removeRepeatableByKey(job.key);
+  }
+
+  // Run health check every 6 hours
   await healthQueue.add("health-check-job", {}, {
     repeat: {
       pattern: "0 */6 * * *",
     },
   });
 
+  // Run billing/dunning daily at midnight
+  await billingQueue.add("billing-dunning-job", {}, {
+    repeat: {
+      pattern: "0 0 * * *",
+    },
+  });
+
   // Run once immediately on startup
   await healthQueue.add("health-check-job-startup", {});
+  await billingQueue.add("billing-dunning-job-startup", {});
 
   console.log("Background worker is active and listening for events.");
 };

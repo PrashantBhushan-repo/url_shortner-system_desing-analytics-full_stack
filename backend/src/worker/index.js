@@ -6,6 +6,8 @@ import { UAParser } from "ua-parser-js";
 import { randomUUID } from "crypto";
 import { resolveGeoLocation } from "../src/utils/location.js";
 import { parseReferrer } from "../utils/referrerParser.js";
+import { hasFeature } from "../services/planLimitService.js";
+import crypto from "crypto";
 
 const connection = {
   host: new URL(config.redisUrl).hostname,
@@ -111,6 +113,44 @@ const upsertRollup = async ({ tx, urlId, timestamp, country, referrer, device, i
   void daily;
 };
 
+const dispatchWebhooks = async (userId, eventName, payload) => {
+  try {
+    const isAllowed = await hasFeature(userId, "webhooks_allowed");
+    if (!isAllowed) return;
+
+    const webhooks = await prisma.webhook.findMany({
+      where: {
+        user_id: userId,
+        is_active: true,
+        event: { in: [eventName, "*"] },
+      },
+    });
+
+    for (const hook of webhooks) {
+      const body = JSON.stringify({
+        event: eventName,
+        timestamp: new Date().toISOString(),
+        data: payload,
+      });
+
+      const signature = crypto.createHmac("sha256", hook.secret).update(body).digest("hex");
+
+      fetch(hook.target_url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-SnapURL-Signature": signature,
+        },
+        body,
+      }).catch((err) => {
+        console.error(`Webhook delivery failure to ${hook.target_url}:`, err.message);
+      });
+    }
+  } catch (err) {
+    console.error("Webhook dispatch error:", err.message);
+  }
+};
+
 const processHealthChecks = async () => {
   const urls = await prisma.url.findMany({ select: { id: true, long_url: true, health_check_failures: true, is_alive: true } });
   for (const url of urls) {
@@ -214,6 +254,26 @@ const worker = new Worker("analytics", async (job) => {
       timestamp: clickPayload.clicked_at.toISOString(),
     }));
   }
+
+  prisma.url.findUnique({
+    where: { id: BigInt(urlId) },
+    select: { user_id: true, short_code: true }
+  }).then(async (urlRecord) => {
+    if (urlRecord && urlRecord.user_id) {
+      await dispatchWebhooks(urlRecord.user_id, "click.created", {
+        shortCode: urlRecord.short_code,
+        click: {
+          ip: clickPayload.ip_address,
+          country: clickPayload.country,
+          city: clickPayload.city,
+          browser: clickPayload.browser,
+          os: clickPayload.operating_system,
+          device: clickPayload.device_type,
+          timestamp: clickPayload.clicked_at.toISOString(),
+        }
+      });
+    }
+  }).catch(err => console.error("Webhook dispatch fetch failure:", err.message));
 }, {
   connection,
   autorun: true,

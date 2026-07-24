@@ -10,6 +10,7 @@ import {
   exportClicksToCsv,
   getPlatformGlobalStats,
 } from "../services/analytics.service.js";
+import { getAnalyticsRetentionCutoff } from "../services/planLimitService.js";
 
 // Helper to verify that the URL belongs to the authenticated user (or user is ADMIN)
 const checkOwnership = async (urlId, user) => {
@@ -38,7 +39,8 @@ export const fetchOverview = async (req, res, next) => {
     const { range } = req.query; // '24h', '7d', '30d'
     await checkOwnership(urlId, req.user);
 
-    const data = await getUrlOverview(urlId, range);
+    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+    const data = await getUrlOverview(urlId, range, cutoff);
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -51,7 +53,8 @@ export const fetchTimeseries = async (req, res, next) => {
     const { range } = req.query;
     await checkOwnership(urlId, req.user);
 
-    const data = await getUrlTimeseries(urlId, range);
+    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+    const data = await getUrlTimeseries(urlId, range, cutoff);
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -64,7 +67,8 @@ export const fetchGeo = async (req, res, next) => {
     const { range } = req.query;
     await checkOwnership(urlId, req.user);
 
-    const data = await getUrlGeo(urlId, range);
+    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+    const data = await getUrlGeo(urlId, range, cutoff);
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -77,7 +81,8 @@ export const fetchDevices = async (req, res, next) => {
     const { range } = req.query;
     await checkOwnership(urlId, req.user);
 
-    const data = await getUrlDevices(urlId, range);
+    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+    const data = await getUrlDevices(urlId, range, cutoff);
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -90,7 +95,8 @@ export const fetchReferrers = async (req, res, next) => {
     const { range } = req.query;
     await checkOwnership(urlId, req.user);
 
-    const data = await getUrlReferrers(urlId, range);
+    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+    const data = await getUrlReferrers(urlId, range, cutoff);
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -113,7 +119,8 @@ export const exportClicks = async (req, res, next) => {
     const { range } = req.query;
     await checkOwnership(urlId, req.user);
 
-    const csvData = await exportClicksToCsv(urlId, range);
+    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+    const csvData = await exportClicksToCsv(urlId, range, cutoff);
     
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename=clicks-export-${urlId}.csv`);

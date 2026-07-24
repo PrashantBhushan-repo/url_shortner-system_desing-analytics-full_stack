@@ -16,12 +16,23 @@ import {
   Trash2, 
   Clock, 
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Lock,
+  Globe,
+  Hourglass,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
   const [longUrl, setLongUrl] = useState("");
   const [customAlias, setCustomAlias] = useState("");
+  const [password, setPassword] = useState("");
+  const [customDomainId, setCustomDomainId] = useState("");
+  const [expiryOption, setExpiryOption] = useState("7d"); // "7d", "30d", "custom", "none"
+  const [customExpiry, setCustomExpiry] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   const [shortUrl, setShortUrl] = useState("");
   const [shortCode, setShortCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,16 +41,44 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
   const [generateQr, setGenerateQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [showCustomizer, setShowCustomizer] = useState(false);
+
+  // Edit states
   const [isEditing, setIsEditing] = useState(false);
   const [editLongUrl, setEditLongUrl] = useState("");
   const [editCustomAlias, setEditCustomAlias] = useState("");
   const [editExpiresAt, setEditExpiresAt] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editCustomDomainId, setEditCustomDomainId] = useState("");
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
+  
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { token } = useAuth();
+
+  // Plan gating limits states
+  const [limits, setLimits] = useState(null);
+  const [userDomains, setUserDomains] = useState([]);
+
+  useEffect(() => {
+    const loadGatingLimits = async () => {
+      if (!token) return;
+      try {
+        const subRes = await API.get("/subscription");
+        const userLimits = subRes.data?.data?.limits || null;
+        setLimits(userLimits);
+
+        if (userLimits?.custom_domain_allowed) {
+          const domainsRes = await API.get("/domains");
+          setUserDomains(domainsRes.data?.data?.filter(d => d.verified) || []);
+        }
+      } catch (err) {
+        console.error("Failed to load user subscription plans:", err.message);
+      }
+    };
+    loadGatingLimits();
+  }, [token]);
 
   const handleShorten = async (e) => {
     e.preventDefault();
@@ -61,10 +100,41 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
       setEditError("");
       setEditSuccess("");
 
-      const response = await API.post("/urls", {
-        long_url: longUrl.trim(),
-        custom_alias: customAlias.trim() || undefined,
-      });
+      const payload = {
+        longUrl: longUrl.trim(),
+      };
+
+      if (customAlias.trim()) {
+        payload.customAlias = customAlias.trim();
+      }
+
+      if (password.trim() && limits?.password_protected_links) {
+        payload.password = password.trim();
+      }
+
+      if (customDomainId && limits?.custom_domain_allowed) {
+        payload.customDomainId = customDomainId;
+      }
+
+      // Compute expiration timestamp based on selected choice
+      let resolvedExpiry = null;
+      if (expiryOption === "7d") {
+        const d = new Date();
+        d.setDate(d.getDate() + 7);
+        resolvedExpiry = d.toISOString();
+      } else if (expiryOption === "30d") {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        resolvedExpiry = d.toISOString();
+      } else if (expiryOption === "custom" && customExpiry && limits?.custom_expiry_allowed) {
+        resolvedExpiry = new Date(customExpiry).toISOString();
+      }
+
+      if (resolvedExpiry) {
+        payload.expiresAt = resolvedExpiry;
+      }
+
+      const response = await API.post("/urls", payload);
 
       const createdUrl = response.data.data;
       setShortCode(createdUrl.shortCode);
@@ -72,9 +142,18 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
       setEditLongUrl(createdUrl.longUrl || "");
       setEditCustomAlias(createdUrl.customAlias || "");
       setEditExpiresAt(createdUrl.expiresAt ? createdUrl.expiresAt.slice(0, 16) : "");
+      setEditPassword("");
+      setEditCustomDomainId(createdUrl.customDomainId || "");
       setIsEditing(false);
+      
+      // Reset inputs
       setLongUrl("");
       setCustomAlias("");
+      setPassword("");
+      setCustomDomainId("");
+      setExpiryOption("7d");
+      setCustomExpiry("");
+      setShowAdvanced(false);
 
       if (generateQr) {
         generateQrCode(createdUrl.shortUrl);
@@ -92,8 +171,6 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
         setError("That custom alias is already taken. Please choose another.");
       } else if (status === 400 && Array.isArray(details)) {
         setError(details.map((d) => d.message).join(". "));
-      } else if (status === 400) {
-        setError(message);
       } else {
         setError(message);
       }
@@ -117,6 +194,14 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
       payload.expiresAt = new Date(editExpiresAt).toISOString();
     } else {
       payload.expiresAt = null;
+    }
+
+    if (editPassword.trim()) {
+      payload.password = editPassword.trim();
+    }
+
+    if (editCustomDomainId) {
+      payload.customDomainId = editCustomDomainId;
     }
 
     try {
@@ -143,8 +228,6 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
         setEditError("That custom alias is already taken. Please choose another.");
       } else if (status === 400 && Array.isArray(details)) {
         setEditError(details.map((d) => d.message).join(". "));
-      } else if (status === 400) {
-        setEditError(message);
       } else {
         setEditError(message);
       }
@@ -154,34 +237,27 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
   };
 
   const handleDelete = async () => {
-    if (!shortCode) {
-      return;
-    }
-
+    if (!shortCode) return;
     try {
       setDeleteLoading(true);
       setEditError("");
-      setEditSuccess("");
       await API.delete(`/urls/${shortCode}`);
-
       const codeToDelete = shortCode;
-      setShortUrl("");
       setShortCode("");
-      setEditLongUrl("");
-      setEditCustomAlias("");
-      setEditExpiresAt("");
-      setIsEditing(false);
-      setEditSuccess("Short link deactivated successfully.");
+      setShortUrl("");
+      setLongUrl("");
+      setCustomAlias("");
+      setQrDataUrl("");
       onLinkDeleted?.(codeToDelete);
     } catch (err) {
-      const message = err?.response?.data?.message || "Unable to deactivate the short link.";
-      setEditError(message);
+      setEditError(err.response?.data?.message || "Failed to delete url.");
     } finally {
       setDeleteLoading(false);
     }
   };
 
   const copyToClipboard = async () => {
+    if (!shortUrl) return;
     await navigator.clipboard.writeText(shortUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -190,10 +266,10 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
   const generateQrCode = async (text) => {
     try {
       const dataUrl = await QRCode.toDataURL(text, {
-        width: 400,
+        width: 300,
         margin: 2,
         color: {
-          dark: "#000000",
+          dark: "#0f172a",
           light: "#ffffff",
         },
       });
@@ -213,12 +289,10 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
 
   return (
     <div className="w-full">
-      {/* Shortener input form */}
       <form onSubmit={handleShorten} className="space-y-5">
         
-        {/* Row 1: Long URL and custom alias aligned grid */}
+        {/* Destination & Alias Grid */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-          
           <div className="md:col-span-9">
             <label htmlFor="longUrl" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
               Destination URL
@@ -229,32 +303,134 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
               placeholder="https://example.com/very-long-landing-page-url"
               value={longUrl}
               onChange={(e) => setLongUrl(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white placeholder-slate-500 transition-all duration-200 focus:border-blue-500/50 focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white placeholder-slate-500 transition-all duration-200 focus:border-blue-500/50 focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-mono"
               required
             />
           </div>
 
           <div className="md:col-span-3">
-            <label htmlFor="customAlias" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Alias <span className="text-[10px] text-slate-500 font-normal">(Optional)</span>
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label htmlFor="customAlias" className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Alias
+              </label>
+              {!limits?.custom_alias_allowed && token && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] font-black tracking-widest text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                  <Lock className="w-2.5 h-2.5" /> PRO
+                </span>
+              )}
+            </div>
             <input
               id="customAlias"
               type="text"
               placeholder="mylink"
               value={customAlias}
               onChange={(e) => setCustomAlias(e.target.value)}
-              pattern="[a-zA-Z0-9]{3,10}"
-              title="Letters and numbers only, 3 to 10 characters"
-              className="w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white placeholder-slate-500 transition-all duration-200 focus:border-blue-500/50 focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              disabled={token && !limits?.custom_alias_allowed}
+              className="w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-white placeholder-slate-500 transition focus:border-blue-500/50 focus:bg-slate-900 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed font-mono"
             />
           </div>
-
         </div>
 
-        {/* Row 2: Checkbox on left, Button on right */}
+        {/* Advanced Options Accordion */}
+        {token && (
+          <div className="border border-white/5 rounded-2xl bg-slate-950/20 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full flex items-center justify-between px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/5 transition duration-150"
+            >
+              <span className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-blue-400" /> Advanced Options
+              </span>
+              {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+
+            {showAdvanced && (
+              <div className="p-4 border-t border-white/5 grid gap-4 md:grid-cols-3 bg-slate-950/40">
+                {/* 1. Custom Domains */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Custom Domain</label>
+                    {!limits?.custom_domain_allowed && (
+                      <span className="text-[9px] font-black text-indigo-400 bg-indigo-500/10 px-1 py-0.5 rounded">PRO</span>
+                    )}
+                  </div>
+                  {limits?.custom_domain_allowed ? (
+                    <select
+                      value={customDomainId}
+                      onChange={(e) => setCustomDomainId(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500"
+                    >
+                      <option value="">Default (snapurl.me)</option>
+                      {userDomains.map((d) => (
+                        <option key={d.id} value={d.id}>{d.domain}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-xl border border-white/5 bg-slate-900/50 p-2.5 text-[11px] text-slate-500 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 shrink-0" /> Upgrade for custom domains
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Password Protected */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Lock Link Password</label>
+                    {!limits?.password_protected_links && (
+                      <span className="text-[9px] font-black text-indigo-400 bg-indigo-500/10 px-1 py-0.5 rounded">PRO</span>
+                    )}
+                  </div>
+                  {limits?.password_protected_links ? (
+                    <input
+                      type="password"
+                      placeholder="Optional password..."
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500"
+                    />
+                  ) : (
+                    <div className="rounded-xl border border-white/5 bg-slate-900/50 p-2.5 text-[11px] text-slate-500 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 shrink-0" /> Upgrade for passwords
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Link Expiry */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Link Expiration</label>
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={expiryOption}
+                      onChange={(e) => setExpiryOption(e.target.value)}
+                      className="flex-1 rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500"
+                    >
+                      <option value="7d">7 Days (Default)</option>
+                      <option value="30d">30 Days</option>
+                      <option value="custom" disabled={!limits?.custom_expiry_allowed}>
+                        Custom Expiry {!limits?.custom_expiry_allowed ? "🔒" : ""}
+                      </option>
+                      {limits?.custom_expiry_allowed && <option value="none">No Expiry</option>}
+                    </select>
+                  </div>
+                  {expiryOption === "custom" && limits?.custom_expiry_allowed && (
+                    <input
+                      type="datetime-local"
+                      value={customExpiry}
+                      onChange={(e) => setCustomExpiry(e.target.value)}
+                      className="mt-2 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Checkbox and Button Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-          
           <label className="flex items-center gap-3 cursor-pointer group text-sm text-slate-300">
             <input
               type="checkbox"
@@ -272,11 +448,10 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
           >
             {loading ? "Generating..." : "Shorten URL"}
           </button>
-
         </div>
       </form>
 
-      {/* Error alert wrapper */}
+      {/* Errors */}
       {error && (
         <div role="alert" className="mt-5 flex items-start gap-3 rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-xs text-rose-300">
           <AlertCircle className="w-4.5 h-4.5 text-rose-400 shrink-0" />
@@ -284,19 +459,15 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
         </div>
       )}
 
-      {/* Output short URL details container (widescreen grid) */}
+      {/* Output Details */}
       {shortUrl && (
         <div className="mt-8 bg-slate-950/50 border border-white/5 rounded-3xl p-6 grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-          
-          {/* Left Column: Short link string, action buttons, and edits (7 cols) */}
           <div className="md:col-span-7 space-y-6">
-            
             <div className="space-y-2">
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-blue-400 animate-pulse" /> Your Short URL is active
               </span>
               
-              {/* URL Display and Action group */}
               <div className="flex gap-2">
                 <input
                   value={shortUrl}
@@ -309,15 +480,8 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
                   onClick={copyToClipboard}
                   className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-xl transition duration-200 text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0"
                 >
-                  {copied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" /> Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" /> Copy
-                    </>
-                  )}
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? "Copied!" : "Copy"}
                 </button>
                 <a
                   href={shortUrl}
@@ -330,7 +494,6 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
               </div>
             </div>
 
-            {/* Quick Metadata summary */}
             <div className="bg-slate-900/40 rounded-2xl p-4 border border-white/5 space-y-2.5 text-xs text-slate-300">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-slate-500 shrink-0" />
@@ -342,20 +505,19 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
                   <span className="text-slate-400 shrink-0">Expires:</span>
-                  <span className="text-slate-300 font-medium">
-                    {new Date(editExpiresAt).toLocaleDateString([], { dateStyle: "medium" })}
+                  <span className="text-slate-300 font-medium font-mono">
+                    {new Date(editExpiresAt).toLocaleString()}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Link Custom Action panel */}
             <div className="space-y-4 pt-2">
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsEditing((value) => !value);
+                    setIsEditing(!isEditing);
                     setEditError("");
                     setEditSuccess("");
                   }}
@@ -376,7 +538,6 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
                 </button>
               </div>
 
-              {/* Edit forms */}
               {isEditing && (
                 <form onSubmit={handleUpdate} className="bg-slate-900/50 border border-white/5 rounded-2xl p-4 space-y-4 animate-fade-in">
                   <div>
@@ -421,29 +582,13 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
                 </form>
               )}
 
-              {/* Status reports */}
-              {editError && (
-                <div className="bg-rose-500/10 text-rose-300 border border-rose-500/20 p-3 rounded-xl text-xs">
-                  {editError}
-                </div>
-              )}
-
-              {editSuccess && (
-                <div className="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 p-3 rounded-xl text-xs">
-                  {editSuccess}
-                </div>
-              )}
+              {editError && <div className="bg-rose-500/10 text-rose-300 border border-rose-500/20 p-3 rounded-xl text-xs">{editError}</div>}
+              {editSuccess && <div className="bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 p-3 rounded-xl text-xs">{editSuccess}</div>}
             </div>
-
           </div>
 
-          {/* Right Column: QR Code visual center (5 cols) */}
           <div className="md:col-span-5 bg-slate-900/40 border border-white/5 rounded-3xl p-5 flex flex-col items-center justify-between gap-4 self-stretch">
-            
-            {/* Visual Header */}
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block w-full text-left">Link QR Code</span>
-            
-            {/* QR block content */}
+            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block w-full text-left">Link QR Code Centre</span>
             {generateQr && qrDataUrl ? (
               <div className="flex flex-col items-center gap-4 w-full">
                 <div className="bg-white p-3.5 rounded-2xl border border-white/10 shadow-lg">
@@ -471,7 +616,7 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
                 <QrCode className="w-10 h-10 text-slate-600 mx-auto" />
                 <p className="text-xs font-semibold text-slate-300">No QR Code generated yet</p>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Tick the checkbox above during shorten or hit compile to make styling custom QR graphics.
+                  Tick the checkbox above during shorten or click generate now to make styling custom QR graphics.
                 </p>
                 <button
                   type="button"
@@ -485,49 +630,35 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
                 </button>
               </div>
             )}
-
           </div>
-
         </div>
       )}
 
       {/* Auth Prompt Modal */}
       {showAuthModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-slate-900/95 p-6 shadow-[0_0_50px_-12px_rgba(59,130,246,0.3)] transition-all duration-300">
-            
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl">
             <div className="relative flex flex-col items-center text-center pb-4 border-b border-white/5">
-              <button 
-                onClick={() => setShowAuthModal(false)} 
-                className="absolute top-0 right-0 rounded-full p-1.5 text-slate-400 hover:bg-white/5 hover:text-white transition-all duration-200 cursor-pointer"
-                aria-label="Close modal"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 ring-8 ring-blue-500/5 mb-3">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 mb-3">
                 <Sliders className="w-6 h-6 text-blue-400" />
               </div>
-
-              <p className="text-xs uppercase tracking-[0.25em] text-blue-400 font-semibold">Authentication Required</p>
               <h2 className="mt-1 text-xl font-bold text-white">Sign In to Shorten URL</h2>
-              <p className="mt-1.5 text-xs text-slate-400 max-w-[280px]">
+              <p className="mt-1.5 text-xs text-slate-400">
                 You need to be logged in to shorten long URLs and customize your link analytics.
               </p>
             </div>
-
             <div className="mt-6 space-y-3">
               <Link 
                 to="/auth?mode=login" 
-                className="flex w-full items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all duration-200 hover:from-blue-500 hover:to-indigo-500 hover:shadow-blue-500/35 focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                className="flex w-full items-center justify-center rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
               >
                 Sign In
               </Link>
               <Link 
                 to="/auth?mode=register" 
-                className="flex w-full items-center justify-center rounded-lg border border-white/10 bg-slate-800 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition duration-200 cursor-pointer"
+                className="flex w-full items-center justify-center rounded-lg border border-white/10 bg-slate-800 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition"
               >
-                Create an Account (Sign Up)
+                Create an Account
               </Link>
             </div>
           </div>
@@ -541,7 +672,6 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
           onClose={() => setShowCustomizer(false)} 
         />
       )}
-
     </div>
   );
 }
