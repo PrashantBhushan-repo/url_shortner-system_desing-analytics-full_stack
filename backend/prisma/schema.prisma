@@ -103,6 +103,7 @@ model User {
   adminActions       AdminAuditLog[]
   payments           Payment[]
   couponRedemptions  CouponRedemption[]
+  must_change_password Boolean @default(false)
 }
 
 enum Role {
@@ -432,6 +433,21 @@ model CouponRedemption {
   redeemed_at DateTime @default(now())
 
   @@unique([coupon_id, user_id])   // one redemption per user per coupon, keep it simple
+}
+
+model ApprovalRequest {
+  id              String   @id @default(uuid())
+  action          String   // e.g. "payment.refund", "subscription.change_plan"
+  status          String   @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  target_id       String
+  payload         Json
+  requester_id    String
+  requester_email String
+  reason          String?
+  approver_id     String?
+  approver_email  String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 }
 
 

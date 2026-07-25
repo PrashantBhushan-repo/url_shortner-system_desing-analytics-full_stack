@@ -148,6 +148,9 @@ export const AuthProvider = ({ children }) => {
     setAccessToken(null);
     setToken(null);
     setUser(null);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("snapurl_evaluator_session");
+    }
   };
 
   const value = useMemo(() => ({ token, user, loading, login, logout, setUser }), [token, user, loading]);

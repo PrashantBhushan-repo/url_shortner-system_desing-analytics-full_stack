@@ -22,7 +22,7 @@ export const registerSchema = z.object({
     .email("Invalid email address")
     .max(254, "Email must be at most 254 characters"),
   password: passwordSchema,
-});
+}).strict();
 
 export const verifyEmailSchema = z.object({
   userId: z.string().uuid(),
@@ -101,3 +101,8 @@ export const twoFactorOtpSchema = z.object({
 export const deleteAccountSchema = z.object({
   currentPassword: z.string().min(8).max(128),
 });
+
+export const forceChangePasswordSchema = z.object({
+  changePasswordToken: z.string().trim().min(1, "Token required"),
+  newPassword: passwordSchema,
+}).strict();

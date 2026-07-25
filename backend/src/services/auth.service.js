@@ -21,6 +21,7 @@ import { getRedisClient } from "../config/redisClient.js";
 import { sendEmail } from "../utils/mailer.js";
 import { config } from "../config/config.js";
 import { AppError } from "../utils/AppError.js";
+import jwt from "jsonwebtoken";
 import {
   SALT_ROUNDS,
   createAccessToken,
@@ -30,6 +31,7 @@ import {
   hashToken,
   toAuthError,
   parseRequestMeta,
+  getJwtSecret,
 } from "../utils/auth.utils.js";
 import { verifyTwoFactorLogin } from "./twoFactor.service.js";
 
@@ -120,7 +122,18 @@ const verifyOtp = async (purpose, userId, otp) => {
 };
 
 const createRefreshTokenRecord = async ({ userId, token, device, ip, browser, os, location }) => {
-  const expiresAt = new Date(Date.now() + config.jwt.refreshExpiresDays * 24 * 60 * 60 * 1000);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true }
+  });
+  const role = user?.role || "USER";
+
+  // admins always re-verify OTP, no device-trust bypass — this is intentional, not an oversight
+  const ttlMs = role === "ADMIN"
+    ? 8 * 60 * 60 * 1000 // 8 hours for admins
+    : config.jwt.refreshExpiresDays * 24 * 60 * 60 * 1000;
+
+  const expiresAt = new Date(Date.now() + ttlMs);
   return createRefreshToken({
     userId,
     tokenHash: hashToken(token),
@@ -404,7 +417,8 @@ const verifyBackupCode = async (user, code) => {
 };
 
 const checkAndNotifyNewDeviceLogin = async (user, meta) => {
-  if (!user.securityEmailAlerts) return;
+  // admins always receive new-device login email alerts, non-skippable — this is intentional, not an oversight
+  if (!user.securityEmailAlerts && user.role !== "ADMIN") return;
 
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -425,18 +439,27 @@ const checkAndNotifyNewDeviceLogin = async (user, meta) => {
       (login) => login.device === meta.device || (login.ip === meta.ip && login.device === meta.device)
     );
 
-    if (isNew) {
+    if (isNew || user.role === "ADMIN") {
+      const isAdmin = user.role === "ADMIN";
       await sendEmail({
         to: user.email,
-        subject: "🔒 Security Alert: New Device Sign-in",
+        subject: isAdmin 
+          ? "🔒 SECURITY CRITICAL: Administrative Console Login Alert"
+          : "🔒 Security Alert: New Device Sign-in",
         html: `
-          <div style="font-family: Arial, sans-serif; padding: 24px; color: #0f172a; background-color: #f8fafc; border-radius: 16px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0;">
+          <div style="font-family: Arial, sans-serif; padding: 24px; color: #0f172a; background-color: ${isAdmin ? "#fef2f2" : "#f8fafc"}; border-radius: 16px; max-width: 600px; margin: 0 auto; border: 1px solid ${isAdmin ? "#fca5a5" : "#e2e8f0"};">
             <div style="text-align: center; margin-bottom: 24px;">
               <span style="font-size: 40px;">🛡️</span>
-              <h2 style="color: #0f172a; margin-top: 12px; font-weight: 800; tracking-tight: -0.025em;">New Login Detected</h2>
+              <h2 style="color: ${isAdmin ? "#991b1b" : "#0f172a"}; margin-top: 12px; font-weight: 800; tracking-tight: -0.025em;">
+                ${isAdmin ? "ADMINISTRATIVE LOGIN ALERT" : "New Login Detected"}
+              </h2>
             </div>
             <p style="font-size: 15px; line-height: 1.6; color: #334155;">Hello <strong>${user.name}</strong>,</p>
-            <p style="font-size: 15px; line-height: 1.6; color: #334155;">We detected a new successful sign-in to your SnapURL account from a device or location we don't recognize.</p>
+            <p style="font-size: 15px; line-height: 1.6; color: #334155;">
+              ${isAdmin 
+                ? "A successful administrative login was established for your account. Due to the high privilege level, this notification is mandatory."
+                : "We detected a new successful sign-in to your SnapURL account from a device or location we don't recognize."}
+            </p>
             
             <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin: 24px 0;">
               <table style="width: 100%; border-collapse: collapse;">
@@ -502,6 +525,18 @@ export const verifyLoginOtp = async ({ userId, otp }, req = {}) => {
   await recordLoginAttempt(user.id, req, true, "Successful MFA verification", "low");
   await checkAndNotifyNewDeviceLogin(user, meta);
 
+  if (user.must_change_password) {
+    const changePasswordToken = jwt.sign(
+      { userId: user.id, scope: "change_password" },
+      getJwtSecret(),
+      { expiresIn: "10m" }
+    );
+    return {
+      mustChangePassword: true,
+      changePasswordToken,
+    };
+  }
+
   return issueTokenPair(user, req);
 };
 
@@ -550,4 +585,36 @@ export const logoutUser = async ({ refreshToken }) => {
   const tokenHash = hashToken(refreshToken);
   await revokeRefreshTokenByHash(tokenHash);
   return true;
+};
+
+export const forceChangePasswordService = async ({ changePasswordToken, newPassword }, req = {}) => {
+  let decoded;
+  try {
+    decoded = jwt.verify(changePasswordToken, getJwtSecret());
+  } catch (err) {
+    throw new AppError("Invalid or expired password reset token.", 401);
+  }
+
+  if (decoded.scope !== "change_password") {
+    throw new AppError("Invalid token scope", 401);
+  }
+
+  const user = await findUserById(decoded.userId);
+  if (!user) {
+    throw new AppError("User not found", 404);
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      must_change_password: false,
+    },
+  });
+
+  await recordLoginAttempt(user.id, req, true, "Password rotated on first sign-in complete", "low");
+
+  return issueTokenPair(user, req);
 };

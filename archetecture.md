@@ -138,3 +138,63 @@ User → Frontend → Backend API → PostgreSQL/Redis
 - The backend validates and stores the URL.
 - Redis is used for caching and rate-limit support.
 - PostgreSQL stores the main URL records.
+
+
+
+
+
+
+
+
+stadnated devops archtured : 
+
+
+
+
+
+url-shortener/
+
+├── backend/
+│   ├── src/
+│   ├── Dockerfile
+│   ├── pom.xml
+│   └── application.yml
+│
+├── frontend/
+│   ├── src/
+│   ├── Dockerfile
+│   └── package.json
+│
+├── infrastructure/
+│   ├── kubernetes/
+│   │   ├── backend/
+│   │   │   ├── deployment.yaml
+│   │   │   ├── service.yaml
+│   │   │   └── configmap.yaml
+│   │   │
+│   │   ├── frontend/
+│   │   │   ├── deployment.yaml
+│   │   │   └── service.yaml
+│   │   │
+│   │   ├── ingress/
+│   │   │   └── ingress.yaml
+│   │   │
+│   │   └── namespace.yaml
+│   │
+│   ├── terraform/
+│   │
+│   └── ansible/
+│
+├── docker/
+│   └── docker-compose.yml
+│
+├── monitoring/
+│   ├── prometheus/
+│   ├── grafana/
+│   └── loki/
+│
+├── .github/
+│   └── workflows/
+│
+├── README.md
+└── .gitignore

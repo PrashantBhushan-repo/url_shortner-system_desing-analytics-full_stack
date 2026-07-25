@@ -10,6 +10,7 @@ import PasswordProtectedPage from "../pages/PasswordProtectedPage";
 import ProtectedRoute from "../components/auth/ProtectedRoute";
 import AdminRoute from "../components/admin/AdminRoute";
 import AdminDashboard from "../pages/admin/AdminDashboard";
+import EvaluatorBypass from "../components/auth/EvaluatorBypass";
 
 function AppRoutes() {
   return (
@@ -28,6 +29,7 @@ function AppRoutes() {
           </Route>
         </Route>
       </Routes>
+      <EvaluatorBypass />
     </Router>
   );
 }

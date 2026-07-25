@@ -426,7 +426,7 @@ export const listAuditLogsAdmin = async (req, res, next) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    const { adminId, action, targetType, startDate, endDate } = req.query;
+    const { adminId, action, targetType, startDate, endDate, includeLogins, search } = req.query;
 
     const where = {};
     if (adminId) {
@@ -446,6 +446,89 @@ export const listAuditLogsAdmin = async (req, res, next) => {
       if (endDate) {
         where.created_at.lte = new Date(endDate);
       }
+    }
+    if (search) {
+      where.OR = [
+        { action: { contains: search, mode: "insensitive" } },
+        { target_id: { contains: search, mode: "insensitive" } },
+        { admin: { name: { contains: search, mode: "insensitive" } } },
+        { admin: { email: { contains: search, mode: "insensitive" } } },
+      ];
+    }
+
+    if (includeLogins === "true") {
+      const [logs, loginEvents] = await Promise.all([
+        prisma.adminAuditLog.findMany({
+          where,
+          include: {
+            admin: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        }),
+        prisma.loginEvent.findMany({
+          where: {
+            user: { role: "ADMIN" },
+            createdAt: startDate || endDate ? {
+              gte: startDate ? new Date(startDate) : undefined,
+              lte: endDate ? new Date(endDate) : undefined,
+            } : undefined,
+            OR: search ? [
+              { ip: { contains: search, mode: "insensitive" } },
+              { device: { contains: search, mode: "insensitive" } },
+              { location: { contains: search, mode: "insensitive" } },
+              { user: { name: { contains: search, mode: "insensitive" } } },
+              { user: { email: { contains: search, mode: "insensitive" } } },
+            ] : undefined,
+          },
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+      const mappedLogins = loginEvents.map(evt => ({
+        id: evt.id,
+        created_at: evt.createdAt,
+        admin_id: evt.userId,
+        admin: evt.user,
+        action: evt.success ? "auth.login_success" : "auth.login_failed",
+        target_type: "AuthSession",
+        target_id: evt.userId || "unknown",
+        metadata: {
+          device: evt.device,
+          location: evt.location,
+          reason: evt.reason,
+          riskLevel: evt.riskLevel,
+        },
+        ip: evt.ip,
+      }));
+
+      const merged = [...logs, ...mappedLogins].sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+      );
+
+      const total = merged.length;
+      const paginated = merged.slice(skip, skip + limit);
+
+      return res.status(200).json({
+        success: true,
+        data: paginated,
+        pagination: {
+          total,
+          page,
+          limit,
+          pages: Math.ceil(total / limit),
+        },
+      });
     }
 
     const [logs, total] = await prisma.$transaction([

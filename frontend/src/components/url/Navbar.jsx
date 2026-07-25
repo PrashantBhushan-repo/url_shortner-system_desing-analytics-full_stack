@@ -12,6 +12,7 @@ function Navbar() {
           <span>SnapURL</span>
         </Link>
         <div className="flex items-center gap-4 text-xs md:text-sm">
+          <Link to="/pricing" className="text-slate-300 hover:text-white transition font-semibold">Pricing</Link>
           {token ? (
             <>
               <Link to="/dashboard" className="text-slate-300 hover:text-white transition font-semibold">Dashboard</Link>
