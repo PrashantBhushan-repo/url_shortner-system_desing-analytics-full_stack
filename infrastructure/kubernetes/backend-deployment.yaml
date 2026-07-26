@@ -22,8 +22,7 @@ spec:
     spec:
       initContainers:
         - name: db-migration-and-seed
-          # Replace 'your-username' with your container registry path
-          image: ghcr.io/your-username/snapurl-backend:latest
+          image: IMAGE_BACKEND
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c", "npx prisma migrate deploy && node prisma/seed.js && node prisma/seedAdmin.js"]
           envFrom:
@@ -40,8 +39,7 @@ spec:
               memory: "256Mi"
       containers:
         - name: backend-api
-          # Replace 'your-username' with your container registry path
-          image: ghcr.io/your-username/snapurl-backend:latest
+          image: IMAGE_BACKEND
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
@@ -53,7 +51,7 @@ spec:
                 name: snapurl-secrets
           readinessProbe:
             httpGet:
-              path: /health # Assuming there is a health endpoint or we can hit root
+              path: /health
               port: 5000
             initialDelaySeconds: 15
             periodSeconds: 10

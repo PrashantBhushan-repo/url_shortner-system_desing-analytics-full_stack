@@ -5,6 +5,11 @@ on:
   push:
     branches: [ main ]
 
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/url_shortner-backend:${{ github.sha }}
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/url_shortner-frontend:${{ github.sha }}
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -19,11 +24,14 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig
           export KUBECONFIG=$PWD/kubeconfig
           kubectl version --client
-      - name: Replace image placeholders (if used)
+      - name: Render deployment manifests
         run: |
-          sed -i "s|IMAGE_BACKEND|ghcr.io/${{ github.repository_owner }}/url_shortner-backend:${{ github.sha }}|g" infrastructure/kubernetes/*.yaml || true
-          sed -i "s|IMAGE_FRONTEND|ghcr.io/${{ github.repository_owner }}/url_shortner-frontend:${{ github.sha }}|g" infrastructure/kubernetes/*.yaml || true
+          mkdir -p deploy-manifests
+          for file in infrastructure/kubernetes/*.yaml; do
+            sed -e "s|IMAGE_BACKEND|${BACKEND_IMAGE}|g" \
+                -e "s|IMAGE_FRONTEND|${FRONTEND_IMAGE}|g" "$file" > deploy-manifests/$(basename "$file")
+          done
       - name: Apply manifests
         run: |
           export KUBECONFIG=$PWD/kubeconfig
-          kubectl apply -f infrastructure/kubernetes
+          kubectl apply -f deploy-manifests

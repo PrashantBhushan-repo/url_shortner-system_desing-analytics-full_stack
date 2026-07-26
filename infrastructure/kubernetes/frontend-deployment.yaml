@@ -22,8 +22,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          # Replace 'your-username' with your container registry path
-          image: ghcr.io/your-username/snapurl-frontend:latest
+          image: IMAGE_FRONTEND
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000

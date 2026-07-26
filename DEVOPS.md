@@ -5,9 +5,8 @@ This file documents the basic DevOps setup applied to the repository and the man
 Files added:
 - `.gitignore` — ignore local secrets, node_modules, build outputs
 - `backend/.dockerignore`, `frontend/.dockerignore` — speed up Docker builds
-- `.github/workflows/ci.yml` — CI: lint, test, build backend and frontend
-- `.github/workflows/docker-build.yml` — builds and pushes Docker images to GHCR
-- `.github/workflows/deploy-k8s.yml` — deploys `infrastructure/kubernetes` manifests to a cluster
+- `.github/workflows/ci-cd.yml` — combined CI and Docker image build/push pipeline
+- `.github/workflows/deploy-k8s.yml` — Kubernetes deployment pipeline using rendered manifest images
 - `.github/dependabot.yml` — weekly dependency updates
 
 Required GitHub secrets (set in repository Settings → Secrets → Actions):
