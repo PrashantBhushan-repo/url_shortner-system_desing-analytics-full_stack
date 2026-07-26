@@ -40,8 +40,13 @@ function AuthPage() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resending, setResending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, token } = useAuth();
+
+  useEffect(() => {
+    if (token) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [token, navigate]);
 
   const handleChange = (e) => {
     setError("");

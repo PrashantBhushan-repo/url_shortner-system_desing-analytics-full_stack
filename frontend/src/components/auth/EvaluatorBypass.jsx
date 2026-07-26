@@ -194,21 +194,19 @@ function EvaluatorBypass() {
           Explore First. Sign In Later.
             </div>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-2 shrink-0" onMouseDown={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={() => {
                 setIsMinimized(true);
                 localStorage.setItem("snapurl_bypass_minimized", "true");
               }}
-              className="p-1 rounded hover:bg-[#00F0FF]/15 text-slate-400 hover:text-[#00F0FF] transition cursor-pointer"
+              className="px-2 py-1 rounded-md border border-[#00F0FF]/50 bg-[#00F0FF]/10 hover:bg-[#00F0FF]/25 text-[#00F0FF] font-black text-[9px] uppercase tracking-wider transition duration-150 cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.2)] active:scale-95"
               title="Minimize console"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
+              MINIMIZE
             </button>
-            <Move className="w-3.5 h-3.5 text-slate-500 cursor-move active:cursor-grabbing" />
+            <Move className="w-4 h-4 text-slate-500 hover:text-[#00F0FF] cursor-move active:cursor-grabbing transition" />
           </div>
         </div>
 

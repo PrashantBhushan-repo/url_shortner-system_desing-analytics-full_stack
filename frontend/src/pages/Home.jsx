@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Navbar from "../components/url/Navbar";
 import UrlForm from "../components/url/UrlForm";
 import Footer from "../components/url/Footer";
+import { useAuth } from "../context/AuthContext";
 import { 
   Activity, 
   Cpu, 
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 
 function Home() {
+  const { token } = useAuth();
   const [metricLinks, setMetricLinks] = useState(1284729);
   const [metricLatency, setMetricLatency] = useState(1.42);
 
@@ -215,10 +217,17 @@ function Home() {
               Get started with our free tier or access premium domains, advanced analytics, and priority ingestion pipelines today.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <Link to="/auth?mode=register" className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold text-white hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 active:scale-[0.98] transition cursor-pointer">
-                <span>Deploy Free Account</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
+              {token ? (
+                <Link to="/dashboard" className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold text-white hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 active:scale-[0.98] transition cursor-pointer">
+                  <span>Go to Dashboard</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              ) : (
+                <Link to="/auth?mode=register" className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-semibold text-white hover:from-blue-500 hover:to-indigo-500 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 active:scale-[0.98] transition cursor-pointer">
+                  <span>Deploy Free Account</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              )}
               <Link to="/pricing" className="px-6 py-3 rounded-xl border border-[#1b1e25] bg-slate-900/60 hover:bg-slate-900 text-slate-300 font-semibold transition cursor-pointer">
                 View Plan Pricing
               </Link>
