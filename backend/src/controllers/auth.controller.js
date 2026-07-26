@@ -1,6 +1,6 @@
-import { changePasswordSchema, emailChangeConfirmSchema, emailChangeRequestSchema, forgotPasswordSchema, loginSchema, logoutSchema, profileUpdateSchema, refreshSchema, registerSchema, resetPasswordSchema, twoFactorOtpSchema, verifyEmailSchema, verifyLoginOtpSchema } from "../validators/auth.validators.js";
+import { changePasswordSchema, emailChangeConfirmSchema, emailChangeRequestSchema, forgotPasswordSchema, loginSchema, logoutSchema, profileUpdateSchema, refreshSchema, registerSchema, resetPasswordSchema, twoFactorOtpSchema, verifyEmailSchema, verifyLoginOtpSchema, deleteAccountSchema } from "../validators/auth.validators.js";
 import { forgotPasswordUser, loginUser, logoutUser, refreshAccessToken, registerUser, resendOtp, resetPasswordUser, verifyEmailOtp, verifyLoginOtp as verifyLoginOtpService } from "../services/auth.service.js";
-import { changePasswordUser, confirmEmailChange, getProfileUser, getSecuritySessions, requestEmailChange, updateProfileUser } from "../services/profile.service.js";
+import { changePasswordUser, confirmEmailChange, getProfileUser, getSecuritySessions, requestEmailChange, updateProfileUser, deleteUserAccount } from "../services/profile.service.js";
 import { disableTwoFactor, enableTwoFactor, setupTwoFactor } from "../services/twoFactor.service.js";import { config } from "../config/config.js";
 import { AppError } from "../utils/AppError.js";
 
@@ -81,8 +81,8 @@ export const confirmEmailChangeController = async (req, res) => {
 };
 
 export const getSecuritySessionsController = async (req, res) => {
-  const result = await getSecuritySessions(req.user);
-  res.status(200).json({ success: true, message: "Security sessions fetched", data: result });
+  const { refreshTokens } = await getSecuritySessions(req.user);
+  res.status(200).json({ success: true, message: "Security sessions fetched", data: refreshTokens });
 };
 
 export const refresh = async (req, res) => {
@@ -149,5 +149,13 @@ export const disableTwoFactorController = async (req, res) => {
     success: true,
     message: "Two-factor authentication disabled",
     data: result,
+  });
+};
+
+export const deleteAccountController = async (req, res) => {
+  await deleteUserAccount(req.validated, req.user);
+  res.status(200).json({
+    success: true,
+    message: "Account deleted successfully",
   });
 };

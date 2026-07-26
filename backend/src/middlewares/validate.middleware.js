@@ -33,6 +33,15 @@ const createUrlSchema = z
       .string()
       .datetime({ message: "expiresAt must be a valid ISO timestamp" })
       .optional(),
+    password: z
+      .string()
+      .min(1, "Password must not be empty")
+      .max(64, "Password too long")
+      .optional(),
+    customDomainId: z
+      .string()
+      .regex(/^\d+$/, "customDomainId must be a numeric string representable as BigInt")
+      .optional(),
   })
   .strict();
 
@@ -71,6 +80,17 @@ const updateUrlSchema = z
       .datetime({ message: "expiresAt must be a valid ISO timestamp" })
       .nullable()
       .optional(),
+    password: z
+      .string()
+      .min(1, "Password must not be empty")
+      .max(64, "Password too long")
+      .nullable()
+      .optional(),
+    customDomainId: z
+      .string()
+      .regex(/^\d+$/, "customDomainId must be a numeric string representable as BigInt")
+      .nullable()
+      .optional(),
   })
   .strict()
   .refine((data) => Object.keys(data).length > 0, {
@@ -81,6 +101,8 @@ const normalizePayload = (reqBody) => ({
   longUrl: reqBody?.longUrl ?? reqBody?.long_url,
   customAlias: reqBody?.customAlias ?? reqBody?.custom_alias,
   expiresAt: reqBody?.expiresAt ?? reqBody?.expires_at,
+  password: reqBody?.password,
+  customDomainId: reqBody?.customDomainId ?? reqBody?.custom_domain_id,
 });
 
 const sanitizeValidatedBody = (body) =>

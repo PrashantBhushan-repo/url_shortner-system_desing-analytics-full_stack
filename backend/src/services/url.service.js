@@ -6,34 +6,53 @@ import {
   updateUrl,
   deactivateUrl,
   listUrlsForUser,
+  findById,
 } from "../repositories/url.repository.js";
 
 import { generateShortCode } from "../utils/generateShortCode.js";
 import { AppError } from "../utils/AppError.js";
 import { getCachedUrl, setCachedUrl, invalidateCache } from "./cache.service.js";
 import { config } from "../config/config.js";
+import bcrypt from "bcrypt";
+import { validateUrlGating } from "./planLimitService.js";
+import QRCode from "qrcode";
 
 const MAX_COLLISION_RETRIES = 5;
 
 const formatUrlResponse = (url) => ({
-  id: url.id,
+  id: url.id.toString(),
   longUrl: url.long_url,
   shortCode: url.short_code,
   shortUrl: `${config.baseUrl}/${url.short_code}`,
   customAlias: url.custom_alias,
   isActive: url.is_active,
+  isAlive: url.is_alive ?? true,
+  lastCheckedAt: url.last_checked_at,
+  healthCheckFailures: url.health_check_failures ?? 0,
   expiresAt: url.expires_at,
   createdAt: url.created_at,
+  clicksCount: url.clicks_count !== undefined ? Number(url.clicks_count) : 0,
+  passwordProtected: Boolean(url.password_hash),
+  customDomainId: url.custom_domain_id ? url.custom_domain_id.toString() : null,
 });
 
-export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null, user = null) => {
+export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null, user = null, password = null, customDomainId = null) => {
+  let validatedExpiresAt = expiresAt;
+
+  if (user && user.id) {
+    const gated = await validateUrlGating(user.id, { customAlias, expiresAt, password, customDomainId });
+    validatedExpiresAt = gated.expiresAt;
+  }
+
+  const passwordHash = password ? await bcrypt.hash(password, 10) : null;
+
   if (customAlias) {
     const exists = await shortCodeExists(customAlias);
     if (exists) {
       throw new AppError("Custom alias already taken", 409);
     }
 
-    const url = await createUrl(longUrl, customAlias, true, expiresAt, user?.id ?? null);
+    const url = await createUrl(longUrl, customAlias, true, validatedExpiresAt, user?.id ?? null, passwordHash, customDomainId);
     return formatUrlResponse(url);
   }
 
@@ -41,7 +60,7 @@ export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null, 
     const shortCode = generateShortCode();
 
     try {
-      const url = await createUrl(longUrl, shortCode, false, expiresAt, user?.id ?? null);
+      const url = await createUrl(longUrl, shortCode, false, validatedExpiresAt, user?.id ?? null, passwordHash, customDomainId);
       return formatUrlResponse(url);
     } catch (error) {
       if (error?.code === "23505") {
@@ -56,7 +75,7 @@ export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null, 
 
 export const getOriginalUrl = async (shortCode) => {
   const cachedUrl = await getCachedUrl(shortCode);
-  if (cachedUrl) {
+  if (cachedUrl && cachedUrl.longUrl) {
     return cachedUrl;
   }
 
@@ -74,9 +93,15 @@ export const getOriginalUrl = async (shortCode) => {
     throw new AppError("This short URL has expired", 410);
   }
 
-  await setCachedUrl(shortCode, url.long_url);
+  const urlData = {
+    id: url.id.toString(),
+    longUrl: url.long_url,
+    passwordHash: url.password_hash,
+  };
 
-  return url.long_url;
+  await setCachedUrl(shortCode, urlData);
+
+  return urlData;
 };
 
 export const getUrlStats = async (shortCode, user = null) => {
@@ -87,6 +112,21 @@ export const getUrlStats = async (shortCode, user = null) => {
   }
 
   return formatUrlResponse(url);
+};
+
+export const getUrlHealthStatus = async (id) => {
+  const url = await findById(id);
+
+  if (!url) {
+    throw new AppError("URL not found", 404);
+  }
+
+  return {
+    shortCode: url.short_code,
+    isAlive: url.is_alive ?? true,
+    lastCheckedAt: url.last_checked_at,
+    healthCheckFailures: url.health_check_failures ?? 0,
+  };
 };
 
 export const updateShortUrl = async (shortCode, updates, user = null) => {
@@ -116,6 +156,8 @@ export const updateShortUrl = async (shortCode, updates, user = null) => {
   let nextShortCode = existingUrl.short_code;
   let nextCustomAlias = existingUrl.custom_alias;
   let nextExpiresAt = existingUrl.expires_at;
+  let nextPasswordHash = existingUrl.password_hash;
+  let nextCustomDomainId = existingUrl.custom_domain_id ? existingUrl.custom_domain_id.toString() : null;
 
   if (Object.prototype.hasOwnProperty.call(normalizedUpdates, "longUrl")) {
     nextLongUrl = normalizedUpdates.longUrl;
@@ -143,7 +185,44 @@ export const updateShortUrl = async (shortCode, updates, user = null) => {
     nextExpiresAt = normalizedUpdates.expiresAt ?? null;
   }
 
-  const updatedUrl = await updateUrl(shortCode, nextLongUrl, nextShortCode, nextCustomAlias, nextExpiresAt, user?.id ?? null, user?.role ?? "USER");
+  let passwordToValidate = undefined;
+  if (Object.prototype.hasOwnProperty.call(normalizedUpdates, "password")) {
+    const password = normalizedUpdates.password;
+    if (password && typeof password === "string" && password.trim().length > 0) {
+      nextPasswordHash = await bcrypt.hash(password, 10);
+      passwordToValidate = password;
+    } else {
+      nextPasswordHash = null;
+    }
+  }
+
+  let customDomainIdToValidate = undefined;
+  if (Object.prototype.hasOwnProperty.call(normalizedUpdates, "customDomainId")) {
+    nextCustomDomainId = normalizedUpdates.customDomainId ?? null;
+    customDomainIdToValidate = nextCustomDomainId;
+  }
+
+  if (user && user.id) {
+    const gated = await validateUrlGating(user.id, {
+      customAlias: nextCustomAlias ? nextShortCode : null,
+      expiresAt: nextExpiresAt,
+      password: passwordToValidate,
+      customDomainId: customDomainIdToValidate,
+    });
+    nextExpiresAt = gated.expiresAt;
+  }
+
+  const updatedUrl = await updateUrl(
+    shortCode,
+    nextLongUrl,
+    nextShortCode,
+    nextCustomAlias,
+    nextExpiresAt,
+    user?.id ?? null,
+    user?.role ?? "USER",
+    nextPasswordHash,
+    nextCustomDomainId
+  );
 
   if (!updatedUrl) {
     throw new AppError("URL not found or is no longer active", 404);
@@ -169,4 +248,24 @@ export const deactivateShortUrl = async (shortCode, user = null) => {
 export const listUserUrls = async (user = null) => {
   const urls = await listUrlsForUser(user?.id ?? null, user?.role ?? "USER");
   return urls.map(formatUrlResponse);
+};
+
+export const getUrlById = async (id, user = null) => {
+  const url = await findById(id);
+  if (!url) {
+    throw new AppError("URL not found", 404);
+  }
+  if (url.user_id !== user?.id && user?.role !== "ADMIN") {
+    throw new AppError("Unauthorized access to this URL", 403);
+  }
+  return formatUrlResponse(url);
+};
+
+export const generateUrlQrCode = async (shortCode, user = null) => {
+  const url = await findByShortCodeForUser(shortCode, user?.id ?? null, user?.role ?? "USER");
+  if (!url) {
+    throw new AppError("URL not found", 404);
+  }
+  const shortUrl = `${config.baseUrl}/${url.short_code}`;
+  return await QRCode.toDataURL(shortUrl);
 };

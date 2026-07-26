@@ -1,10 +1,10 @@
 import express from "express";
-import { changePassword, confirmEmailChangeController, disableTwoFactorController, enableTwoFactorController, forgotPassword, getProfile, getSecuritySessionsController, login, logout, refresh, register, requestEmailChangeController, resendOtpController, resetPassword, setupTwoFactorController, updateProfile, verifyEmail, verifyLoginOtp as verifyLoginOtpController } from "../controllers/auth.controller.js";
+import { changePassword, confirmEmailChangeController, disableTwoFactorController, enableTwoFactorController, forgotPassword, getProfile, getSecuritySessionsController, login, logout, refresh, register, requestEmailChangeController, resendOtpController, resetPassword, setupTwoFactorController, updateProfile, verifyEmail, verifyLoginOtp as verifyLoginOtpController, deleteAccountController } from "../controllers/auth.controller.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { authGeneralLimiter, authLoginLimiter, authOtpLimiter, authSensitiveLimiter } from "../middlewares/rateLimit.middleware.js";
 import { validateBody } from "../middlewares/validateAuth.middleware.js";
 import { z } from "zod";
-import { changePasswordSchema, emailChangeConfirmSchema, emailChangeRequestSchema, forgotPasswordSchema, loginSchema, logoutSchema, profileUpdateSchema, refreshSchema, registerSchema, resetPasswordSchema, twoFactorOtpSchema, verifyEmailSchema, verifyLoginOtpSchema } from "../validators/auth.validators.js";
+import { changePasswordSchema, emailChangeConfirmSchema, emailChangeRequestSchema, forgotPasswordSchema, loginSchema, logoutSchema, profileUpdateSchema, refreshSchema, registerSchema, resetPasswordSchema, twoFactorOtpSchema, verifyEmailSchema, verifyLoginOtpSchema, deleteAccountSchema } from "../validators/auth.validators.js";
 
 const router = express.Router();
 
@@ -27,5 +27,6 @@ router.get("/security-sessions", authMiddleware, getSecuritySessionsController);
 router.post("/2fa/setup", authSensitiveLimiter, authMiddleware, setupTwoFactorController);
 router.post("/2fa/enable", authSensitiveLimiter, authMiddleware, validateBody(twoFactorOtpSchema), enableTwoFactorController);
 router.post("/2fa/disable", authSensitiveLimiter, authMiddleware, validateBody(twoFactorOtpSchema), disableTwoFactorController);
+router.delete("/delete-account", authSensitiveLimiter, authMiddleware, validateBody(deleteAccountSchema), deleteAccountController);
 
 export default router;

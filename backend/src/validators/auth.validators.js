@@ -73,6 +73,7 @@ export const profileUpdateSchema = z.object({
     ])
     .optional()
     .nullable(),
+  securityEmailAlerts: z.boolean().optional(),
 });
 
 export const emailChangeRequestSchema = z.object({
@@ -95,4 +96,8 @@ export const logoutSchema = z.object({
 
 export const twoFactorOtpSchema = z.object({
   otp: z.string().trim().length(6, "Enter a valid 6-digit code"),
+});
+
+export const deleteAccountSchema = z.object({
+  currentPassword: z.string().min(8).max(128),
 });

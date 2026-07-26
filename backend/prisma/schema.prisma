@@ -26,9 +26,13 @@ model Url {
   stats_hourly           UrlStatsHourly[]
   stats_daily            UrlStatsDaily[]
   user                   User?             @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  password_hash          String?
+  custom_domain_id       BigInt?
+  customDomain           CustomDomain?     @relation(fields: [custom_domain_id], references: [id])
 
   @@index([short_code], map: "idx_urls_short_code")
   @@index([user_id])
+  @@index([custom_domain_id])
 }
 
 model Click {
@@ -66,8 +70,8 @@ model Click {
   url               Url      @relation(fields: [url_id], references: [id], onDelete: Cascade)
 
   @@index([url_id])
+  @@index([clicked_at])
 }
-
 
 model User {
   id            String   @id @default(uuid())
@@ -75,6 +79,7 @@ model User {
   email         String   @unique
   passwordHash  String
   role          Role     @default(USER)
+  status        AccountStatus @default(ACTIVE)
   emailVerified Boolean  @default(false)
   tokenVersion  Int      @default(0)
   phone         String?
@@ -84,14 +89,47 @@ model User {
   profileImage       String?
   twoFactorEnabled   Boolean  @default(false)
   twoFactorSecret    String?
+  twoFactorBackupCodes String?
+  securityEmailAlerts Boolean @default(true)
   createdAt          DateTime @default(now())
   refreshTokens RefreshToken[]
   urls          Url[]
+  subscriptions Subscription[]
+  teamsOwned         Team[]             @relation("TeamOwner")
+  teamMemberships    TeamMember[]
+  apiKeys            ApiKey[]
+  webhooks           Webhook[]
+  customDomains      CustomDomain[]
+  adminActions       AdminAuditLog[]
+  payments           Payment[]
+  couponRedemptions  CouponRedemption[]
 }
 
 enum Role {
   USER
   ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+model AdminAuditLog {
+  id          String   @id @default(uuid())
+  admin_id    String
+  admin       User     @relation(fields: [admin_id], references: [id])
+  action      String   // e.g. "user.suspend", "user.role_change", "url.moderate_delete"
+  target_type String   // "User" | "Url" | "Subscription" | "Plan" | etc
+  target_id   String   // stored as string regardless of target's actual PK type
+  metadata    Json?    // before/after values, reason string, etc — keep small
+  ip          String?
+  created_at  DateTime @default(now())
+
+  @@index([admin_id])
+  @@index([target_type, target_id])
+  @@index([created_at])
 }
 
 model RefreshToken {
@@ -101,6 +139,9 @@ model RefreshToken {
   tokenHash String
   device    String?
   ip        String?
+  browser   String?
+  os        String?
+  location  String?
   expiresAt DateTime
   revoked   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -109,28 +150,17 @@ model RefreshToken {
   @@index([userId])
 }
 
-model LoginEvent {
-  id        String   @id @default(uuid())
-  userId    String?
-  ip        String?
-  device    String?
-  success   Boolean
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-}
-
 model UrlStatsHourly {
-  id           BigInt   @id @default(autoincrement())
-  url_id       BigInt
-  bucket_start DateTime @db.Timestamptz(6)
-  total_clicks Int      @default(0)
-  unique_clicks Int     @default(0)
-  bot_clicks   Int      @default(0)
-  top_country  String?
-  top_referrer String?
-  top_device   String?
-  url          Url      @relation(fields: [url_id], references: [id], onDelete: Cascade)
+  id            BigInt   @id @default(autoincrement())
+  url_id        BigInt
+  bucket_start  DateTime @db.Timestamptz(6)
+  total_clicks  Int      @default(0)
+  unique_clicks Int      @default(0)
+  bot_clicks    Int      @default(0)
+  top_country   String?
+  top_referrer  String?
+  top_device    String?
+  url           Url      @relation(fields: [url_id], references: [id], onDelete: Cascade)
 
   @@unique([url_id, bucket_start])
   @@index([url_id])
@@ -142,7 +172,7 @@ model UrlStatsDaily {
   url_id        BigInt
   bucket_date   DateTime @db.Date
   total_clicks  Int      @default(0)
-  unique_clicks Int      @default(0)
+  unique_clicks  Int      @default(0)
   bot_clicks    Int      @default(0)
   top_country   String?
   top_referrer  String?
@@ -153,3 +183,256 @@ model UrlStatsDaily {
   @@index([url_id])
   @@index([bucket_date])
 }
+
+model LoginEvent {
+  id        String   @id @default(uuid())
+  userId    String?
+  ip        String?
+  device    String?
+  success   Boolean
+  createdAt DateTime @default(now())
+  location  String?
+  reason    String?
+  riskLevel String?
+
+  @@index([userId])
+}
+
+model Plan {
+  id              String         @id @default(uuid())
+  key             String         @unique @db.VarChar(20)
+  name            String
+  description     String?
+  price_monthly   Int
+  price_quarterly Int?
+  price_yearly    Int?
+  currency        String         @default("INR")
+  is_active       Boolean        @default(true)
+  sort_order      Int            @default(0)
+  created_at      DateTime       @default(now())
+  limit           PlanLimit?
+  subscriptions   Subscription[]
+  payments        Payment[]
+}
+
+model PlanLimit {
+  id                       String   @id @default(uuid())
+  plan_id                  String   @unique
+  plan                     Plan     @relation(fields: [plan_id], references: [id])
+  max_urls                 Int?
+  analytics_retention_days Int?
+  custom_alias_allowed     Boolean  @default(false)
+  custom_domain_allowed    Boolean  @default(false)
+  custom_expiry_allowed    Boolean  @default(false)
+  qr_code_allowed          Boolean  @default(false)
+  password_protected_links Boolean  @default(false)
+  geo_analytics            Boolean  @default(false)
+  device_browser_analytics Boolean  @default(false)
+  utm_builder              Boolean  @default(false)
+  api_access               Boolean  @default(false)
+  csv_export               Boolean  @default(false)
+  bulk_url_creation        Boolean  @default(false)
+  webhooks_allowed         Boolean  @default(false)
+  team_members_allowed     Int?
+  api_rate_limit_per_min   Int?
+  priority_support         Boolean  @default(false)
+}
+
+model Subscription {
+  id                       String             @id @default(uuid())
+  user_id                  String
+  user                     User               @relation(fields: [user_id], references: [id])
+  plan_id                  String
+  plan                     Plan               @relation(fields: [plan_id], references: [id])
+  billing_cycle            BillingCycle       @default(MONTHLY)
+  status                   SubscriptionStatus @default(ACTIVE)
+  started_at               DateTime           @default(now())
+  current_period_end       DateTime?
+  cancel_at_period_end     Boolean            @default(false)
+  canceled_at              DateTime?
+  external_customer_id     String?
+  external_subscription_id String?
+  created_at               DateTime           @default(now())
+  updated_at               DateTime           @updatedAt
+  payments                 Payment[]
+
+  @@index([user_id])
+  @@index([plan_id])
+  @@index([status])
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+  TRIALING
+}
+
+model Team {
+  id         String       @id @default(uuid())
+  name       String
+  owner_id   String
+  owner      User         @relation("TeamOwner", fields: [owner_id], references: [id])
+  created_at DateTime     @default(now())
+  members    TeamMember[]
+}
+
+model TeamMember {
+  id         String       @id @default(uuid())
+  team_id    String
+  team       Team         @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user_id    String
+  user       User         @relation(fields: [user_id], references: [id])
+  role       TeamRole     @default(MEMBER)
+  status     InviteStatus @default(PENDING)
+  invited_at DateTime     @default(now())
+  joined_at  DateTime?
+
+  @@unique([team_id, user_id])
+  @@index([user_id])
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+model ApiKey {
+  id           String    @id @default(uuid())
+  user_id      String
+  user         User      @relation(fields: [user_id], references: [id])
+  key_hash     String    @unique
+  label        String?
+  last_used_at DateTime?
+  revoked      Boolean   @default(false)
+  created_at   DateTime  @default(now())
+
+  @@index([user_id])
+}
+
+model Webhook {
+  id         String   @id @default(uuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  target_url String
+  event      String
+  secret     String
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  @@index([user_id])
+}
+
+model CustomDomain {
+  id                 BigInt   @id @default(autoincrement())
+  user_id            String
+  user               User     @relation(fields: [user_id], references: [id])
+  domain             String   @unique
+  verified           Boolean  @default(false)
+  verification_token String?
+  created_at         DateTime @default(now())
+  urls               Url[]
+
+  @@index([user_id])
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  user_id               String
+  user                  User          @relation(fields: [user_id], references: [id])
+  subscription_id       String?
+  subscription          Subscription? @relation(fields: [subscription_id], references: [id])
+  plan_id               String
+  plan                  Plan          @relation(fields: [plan_id], references: [id])
+  billing_cycle         BillingCycle
+  amount                Int           // smallest currency unit, matches Plan.price_*
+  currency              String        @default("INR")
+  status                PaymentStatus @default(CREATED)
+  gateway               String        @default("razorpay")
+  gateway_order_id      String        @unique
+  gateway_payment_id    String?       @unique   // set once Razorpay confirms
+  gateway_signature     String?                  // stored for audit trail, never trusted post-verify
+  failure_reason        String?
+  refunded_amount       Int           @default(0)
+  metadata              Json?
+  created_at            DateTime      @default(now())
+  updated_at            DateTime      @updatedAt
+
+  @@index([user_id])
+  @@index([status])
+  @@index([created_at])
+}
+
+enum PaymentStatus {
+  CREATED     // Razorpay order created, awaiting checkout
+  AUTHORIZED  // payment captured client-side, awaiting webhook confirmation
+  CAPTURED    // confirmed successful, subscription activated/renewed
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model WebhookEvent {
+  id               String   @id @default(uuid())
+  gateway          String   @default("razorpay")
+  event_id         String   @unique   // Razorpay's x-razorpay-event-id, enforces idempotency
+  event_type       String              // "payment.captured", "payment.failed", "refund.processed", etc
+  payload          Json
+  processed        Boolean  @default(false)
+  processing_error String?
+  received_at      DateTime @default(now())
+  processed_at     DateTime?
+
+  @@index([event_type])
+  @@index([processed])
+}
+
+model Coupon {
+  id                String    @id @default(uuid())
+  code              String    @unique
+  description       String?
+  discount_type     DiscountType
+  discount_value    Int        // percent (0-100) or smallest-currency-unit flat amount, per discount_type
+  applicable_plans  String[]   // Plan.key values, empty array = all plans
+  max_redemptions   Int?       // null = unlimited
+  times_redeemed    Int        @default(0)
+  valid_from        DateTime   @default(now())
+  valid_until       DateTime?
+  is_active         Boolean    @default(true)
+  created_at        DateTime   @default(now())
+  redemptions       CouponRedemption[]
+}
+
+enum DiscountType {
+  PERCENT
+  FLAT
+}
+
+model CouponRedemption {
+  id         String   @id @default(uuid())
+  coupon_id  String
+  coupon     Coupon   @relation(fields: [coupon_id], references: [id])
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  payment_id String?
+  redeemed_at DateTime @default(now())
+
+  @@unique([coupon_id, user_id])   // one redemption per user per coupon, keep it simple
+}
+
+
+

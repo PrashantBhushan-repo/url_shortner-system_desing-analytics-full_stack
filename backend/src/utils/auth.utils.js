@@ -1,7 +1,9 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import { UAParser } from "ua-parser-js";
 import { config } from "../config/config.js";
 import { AppError } from "./AppError.js";
+import { resolveGeoLocation } from "./location.js";
 
 export const SALT_ROUNDS = 10;
 
@@ -35,6 +37,58 @@ export const getRequestMeta = (req = {}) => ({
   device: req.headers?.["user-agent"] || "unknown",
   ip: req.ip || req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() || "unknown",
 });
+
+export const parseRequestMeta = async (req = {}) => {
+  const ua = req.headers?.["user-agent"] || "unknown";
+  const ip = req.ip || req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() || "unknown";
+
+  const parser = new UAParser(ua);
+  const parsed = parser.getResult();
+
+  // Extract friendly browser and OS strings
+  const browserName = parsed.browser.name || "";
+  const browserVer = parsed.browser.version || "";
+  const browser = browserName ? `${browserName} ${browserVer}`.trim() : "Unknown Browser";
+
+  const osName = parsed.os.name || "";
+  const osVer = parsed.os.version || "";
+  const os = osName ? `${osName} ${osVer}`.trim() : "Unknown OS";
+
+  // Friendly device display name
+  let device = "Desktop";
+  if (parsed.device.type === "mobile") {
+    device = parsed.device.model || "Mobile Device";
+  } else if (parsed.device.type === "tablet") {
+    device = parsed.device.model || "Tablet Device";
+  } else if (parsed.device.model) {
+    device = parsed.device.model;
+  }
+
+  // Resolve GeoIP Location
+  let location = "Unknown Location";
+  try {
+    const geo = await resolveGeoLocation(ip);
+    if (geo) {
+      const parts = [];
+      if (geo.city) parts.push(geo.city);
+      if (geo.region && geo.region !== geo.city) parts.push(geo.region);
+      if (geo.country) parts.push(geo.country);
+      location = parts.length > 0 ? parts.join(", ") : "Unknown Location";
+    } else if (ip === "127.0.0.1" || ip === "::1" || ip === "localhost") {
+      location = "Local Network (Loopback)";
+    }
+  } catch (err) {
+    console.warn("Failed to resolve GeoIP location:", err.message);
+  }
+
+  return {
+    device,
+    ip,
+    browser,
+    os,
+    location,
+  };
+};
 
 export const toAuthError = (message, statusCode = 400) => new AppError(message, statusCode);
 

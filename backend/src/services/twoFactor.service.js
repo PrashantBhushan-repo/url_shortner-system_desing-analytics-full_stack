@@ -1,5 +1,6 @@
 import { generateSecret, generateURI, verifySync } from "otplib";
 import QRCode from "qrcode";
+import crypto from "crypto";
 import { getRedisClient } from "../config/redisClient.js";
 import { findUserById, updateUserProfile } from "../repositories/user.repository.js";
 import { AppError } from "../utils/AppError.js";
@@ -47,6 +48,16 @@ export const setupTwoFactor = async (user) => {
   };
 };
 
+const generateBackupCodes = () => {
+  const codes = [];
+  for (let i = 0; i < 8; i++) {
+    const part1 = crypto.randomBytes(3).toString("hex");
+    const part2 = crypto.randomBytes(3).toString("hex");
+    codes.push(`${part1}-${part2}`);
+  }
+  return codes;
+};
+
 export const enableTwoFactor = async (user, otp) => {
   const existingUser = await findUserById(user.id);
   if (!existingUser) {
@@ -68,13 +79,19 @@ export const enableTwoFactor = async (user, otp) => {
     throw toAuthError("Invalid authenticator code", 400);
   }
 
+  const plaintextCodes = generateBackupCodes();
+  const hashedCodes = plaintextCodes.map(code => 
+    crypto.createHash("sha256").update(code.replace("-", "")).digest("hex")
+  );
+
   await updateUserProfile(user.id, {
     twoFactorEnabled: true,
     twoFactorSecret: encryptSecret(pendingSecret),
+    twoFactorBackupCodes: JSON.stringify(hashedCodes),
   });
   await client.del(pendingSetupKey(user.id));
 
-  return { twoFactorEnabled: true };
+  return { twoFactorEnabled: true, backupCodes: plaintextCodes };
 };
 
 export const disableTwoFactor = async (user, otp) => {
@@ -96,6 +113,7 @@ export const disableTwoFactor = async (user, otp) => {
   await updateUserProfile(user.id, {
     twoFactorEnabled: false,
     twoFactorSecret: null,
+    twoFactorBackupCodes: null,
   });
 
   return { twoFactorEnabled: false };
