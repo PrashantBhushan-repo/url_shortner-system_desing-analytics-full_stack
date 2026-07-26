@@ -30,12 +30,26 @@ export const errorHandler = (err, req, res, next) => {
     details = null;
   }
 
+  const getErrorCode = (status) => {
+    switch (status) {
+      case 400: return "BAD_REQUEST";
+      case 401: return "UNAUTHORIZED";
+      case 403: return "FORBIDDEN";
+      case 404: return "NOT_FOUND";
+      case 409: return "CONFLICT";
+      case 410: return "GONE";
+      case 429: return "TOO_MANY_REQUESTS";
+      default: return "INTERNAL_SERVER_ERROR";
+    }
+  };
+
   const response = {
     success: false,
     message,
+    code: err.errorCode || getErrorCode(statusCode),
   };
 
-  if (statusCode === 400 && details) {
+  if (details) {
     response.details = details;
   }
 

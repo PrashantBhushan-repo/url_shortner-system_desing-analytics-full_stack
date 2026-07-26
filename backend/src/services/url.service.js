@@ -1,9 +1,11 @@
 import {
   createUrl,
   findByShortCode,
+  findByShortCodeForUser,
   shortCodeExists,
   updateUrl,
   deactivateUrl,
+  listUrlsForUser,
 } from "../repositories/url.repository.js";
 
 import { generateShortCode } from "../utils/generateShortCode.js";
@@ -24,14 +26,14 @@ const formatUrlResponse = (url) => ({
   createdAt: url.created_at,
 });
 
-export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null) => {
+export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null, user = null) => {
   if (customAlias) {
     const exists = await shortCodeExists(customAlias);
     if (exists) {
       throw new AppError("Custom alias already taken", 409);
     }
 
-    const url = await createUrl(longUrl, customAlias, true, expiresAt);
+    const url = await createUrl(longUrl, customAlias, true, expiresAt, user?.id ?? null);
     return formatUrlResponse(url);
   }
 
@@ -39,7 +41,7 @@ export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null) 
     const shortCode = generateShortCode();
 
     try {
-      const url = await createUrl(longUrl, shortCode, false, expiresAt);
+      const url = await createUrl(longUrl, shortCode, false, expiresAt, user?.id ?? null);
       return formatUrlResponse(url);
     } catch (error) {
       if (error?.code === "23505") {
@@ -77,8 +79,8 @@ export const getOriginalUrl = async (shortCode) => {
   return url.long_url;
 };
 
-export const getUrlStats = async (shortCode) => {
-  const url = await findByShortCode(shortCode);
+export const getUrlStats = async (shortCode, user = null) => {
+  const url = await findByShortCodeForUser(shortCode, user?.id ?? null, user?.role ?? "USER");
 
   if (!url) {
     throw new AppError("URL not found", 404);
@@ -87,7 +89,7 @@ export const getUrlStats = async (shortCode) => {
   return formatUrlResponse(url);
 };
 
-export const updateShortUrl = async (shortCode, updates) => {
+export const updateShortUrl = async (shortCode, updates, user = null) => {
   if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
     throw new AppError("Invalid update payload", 400);
   }
@@ -100,7 +102,7 @@ export const updateShortUrl = async (shortCode, updates) => {
     throw new AppError("At least one field is required", 400);
   }
 
-  const existingUrl = await findByShortCode(shortCode);
+  const existingUrl = await findByShortCodeForUser(shortCode, user?.id ?? null, user?.role ?? "USER");
 
   if (!existingUrl) {
     throw new AppError("URL not found", 404);
@@ -141,7 +143,7 @@ export const updateShortUrl = async (shortCode, updates) => {
     nextExpiresAt = normalizedUpdates.expiresAt ?? null;
   }
 
-  const updatedUrl = await updateUrl(shortCode, nextLongUrl, nextShortCode, nextCustomAlias, nextExpiresAt);
+  const updatedUrl = await updateUrl(shortCode, nextLongUrl, nextShortCode, nextCustomAlias, nextExpiresAt, user?.id ?? null, user?.role ?? "USER");
 
   if (!updatedUrl) {
     throw new AppError("URL not found or is no longer active", 404);
@@ -152,8 +154,8 @@ export const updateShortUrl = async (shortCode, updates) => {
   return formatUrlResponse(updatedUrl);
 };
 
-export const deactivateShortUrl = async (shortCode) => {
-  const deactivated = await deactivateUrl(shortCode);
+export const deactivateShortUrl = async (shortCode, user = null) => {
+  const deactivated = await deactivateUrl(shortCode, user?.id ?? null, user?.role ?? "USER");
 
   if (!deactivated) {
     throw new AppError("URL not found or already inactive", 404);
@@ -162,4 +164,9 @@ export const deactivateShortUrl = async (shortCode) => {
   await invalidateCache(shortCode);
 
   return { success: true, message: "URL deactivated successfully" };
+};
+
+export const listUserUrls = async (user = null) => {
+  const urls = await listUrlsForUser(user?.id ?? null, user?.role ?? "USER");
+  return urls.map(formatUrlResponse);
 };
