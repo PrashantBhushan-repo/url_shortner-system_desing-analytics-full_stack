@@ -431,15 +431,83 @@ export const verifySignature = async (req, res, next) => {
     }
 
     // Signature verified!
-    // Update payment status to AUTHORIZED (awaiting capturing webhook)
-    await prisma.payment.update({
+    const payment = await prisma.payment.findUnique({
       where: { gateway_order_id: razorpay_order_id },
-      data: {
-        status: "AUTHORIZED",
-        gateway_payment_id: razorpay_payment_id,
-        gateway_signature: razorpay_signature,
-      },
+      include: { plan: true },
     });
+
+    if (!payment) {
+      throw new AppError("Payment order not found.", 404);
+    }
+
+    if (payment.status !== "CAPTURED") {
+      await prisma.$transaction(async (tx) => {
+        // Update payment state
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: "CAPTURED",
+            gateway_payment_id: razorpay_payment_id,
+            gateway_signature: razorpay_signature,
+          },
+        });
+
+        // Set period end
+        const periodEnd = new Date();
+        if (payment.billing_cycle === "MONTHLY") periodEnd.setMonth(periodEnd.getMonth() + 1);
+        if (payment.billing_cycle === "QUARTERLY") periodEnd.setMonth(periodEnd.getMonth() + 3);
+        if (payment.billing_cycle === "YEARLY") periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+
+        // Cancel other active subscriptions for this user
+        await tx.subscription.updateMany({
+          where: { user_id: payment.user_id, status: "ACTIVE" },
+          data: { status: "CANCELED", canceled_at: new Date() },
+        });
+
+        // Create new active subscription
+        const sub = await tx.subscription.create({
+          data: {
+            user_id: payment.user_id,
+            plan_id: payment.plan_id,
+            billing_cycle: payment.billing_cycle,
+            status: "ACTIVE",
+            started_at: new Date(),
+            current_period_end: periodEnd,
+            external_subscription_id: razorpay_order_id,
+          },
+        });
+
+        // Associate subscription to payment
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: { subscription_id: sub.id },
+        });
+
+        // Handle coupon redemption tracking if any
+        const couponCode = payment.metadata?.couponCode;
+        if (couponCode) {
+          const coupon = await tx.coupon.findUnique({
+            where: { code: couponCode.toUpperCase().trim() },
+          });
+          if (coupon) {
+            await tx.couponRedemption.create({
+              data: {
+                coupon_id: coupon.id,
+                user_id: payment.user_id,
+                payment_id: payment.id,
+              },
+            });
+
+            await tx.coupon.update({
+              where: { id: coupon.id },
+              data: { times_redeemed: { increment: 1 } },
+            });
+          }
+        }
+      });
+
+      await invalidateSubscriptionCache(payment.user_id);
+    }
 
     // Set Redis pending flag
     if (isRedisReady()) {
@@ -453,8 +521,8 @@ export const verifySignature = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      status: "processing",
-      message: "Payment signature verified. Subscription activation is processing.",
+      status: "success",
+      message: "Payment signature verified and subscription activated successfully.",
     });
   } catch (err) {
     next(err);
@@ -525,7 +593,7 @@ export const processWebhookPayload = async (eventId, eventType, payload) => {
           include: { plan: true },
         });
 
-        if (payment) {
+        if (payment && payment.status !== "CAPTURED") {
           // Update payment state
           await tx.payment.update({
             where: { id: payment.id },

@@ -1,0 +1,29 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: '1.27.0'
+      - name: Configure kubeconfig
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig
+          export KUBECONFIG=$PWD/kubeconfig
+          kubectl version --client
+      - name: Replace image placeholders (if used)
+        run: |
+          sed -i "s|IMAGE_BACKEND|ghcr.io/${{ github.repository_owner }}/url_shortner-backend:${{ github.sha }}|g" infrastructure/kubernetes/*.yaml || true
+          sed -i "s|IMAGE_FRONTEND|ghcr.io/${{ github.repository_owner }}/url_shortner-frontend:${{ github.sha }}|g" infrastructure/kubernetes/*.yaml || true
+      - name: Apply manifests
+        run: |
+          export KUBECONFIG=$PWD/kubeconfig
+          kubectl apply -f infrastructure/kubernetes

@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: snapurl
+  labels:
+    app: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          # Replace 'your-username' with your container registry path
+          image: ghcr.io/your-username/snapurl-backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["npm", "run", "worker"]
+          envFrom:
+            - configMapRef:
+                name: snapurl-config
+            - secretRef:
+                name: snapurl-secrets
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
