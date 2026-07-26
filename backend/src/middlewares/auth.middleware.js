@@ -264,3 +264,28 @@ export const requireStepUpConfirmation = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * Admin IP range allowlisting check
+ */
+export const adminIpAllowlistMiddleware = (req, res, next) => {
+  const allowlistRaw = process.env.ADMIN_IP_ALLOWLIST || "";
+  if (!allowlistRaw) {
+    return next();
+  }
+
+  const allowedIps = allowlistRaw.split(",").map(ip => ip.trim());
+  const clientIp = req.ip || req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() || "unknown";
+
+  const matches = allowedIps.some(allowed => {
+    if (allowed === clientIp) return true;
+    if (allowed === "127.0.0.1" && (clientIp === "::1" || clientIp === "::ffff:127.0.0.1" || clientIp === "localhost")) return true;
+    return false;
+  });
+
+  if (!matches) {
+    return next(new AppError("Access denied: Client IP is not allowlisted to access the Administrative Console.", 403));
+  }
+
+  next();
+};

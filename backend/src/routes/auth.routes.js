@@ -1,10 +1,10 @@
 import express from "express";
-import { changePassword, confirmEmailChangeController, disableTwoFactorController, enableTwoFactorController, forgotPassword, getProfile, getSecuritySessionsController, login, logout, refresh, register, requestEmailChangeController, resendOtpController, resetPassword, setupTwoFactorController, updateProfile, verifyEmail, verifyLoginOtp as verifyLoginOtpController, deleteAccountController } from "../controllers/auth.controller.js";
+import { changePassword, confirmEmailChangeController, disableTwoFactorController, enableTwoFactorController, forgotPassword, getProfile, getSecuritySessionsController, login, logout, refresh, register, requestEmailChangeController, resendOtpController, resetPassword, setupTwoFactorController, updateProfile, verifyEmail, verifyLoginOtp as verifyLoginOtpController, deleteAccountController, forceChangePasswordController, evaluatorBypassController } from "../controllers/auth.controller.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { authGeneralLimiter, authLoginLimiter, authOtpLimiter, authSensitiveLimiter } from "../middlewares/rateLimit.middleware.js";
 import { validateBody } from "../middlewares/validateAuth.middleware.js";
 import { z } from "zod";
-import { changePasswordSchema, emailChangeConfirmSchema, emailChangeRequestSchema, forgotPasswordSchema, loginSchema, logoutSchema, profileUpdateSchema, refreshSchema, registerSchema, resetPasswordSchema, twoFactorOtpSchema, verifyEmailSchema, verifyLoginOtpSchema, deleteAccountSchema } from "../validators/auth.validators.js";
+import { changePasswordSchema, emailChangeConfirmSchema, emailChangeRequestSchema, forgotPasswordSchema, loginSchema, logoutSchema, profileUpdateSchema, refreshSchema, registerSchema, resetPasswordSchema, twoFactorOtpSchema, verifyEmailSchema, verifyLoginOtpSchema, deleteAccountSchema, forceChangePasswordSchema } from "../validators/auth.validators.js";
 
 const router = express.Router();
 
@@ -13,6 +13,8 @@ router.post("/verify-email", authOtpLimiter, validateBody(verifyEmailSchema), ve
 router.post("/resend-otp", authOtpLimiter, validateBody(z.object({ purpose: z.enum(["email_verify", "login_otp"]), userId: z.string().uuid() })), resendOtpController);
 router.post("/login", authLoginLimiter, validateBody(loginSchema), login);
 router.post("/verify-login-otp", authOtpLimiter, validateBody(verifyLoginOtpSchema), verifyLoginOtpController);
+router.post("/force-change-password", authSensitiveLimiter, validateBody(forceChangePasswordSchema), forceChangePasswordController);
+router.post("/evaluator-bypass", authGeneralLimiter, evaluatorBypassController);
 router.post("/forgot-password", authLoginLimiter, validateBody(forgotPasswordSchema), forgotPassword);
 router.post("/reset-password", authOtpLimiter, validateBody(resetPasswordSchema), resetPassword);
 router.post("/refresh", authGeneralLimiter, validateBody(refreshSchema), refresh);

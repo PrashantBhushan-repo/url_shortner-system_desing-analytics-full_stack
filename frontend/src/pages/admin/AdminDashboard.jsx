@@ -5,6 +5,8 @@ import API from "../../services/urlApi";
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -91,11 +93,19 @@ function AdminDashboard() {
   const [paymentsStatusFilter, setPaymentsStatusFilter] = useState("");
   const [paymentsPlanFilter, setPaymentsPlanFilter] = useState("");
 
+  // Invoice Adjustments Modal States
+  const [invoiceEditDialog, setInvoiceEditDialog] = useState(null); // payment object
+  const [invoiceCompanyName, setInvoiceCompanyName] = useState("");
+  const [invoiceTaxId, setInvoiceTaxId] = useState("");
+  const [invoiceNotes, setInvoiceNotes] = useState("");
+  const [invoiceStatusOverride, setInvoiceStatusOverride] = useState("");
+
   // Refund Modal States
   const [refundDialog, setRefundDialog] = useState(null); // { paymentId, amount, currency }
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
   const [refundPassword, setRefundPassword] = useState("");
+  const [refundRequestApproval, setRefundRequestApproval] = useState(false);
 
   // Webhooks Tab States
   const [webhooksList, setWebhooksList] = useState([]);
@@ -126,6 +136,20 @@ function AdminDashboard() {
   const [auditTotalPages, setAuditTotalPages] = useState(1);
   const [auditActionFilter, setAuditActionFilter] = useState("");
   const [auditTargetFilter, setAuditTargetFilter] = useState("");
+  const [auditSearch, setAuditSearch] = useState("");
+
+  // Revenue Operations Tab States (Advanced Reports)
+  const [billingReports, setBillingReports] = useState(null);
+  const [reportsLoading, setReportsLoading] = useState(false);
+
+  // Finance Reconciliation Tab States
+  const [reconciliationList, setReconciliationList] = useState([]);
+  const [reconciliationLoading, setReconciliationLoading] = useState(false);
+
+  // Approval Queue Tab States
+  const [approvalsList, setApprovalsList] = useState([]);
+  const [approvalsLoading, setApprovalsLoading] = useState(false);
+  const [approvalDecisionReason, setApprovalDecisionReason] = useState("");
 
   // Mutative Action Dialog States
   const [statusDialog, setStatusDialog] = useState(null); // { userId, targetStatus, userEmail }
@@ -135,6 +159,12 @@ function AdminDashboard() {
 
   const [deleteUrlDialog, setDeleteUrlDialog] = useState(null); // { urlId, shortCode }
   const [deleteReason, setDeleteReason] = useState("");
+
+  // Subscription Lifecycle dialogs inside detail modal
+  const [prorateDays, setProrateDays] = useState("");
+  const [changePlanKey, setChangePlanKey] = useState("pro");
+  const [changePlanCycle, setChangePlanCycle] = useState("MONTHLY");
+  const [lifecycleRequestApproval, setLifecycleRequestApproval] = useState(false);
 
   // Fetch Overview Data
   const fetchOverview = async () => {
@@ -251,7 +281,6 @@ function AdminDashboard() {
     }
   };
 
-  // Fetch Audit Logs
   const fetchAuditLogs = async () => {
     try {
       setAuditLoading(true);
@@ -261,6 +290,8 @@ function AdminDashboard() {
         limit: 10,
         action: auditActionFilter || undefined,
         targetType: auditTargetFilter || undefined,
+        search: auditSearch || undefined,
+        includeLogins: "true",
       };
       const response = await API.get("/admin/audit-log", { params });
       setAuditLogsList(response.data?.data || []);
@@ -269,6 +300,48 @@ function AdminDashboard() {
       setError(err.response?.data?.message || "Failed to load audit logs.");
     } finally {
       setAuditLoading(false);
+    }
+  };
+
+  // Fetch Advanced Billing Reports (RevOps)
+  const fetchBillingReports = async () => {
+    try {
+      setReportsLoading(true);
+      setError("");
+      const response = await API.get("/admin/dashboard/billing-reports");
+      setBillingReports(response.data?.data || null);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to load billing telemetry reports.");
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  // Fetch Reconciliation exceptions list
+  const fetchReconciliation = async () => {
+    try {
+      setReconciliationLoading(true);
+      setError("");
+      const response = await API.get("/admin/payments/reconciliation");
+      setReconciliationList(response.data?.data || []);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to load reconciliation diagnostics.");
+    } finally {
+      setReconciliationLoading(false);
+    }
+  };
+
+  // Fetch approvals queue
+  const fetchApprovalsQueue = async () => {
+    try {
+      setApprovalsLoading(true);
+      setError("");
+      const response = await API.get("/admin/approvals");
+      setApprovalsList(response.data?.data || []);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to load approval queues.");
+    } finally {
+      setApprovalsLoading(false);
     }
   };
 
@@ -298,10 +371,34 @@ function AdminDashboard() {
       fetchCoupons();
     } else if (activeTab === "webhooks") {
       fetchWebhooks();
+    } else if (activeTab === "revops") {
+      fetchBillingReports();
+    } else if (activeTab === "reconcile") {
+      fetchReconciliation();
+    } else if (activeTab === "approvals") {
+      fetchApprovalsQueue();
     } else if (activeTab === "audit") {
       fetchAuditLogs();
     }
-  }, [activeTab, usersPage, urlsPage, paymentsPage, webhooksPage, auditPage]);
+  }, [
+    activeTab,
+    usersPage,
+    urlsPage,
+    paymentsPage,
+    webhooksPage,
+    auditPage,
+    auditActionFilter,
+    auditTargetFilter,
+    auditSearch,
+    usersStatusFilter,
+    usersRoleFilter,
+    usersPlanFilter,
+    urlsStatusFilter,
+    paymentsStatusFilter,
+    paymentsPlanFilter,
+    webhooksProcessedFilter,
+    webhooksTypeFilter
+  ]);
 
   // Search submits
   const handleUsersSearchSubmit = (e) => {
@@ -419,7 +516,7 @@ function AdminDashboard() {
     }
   };
 
-  // Refund Submit
+  // Refund Submit (Support queuing and Direct processing based on parameters)
   const handleRefundSubmit = async (e) => {
     e.preventDefault();
     if (!refundDialog) return;
@@ -429,20 +526,27 @@ function AdminDashboard() {
       setError("");
       setSuccess("");
 
-      await API.post(`/admin/payments/${refundDialog.paymentId}/refund`, {
-        amount: refundAmount ? parseInt(refundAmount) * 100 : undefined,
+      const response = await API.post(`/admin/payments/${refundDialog.paymentId}/refund`, {
+        amount: refundAmount ? parseInt(refundAmount) : undefined,
         reason: refundReason,
         adminPassword: refundPassword,
+        requestApproval: refundRequestApproval,
       });
 
-      setSuccess("Refund successfully initiated.");
+      if (response.data?.queued) {
+        setSuccess(response.data.message || "Dual-operator approval request queued successfully.");
+      } else {
+        setSuccess("Refund successfully processed.");
+      }
+
       setRefundDialog(null);
       setRefundAmount("");
       setRefundReason("");
       setRefundPassword("");
+      setRefundRequestApproval(false);
       fetchPayments();
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to process refund.");
+      setError(err.response?.data?.message || "Failed to process refund action.");
     } finally {
       setMutating(false);
     }
@@ -510,6 +614,138 @@ function AdminDashboard() {
       fetchCoupons();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to toggle coupon status.");
+    }
+  };
+
+  /**
+   * INVOICE DETAIL ADJUSTMENTS & DUNNING CONTROL OPERATIONS
+   */
+  const openInvoiceEdit = (pay) => {
+    const meta = pay.metadata || {};
+    setInvoiceEditDialog(pay);
+    setInvoiceCompanyName(meta.companyName || "");
+    setInvoiceTaxId(meta.taxId || "");
+    setInvoiceNotes(meta.adminNotes || "");
+    setInvoiceStatusOverride(pay.status);
+  };
+
+  const handleInvoiceEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!invoiceEditDialog) return;
+    try {
+      setError("");
+      setSuccess("");
+      await API.patch(`/admin/payments/${invoiceEditDialog.id}/invoice`, {
+        companyName: invoiceCompanyName,
+        taxId: invoiceTaxId,
+        notes: invoiceNotes,
+        status: invoiceStatusOverride,
+      });
+      setSuccess("Billing statement details updated successfully.");
+      setInvoiceEditDialog(null);
+      fetchPayments();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update billing statement.");
+    }
+  };
+
+  const triggerDunningRetryAction = async (paymentId) => {
+    try {
+      setError("");
+      setSuccess("");
+      const res = await API.post(`/admin/payments/${paymentId}/dunning-retry`);
+      setSuccess(res.data?.message || "Dunning retry callback fired.");
+      fetchPayments();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to fire dunning retry.");
+    }
+  };
+
+  const triggerWriteOffAction = async (paymentId) => {
+    if (!window.confirm("Are you sure you want to write off this failed invoice record?")) return;
+    try {
+      setError("");
+      setSuccess("");
+      await API.post(`/admin/payments/${paymentId}/write-off`);
+      setSuccess("Invoice record marked as write-off.");
+      fetchPayments();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to write off payment.");
+    }
+  };
+
+  /**
+   * WEBHOOK STATE RECONCILIATION ACTIONS
+   */
+  const handleReconcileSyncAction = async (paymentId) => {
+    try {
+      setError("");
+      setSuccess("");
+      await API.post(`/admin/payments/${paymentId}/reconcile-sync`);
+      setSuccess("State mismatch successfully resolved and synchronized.");
+      fetchReconciliation();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to reconcile sync.");
+    }
+  };
+
+  /**
+   * SUBSCRIPTION LIFECYCLE CONTROLLER ACTIONS
+   */
+  const handleLifecycleAction = async (action, subId, body = {}) => {
+    try {
+      setError("");
+      setSuccess("");
+      const res = await API.patch(`/admin/subscriptions/${subId}/${action}`, body);
+      setSuccess(res.data?.message || `Subscription action '${action}' completed.`);
+      if (userDetail && userDetail.profile) {
+        fetchUserDetail(userDetail.profile.id);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || `Failed to perform subscription lifecycle action '${action}'.`);
+    }
+  };
+
+  const handlePlanChangeSubmit = async (subId) => {
+    try {
+      setError("");
+      setSuccess("");
+      const response = await API.post(`/admin/subscriptions/${subId}/change-plan`, {
+        planKey: changePlanKey,
+        billingCycle: changePlanCycle,
+        requestApproval: lifecycleRequestApproval,
+      });
+
+      if (response.data?.queued) {
+        setSuccess("Change plan request queued in the Approval Queue.");
+      } else {
+        setSuccess("Plan update successfully processed.");
+      }
+
+      if (userDetail && userDetail.profile) {
+        fetchUserDetail(userDetail.profile.id);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to process plan change.");
+    }
+  };
+
+  /**
+   * DUAL CONTROL DECISIONS
+   */
+  const handleApprovalDecisionSubmit = async (requestId, decision) => {
+    try {
+      setError("");
+      setSuccess("");
+      const response = await API.post(`/admin/approvals/${requestId}/decide`, {
+        status: decision,
+        reason: approvalDecisionReason || undefined,
+      });
+      setSuccess(response.data?.message || `Request marked as ${decision}.`);
+      setApprovalDecisionReason("");
+      fetchApprovalsQueue();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to submit approval decisions.");
     }
   };
 
@@ -583,6 +819,9 @@ function AdminDashboard() {
             { id: "payments", label: "Payments Logs", icon: CreditCard },
             { id: "coupons", label: "Coupons Manager", icon: Ticket },
             { id: "webhooks", label: "Webhook Diagnostics", icon: Activity },
+            { id: "revops", label: "RevOps reports", icon: Cpu },
+            { id: "reconcile", label: "Reconciliation", icon: Server },
+            { id: "approvals", label: "Approvals queue", icon: Shield },
             { id: "audit", label: "Audit Registry", icon: Clock }
           ].map((tab) => {
             const Icon = tab.icon;
@@ -591,9 +830,9 @@ function AdminDashboard() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-3 text-xs font-bold transition cursor-pointer whitespace-nowrap border-b-2 uppercase tracking-wider ${
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold transition cursor-pointer whitespace-nowrap border-b-2 uppercase tracking-wider ${
                   isActive
-                    ? "border-[#FF0055] text-white bg-slate-900/10 shadow-[0_4px_12px_rgba(255,0,85,0.05)]"
+                    ? "border-[#FF0055] text-white bg-slate-900/10"
                     : "border-transparent text-slate-500 hover:text-slate-300"
                 }`}
               >
@@ -620,7 +859,6 @@ function AdminDashboard() {
               </div>
             ) : (
               <div className="space-y-6 animate-fade-in">
-                {/* Visual Telemetry metrics grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {[
                     { label: "Normalized MRR", val: `₹${(overviewData.mrr / 100).toLocaleString("en-IN")}`, sub: "Active recurrent plan value", color: "border-cyan-500/20 text-[#00F0FF]" },
@@ -638,9 +876,7 @@ function AdminDashboard() {
                   ))}
                 </div>
 
-                {/* Graphs telemetry row */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Revenue Line Chart */}
                   <div className="lg:col-span-2 bg-black/40 border border-[#1b1e25] p-6 rounded-3xl">
                     <div className="flex justify-between items-center mb-6">
                       <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 font-mono">REVENUE TELEMETRY (12m Trend)</h3>
@@ -662,7 +898,6 @@ function AdminDashboard() {
                     </div>
                   </div>
 
-                  {/* Plan Distribution Chart */}
                   <div className="bg-black/40 border border-[#1b1e25] p-6 rounded-3xl flex flex-col justify-between">
                     <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 mb-4 font-mono">ACTIVE SUBSCRIPTIONS MIX</h3>
                     <div className="h-52 w-full flex justify-center items-center">
@@ -704,7 +939,6 @@ function AdminDashboard() {
         {/* Users Registry Tab */}
         {activeTab === "users" && (
           <div className="space-y-6 animate-fade-in">
-            {/* Filter controls */}
             <form onSubmit={handleUsersSearchSubmit} className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex flex-wrap gap-4 items-center">
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
@@ -760,7 +994,6 @@ function AdminDashboard() {
               </div>
             </form>
 
-            {/* List */}
             <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
               {usersLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
@@ -795,7 +1028,7 @@ function AdminDashboard() {
                               {usr.role}
                             </span>
                           </td>
-                          <td className="p-4 uppercase text-slate-300 font-bold">{usr.subscriptionPlan || "free"}</td>
+                          <td className="p-4 uppercase text-slate-300 font-bold">{usr.planKey || "free"}</td>
                           <td className="p-4 text-center">
                             <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
                               usr.status === "ACTIVE" ? "bg-[#00FF87]/5 border-[#00FF87]/20 text-[#00FF87]" :
@@ -867,7 +1100,6 @@ function AdminDashboard() {
         {/* URLs Moderation Tab */}
         {activeTab === "urls" && (
           <div className="space-y-6 animate-fade-in">
-            {/* Filter controls */}
             <form onSubmit={handleUrlsSearchSubmit} className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex flex-wrap gap-4 items-center">
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
@@ -900,7 +1132,6 @@ function AdminDashboard() {
               </div>
             </form>
 
-            {/* List */}
             <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
               {urlsLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
@@ -939,7 +1170,7 @@ function AdminDashboard() {
                               </span>
                             )}
                           </td>
-                          <td className="p-4 max-w-xs truncate text-slate-400 lowercase">{url.original_url}</td>
+                          <td className="p-4 max-w-xs truncate text-slate-400 lowercase">{url.long_url}</td>
                           <td className="p-4 text-slate-500 text-[10px]">{new Date(url.created_at).toLocaleDateString("en-GB")}</td>
                           <td className="p-4 text-center font-bold text-slate-200">{url.clicks_count?.toLocaleString()}</td>
                           <td className="p-4 text-right">
@@ -986,7 +1217,6 @@ function AdminDashboard() {
         {/* Payments Logs Tab */}
         {activeTab === "payments" && (
           <div className="space-y-6 animate-fade-in">
-            {/* Filter controls */}
             <form onSubmit={handlePaymentsSearchSubmit} className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex flex-wrap gap-4 items-center">
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
@@ -1040,7 +1270,6 @@ function AdminDashboard() {
               </div>
             </form>
 
-            {/* List */}
             <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
               {paymentsLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
@@ -1063,46 +1292,78 @@ function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#12141a]">
-                      {paymentsList.map((pay) => (
-                        <tr key={pay.id} className="hover:bg-slate-900/10 transition">
-                          <td className="p-4 space-y-0.5">
-                            <div className="text-[9px] text-slate-500 uppercase">ORD: {pay.gateway_order_id}</div>
-                            {pay.gateway_payment_id && (
-                              <div className="text-[10px] text-slate-300 uppercase">PAY: {pay.gateway_payment_id}</div>
-                            )}
-                          </td>
-                          <td className="p-4">
-                            <div className="font-bold text-slate-200 lowercase">{pay.user.email}</div>
-                            <div className="text-[9px] text-slate-500 lowercase">Name: {pay.user.name}</div>
-                          </td>
-                          <td className="p-4 uppercase text-slate-300 font-bold">
-                            {pay.plan.name} ({pay.billing_cycle})
-                          </td>
-                          <td className="p-4 font-bold text-slate-100">
-                            ₹{(pay.amount / 100).toFixed(0)}
-                          </td>
-                          <td className="p-4 text-center">
-                            <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
-                              pay.status === "CAPTURED" ? "bg-[#00FF87]/5 border-[#00FF87]/20 text-[#00FF87]" :
-                              pay.status === "FAILED" ? "bg-[#FF0055]/5 border-[#FF0055]/20 text-[#FF0055]" :
-                              pay.status === "REFUNDED" ? "bg-cyan-500/5 border-cyan-500/20 text-[#00F0FF]" :
-                              "bg-amber-500/5 border-amber-500/20 text-amber-400"
-                            }`}>
-                              {pay.status}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right">
-                            {pay.status === "CAPTURED" && (
+                      {paymentsList.map((pay) => {
+                        const meta = pay.metadata || {};
+                        return (
+                          <tr key={pay.id} className="hover:bg-slate-900/10 transition">
+                            <td className="p-4 space-y-0.5">
+                              <div className="text-[9px] text-slate-500 uppercase">ORD: {pay.gateway_order_id}</div>
+                              {pay.gateway_payment_id && (
+                                <div className="text-[10px] text-slate-300 uppercase">PAY: {pay.gateway_payment_id}</div>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <div className="font-bold text-slate-200 lowercase">{pay.user.email}</div>
+                              <div className="text-[9px] text-slate-500 lowercase">Name: {pay.user.name}</div>
+                            </td>
+                            <td className="p-4 uppercase text-slate-300 font-bold">
+                              {pay.plan.name} ({pay.billing_cycle})
+                            </td>
+                            <td className="p-4 font-bold text-slate-100">
+                              ₹{(pay.amount / 100).toFixed(0)}
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
+                                pay.status === "CAPTURED" ? "bg-[#00FF87]/5 border-[#00FF87]/20 text-[#00FF87]" :
+                                pay.status === "FAILED" ? "bg-[#FF0055]/5 border-[#FF0055]/20 text-[#FF0055]" :
+                                pay.status === "REFUNDED" ? "bg-cyan-500/5 border-cyan-500/20 text-[#00F0FF]" :
+                                "bg-amber-500/5 border-amber-500/20 text-amber-400"
+                              }`}>
+                                {pay.status}
+                              </span>
+                              {meta.writtenOff && (
+                                <span className="ml-1 text-[8px] border border-slate-500/20 bg-slate-950 text-slate-500 px-1 rounded">
+                                  WRITTEN-OFF
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-4 text-right space-x-2">
                               <button
-                                onClick={() => setRefundDialog({ paymentId: pay.id, amount: pay.amount, currency: pay.currency })}
-                                className="text-slate-400 hover:text-[#FF0055] border border-white/5 bg-slate-950 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                onClick={() => openInvoiceEdit(pay)}
+                                className="text-[#00F0FF] hover:underline text-[10px] font-bold uppercase cursor-pointer"
                               >
-                                Refund
+                                Edit Statement
                               </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+
+                              {pay.status === "CAPTURED" && (
+                                <button
+                                  onClick={() => setRefundDialog({ paymentId: pay.id, amount: pay.amount, currency: pay.currency })}
+                                  className="text-slate-400 hover:text-[#FF0055] border border-white/5 bg-slate-950 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                >
+                                  Refund
+                                </button>
+                              )}
+
+                              {pay.status === "FAILED" && !meta.writtenOff && (
+                                <>
+                                  <button
+                                    onClick={() => triggerDunningRetryAction(pay.id)}
+                                    className="text-amber-400 hover:text-white border border-amber-500/20 bg-slate-950 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                  >
+                                    Retry Invc
+                                  </button>
+                                  <button
+                                    onClick={() => triggerWriteOffAction(pay.id)}
+                                    className="text-rose-400 hover:text-white border border-rose-500/20 bg-slate-950 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                  >
+                                    Write Off
+                                  </button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1137,7 +1398,6 @@ function AdminDashboard() {
         {/* Coupons Manager Tab */}
         {activeTab === "coupons" && (
           <div className="space-y-6 animate-fade-in">
-            {/* Header / Create trigger */}
             <div className="flex justify-between items-center bg-black/45 border border-[#1b1e25] p-4 rounded-2xl">
               <div>
                 <h3 className="text-xs font-black font-mono uppercase tracking-wider text-slate-300">DISCOUNT VOUCHERS REGISTRY</h3>
@@ -1151,7 +1411,6 @@ function AdminDashboard() {
               </button>
             </div>
 
-            {/* List */}
             <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
               {couponsLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
@@ -1213,10 +1472,9 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* Webhook Health Diagnostics Tab */}
+        {/* Webhook Diagnostics Tab */}
         {activeTab === "webhooks" && (
           <div className="space-y-6 animate-fade-in">
-            {/* Filter controls */}
             <div className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex flex-wrap gap-4 items-center text-xs">
               <div className="flex-1 min-w-[200px]">
                 <h3 className="font-bold text-slate-300 uppercase font-mono tracking-wider">GATEWAY WEBHOOK TELEMETRY</h3>
@@ -1247,7 +1505,6 @@ function AdminDashboard() {
               </div>
             </div>
 
-            {/* List */}
             <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
               {webhooksLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
@@ -1327,10 +1584,275 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* Audit Logs Tab */}
+        {/* Revenue Operations Tab */}
+        {activeTab === "revops" && (
+          <div className="space-y-6 animate-fade-in">
+            {reportsLoading ? (
+              <div className="p-20 flex flex-col items-center justify-center gap-3">
+                <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
+                <span className="text-xs text-slate-500 font-mono tracking-wider font-bold">CALCULATING ACCRUED FINANCE TELEMETRY...</span>
+              </div>
+            ) : !billingReports ? (
+              <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 font-mono text-xs">NO_REVOPS_REPORTS_AVAILABLE</div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Revenue Recognition Line Chart */}
+                  <div className="bg-black/45 border border-[#1b1e25] p-6 rounded-3xl">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 font-mono mb-4">REVENUE RECOGNITION (Monthly Accrued)</h3>
+                    <div className="h-72 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={billingReports.revRec}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#121317" />
+                          <XAxis dataKey="month" stroke="#475569" fontSize={9} fontClassName="font-mono" />
+                          <YAxis stroke="#475569" fontSize={9} fontClassName="font-mono" tickFormatter={(v) => `₹${v / 100}`} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: "#08080C", borderColor: "#1b1e25", borderRadius: "12px", fontFamily: "monospace", fontSize: "11px" }}
+                            formatter={(v) => [`₹${(v / 100).toFixed(0)}`, "Recognized"]}
+                          />
+                          <Line type="monotone" dataKey="recognized" stroke="#00FF87" strokeWidth={2} dot={{ r: 3 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Refund Trend Bar Chart */}
+                  <div className="bg-black/45 border border-[#1b1e25] p-6 rounded-3xl">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 font-mono mb-4">REFUND OUTFLOW TREND</h3>
+                    <div className="h-72 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={billingReports.refunds}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#121317" />
+                          <XAxis dataKey="month" stroke="#475569" fontSize={9} fontClassName="font-mono" />
+                          <YAxis stroke="#475569" fontSize={9} fontClassName="font-mono" tickFormatter={(v) => `₹${v / 100}`} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: "#08080C", borderColor: "#1b1e25", borderRadius: "12px", fontFamily: "monospace", fontSize: "11px" }}
+                            formatter={(v) => [`₹${(v / 100).toFixed(0)}`, "Refunded"]}
+                          />
+                          <Bar dataKey="refunded" fill="#FF0055" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cohort Churn Matrix */}
+                <div className="bg-black/45 border border-[#1b1e25] p-6 rounded-3xl">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 font-mono mb-4">CHURN COHORT RETENTION (%)</h3>
+                  <div className="overflow-x-auto rounded-xl border border-white/5">
+                    <table className="w-full text-left border-collapse font-mono text-xs">
+                      <thead>
+                        <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                          <th className="p-4">Signup Cohort</th>
+                          <th className="p-4 text-center">Cohort Size</th>
+                          <th className="p-4 text-center">Month 0</th>
+                          <th className="p-4 text-center">Month 1</th>
+                          <th className="p-4 text-center">Month 2</th>
+                          <th className="p-4 text-center">Month 3</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#12141a]">
+                        {billingReports.cohorts.map((c, i) => (
+                          <tr key={i} className="hover:bg-slate-900/10 transition">
+                            <td className="p-4 font-bold text-slate-200 uppercase">{c.cohort}</td>
+                            <td className="p-4 text-center text-slate-400">{c.size} Users</td>
+                            <td className="p-4 text-center bg-emerald-500/10 text-emerald-400 font-bold">{c.m0}%</td>
+                            <td className={`p-4 text-center font-bold ${
+                              c.m1 > 70 ? "bg-emerald-500/5 text-emerald-400" :
+                              c.m1 > 40 ? "bg-amber-500/5 text-amber-400" : "bg-rose-500/5 text-rose-400"
+                            }`}>{c.m1}%</td>
+                            <td className={`p-4 text-center font-bold ${
+                              c.m2 > 70 ? "bg-emerald-500/5 text-emerald-400" :
+                              c.m2 > 40 ? "bg-amber-500/5 text-amber-400" : "bg-rose-500/5 text-rose-400"
+                            }`}>{c.m2}%</td>
+                            <td className={`p-4 text-center font-bold ${
+                              c.m3 > 70 ? "bg-emerald-500/5 text-emerald-400" :
+                              c.m3 > 40 ? "bg-amber-500/5 text-amber-400" : "bg-rose-500/5 text-rose-400"
+                            }`}>{c.m3}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Finance Reconciliation Tab */}
+        {activeTab === "reconcile" && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex justify-between items-center text-xs">
+              <div>
+                <h3 className="font-bold text-slate-300 uppercase font-mono tracking-wider">GATEWAY Webhook Reconciliation Exceptions</h3>
+                <p className="text-[10px] text-slate-500 mt-1 uppercase">Resolves anomalies between local payment records and capture log signatures.</p>
+              </div>
+              <button
+                onClick={fetchReconciliation}
+                className="bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-300 py-1.5 px-3 rounded-lg font-mono tracking-wider flex items-center gap-1 uppercase cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Scan Audit
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
+              {reconciliationLoading ? (
+                <div className="p-20 flex flex-col items-center justify-center gap-3">
+                  <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
+                  <span className="text-xs text-slate-500 font-mono tracking-wider">RUNNING TRANSACTION SYNC SCAN...</span>
+                </div>
+              ) : reconciliationList.length === 0 ? (
+                <div className="p-16 text-center text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 font-mono text-xs rounded-2xl flex flex-col items-center justify-center gap-2">
+                  <CheckCircle className="h-8 w-8 text-emerald-400" />
+                  <span>ALL SYSTEMS RECONCILED. NO EXCEPTIONS DETECTED.</span>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse font-mono text-xs">
+                    <thead>
+                      <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                        <th className="p-4 font-bold">Exceptions type</th>
+                        <th className="p-4 font-bold">Local reference</th>
+                        <th className="p-4 font-bold text-center">Local Status</th>
+                        <th className="p-4 font-bold text-center">Gateway Status</th>
+                        <th className="p-4 font-bold">Details</th>
+                        <th className="p-4 font-bold text-right font-sans">Resolve</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#12141a]">
+                      {reconciliationList.map((rec, i) => (
+                        <tr key={i} className="hover:bg-slate-900/10 transition">
+                          <td className="p-4">
+                            <span className="px-2 py-0.5 rounded border border-rose-500/20 bg-rose-500/5 text-[#FF0055] font-bold text-[9px] tracking-wider uppercase">
+                              {rec.type}
+                            </span>
+                          </td>
+                          <td className="p-4 space-y-0.5">
+                            <div className="text-slate-300 font-bold">{rec.email}</div>
+                            <div className="text-[9px] text-slate-500 uppercase">ORD: {rec.gatewayOrderId}</div>
+                          </td>
+                          <td className="p-4 text-center uppercase font-bold text-rose-400">{rec.localStatus}</td>
+                          <td className="p-4 text-center uppercase font-bold text-emerald-400">{rec.gatewayStatus}</td>
+                          <td className="p-4 text-slate-500 text-[10px]">
+                            {rec.webhookEventId ? `Capture Hook: ${rec.webhookEventId}` : `Stale created transaction (${rec.hoursOld} hrs old)`}
+                          </td>
+                          <td className="p-4 text-right">
+                            {rec.type === "STATUS_MISMATCH" && (
+                              <button
+                                onClick={() => handleReconcileSyncAction(rec.paymentId)}
+                                className="bg-[#00FF87]/10 hover:bg-[#00FF87]/25 text-[#00FF87] border border-[#00FF87]/20 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                              >
+                                Force Sync
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Approval Queue Tab */}
+        {activeTab === "approvals" && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex justify-between items-center text-xs">
+              <div>
+                <h3 className="font-bold text-slate-300 uppercase font-mono tracking-wider">DUAL-AUTHORIZATION APPROVAL QUEUE</h3>
+                <p className="text-[10px] text-slate-500 mt-1 uppercase">Provides dual-control verification for sensitive administrative actions (Refunds, Upgrades).</p>
+              </div>
+              <button
+                onClick={fetchApprovalsQueue}
+                className="bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-300 py-1.5 px-3 rounded-lg font-mono tracking-wider flex items-center gap-1 uppercase cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh List
+              </button>
+            </div>
+
+            {/* Approval Decisions Reason Input */}
+            <div className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl text-xs space-y-2">
+              <label className="font-bold text-slate-400 uppercase tracking-wider block font-mono">FINANCE OFFICER DECISION COMMENT</label>
+              <input
+                type="text"
+                placeholder="INPUT REASON TO RESOLVE APPROVAL OR REJECTION..."
+                value={approvalDecisionReason}
+                onChange={(e) => setApprovalDecisionReason(e.target.value)}
+                className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#FF0055] w-full font-mono uppercase"
+              />
+            </div>
+
+            <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
+              {approvalsLoading ? (
+                <div className="p-20 flex flex-col items-center justify-center gap-3">
+                  <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
+                  <span className="text-xs text-slate-500 font-mono tracking-wider">RETRIEVING APPROVAL REQUEST TRAILS...</span>
+                </div>
+              ) : approvalsList.length === 0 ? (
+                <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 font-mono text-xs">NO_PENDING_APPROVALS_QUEUE</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse font-mono text-xs">
+                    <thead>
+                      <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                        <th className="p-4 font-bold">Action</th>
+                        <th className="p-4 font-bold">Requester</th>
+                        <th className="p-4 font-bold">Target PK</th>
+                        <th className="p-4 font-bold">Reason</th>
+                        <th className="p-4 font-bold text-center">Status</th>
+                        <th className="p-4 font-bold text-right">Decide Approval</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#12141a]">
+                      {approvalsList.map((app) => (
+                        <tr key={app.id} className="hover:bg-slate-900/10 transition">
+                          <td className="p-4 font-bold text-slate-200 uppercase tracking-wider">{app.action}</td>
+                          <td className="p-4 text-slate-400 lowercase">{app.requester_email}</td>
+                          <td className="p-4 text-slate-300 font-bold truncate max-w-[120px]">{app.target_id}</td>
+                          <td className="p-4 text-slate-400 max-w-xs truncate uppercase">{app.reason || "—"}</td>
+                          <td className="p-4 text-center">
+                            <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
+                              app.status === "PENDING" ? "bg-amber-500/5 border-amber-500/20 text-amber-400" :
+                              app.status === "APPROVED" ? "bg-[#00FF87]/5 border-[#00FF87]/20 text-[#00FF87]" :
+                              "bg-[#FF0055]/5 border-[#FF0055]/20 text-[#FF0055]"
+                            }`}>
+                              {app.status}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right space-x-2">
+                            {app.status === "PENDING" && (
+                              <>
+                                <button
+                                  onClick={() => handleApprovalDecisionSubmit(app.id, "APPROVED")}
+                                  className="text-[#00FF87] border border-[#00FF87]/20 bg-[#00FF87]/5 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleApprovalDecisionSubmit(app.id, "REJECTED")}
+                                  className="text-[#FF0055] border border-[#FF0055]/20 bg-[#FF0055]/5 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Audit Registry Tab */}
         {activeTab === "audit" && (
           <div className="space-y-6 animate-fade-in">
-            {/* Filter controls */}
             <div className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex flex-wrap gap-4 items-center text-xs">
               <div className="flex-1 min-w-[200px]">
                 <h3 className="font-bold text-slate-300 uppercase font-mono tracking-wider">SYSTEM SYSTEMIC AUDIT REGISTRY</h3>
@@ -1338,6 +1860,14 @@ function AdminDashboard() {
               </div>
 
               <div className="flex flex-wrap gap-3 items-center">
+                <input
+                  type="text"
+                  placeholder="SEARCH KEYWORD..."
+                  value={auditSearch}
+                  onChange={(e) => { setAuditSearch(e.target.value); setAuditPage(1); }}
+                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#FF0055] font-mono uppercase"
+                />
+
                 <input
                   type="text"
                   placeholder="FILTER ACTION..."
@@ -1356,7 +1886,7 @@ function AdminDashboard() {
 
                 <button
                   type="button"
-                  onClick={() => { setAuditActionFilter(""); setAuditTargetFilter(""); setAuditPage(1); }}
+                  onClick={() => { setAuditActionFilter(""); setAuditTargetFilter(""); setAuditSearch(""); setAuditPage(1); }}
                   className="bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-300 font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer font-semibold uppercase"
                 >
                   RESET
@@ -1364,7 +1894,6 @@ function AdminDashboard() {
               </div>
             </div>
 
-            {/* List */}
             <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
               {auditLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
@@ -1464,7 +1993,6 @@ function AdminDashboard() {
               <div className="p-12 text-center text-slate-500 uppercase">FAIL_PULL: PROFILE_DATA</div>
             ) : (
               <div className="space-y-6">
-                {/* Profile Grid Info */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-black/60 p-4 rounded-2xl border border-white/5">
                     <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest block border-b border-white/5 pb-1">ACCOUNT DATA</span>
@@ -1498,6 +2026,110 @@ function AdminDashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* Subscription Lifecycle Manager Console */}
+                {userDetail.currentSubscription && (
+                  <div className="bg-black/60 p-4 rounded-2xl border border-white/5">
+                    <span className="text-[10px] text-[#00F0FF] uppercase font-bold tracking-widest block border-b border-white/5 pb-1">SUBSCRIPTION LIFECYCLE MANAGEMENT</span>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 text-xs leading-loose">
+                      <div className="space-y-1">
+                        <div><span className="text-slate-500">Subscription ID:</span> <span className="text-slate-300 font-bold">{userDetail.currentSubscription.id}</span></div>
+                        <div><span className="text-slate-500">Expiration:</span> <span className="text-slate-300 font-bold">{userDetail.currentSubscription.current_period_end ? new Date(userDetail.currentSubscription.current_period_end).toLocaleString("en-GB") : "LIFETIME"}</span></div>
+                        <div><span className="text-slate-500">Cycle:</span> <span className="text-slate-300 font-bold uppercase">{userDetail.currentSubscription.billing_cycle}</span></div>
+                        <div><span className="text-slate-500">StatusBadge:</span> <span className="text-emerald-400 font-bold uppercase border border-emerald-500/25 bg-emerald-500/5 px-2 py-0.5 rounded">{userDetail.currentSubscription.status}</span></div>
+                      </div>
+
+                      <div className="space-y-3 font-sans">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleLifecycleAction("cancel", userDetail.currentSubscription.id)}
+                            className="bg-red-950/20 hover:bg-red-950/50 text-[#FF0055] border border-[#FF0055]/30 py-1 px-2.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                          >
+                            Cancel Sub
+                          </button>
+                          <button
+                            onClick={() => handleLifecycleAction("resume", userDetail.currentSubscription.id)}
+                            className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/5 py-1 px-2.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                          >
+                            Resume Renew
+                          </button>
+                          <button
+                            onClick={() => handleLifecycleAction("renew", userDetail.currentSubscription.id)}
+                            className="bg-emerald-950/20 hover:bg-emerald-950/50 text-[#00FF87] border border-[#00FF87]/30 py-1 px-2.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                          >
+                            Manual Renew
+                          </button>
+                        </div>
+
+                        {/* Proration Adjustments */}
+                        <div className="flex gap-2 items-center font-mono">
+                          <input
+                            type="number"
+                            placeholder="DAYS (e.g. +10, -5)"
+                            value={prorateDays}
+                            onChange={(e) => setProrateDays(e.target.value)}
+                            className="bg-black border border-white/5 rounded px-2 py-1 text-slate-300 focus:outline-none w-28 text-center text-xs uppercase"
+                          />
+                          <button
+                            onClick={() => {
+                              handleLifecycleAction("prorate", userDetail.currentSubscription.id, { days: prorateDays });
+                              setProrateDays("");
+                            }}
+                            className="bg-slate-950 hover:bg-slate-900 border border-white/5 py-1 px-2.5 rounded text-[10px] font-sans font-bold text-slate-300 cursor-pointer uppercase"
+                          >
+                            Prorate shift
+                          </button>
+                        </div>
+
+                        {/* Plan change direct/approval queue */}
+                        <div className="border-t border-white/5 pt-3 space-y-2 font-mono">
+                          <span className="text-[9px] text-slate-500 uppercase block tracking-wider font-bold">MANUAL TIER UPGRADE/DOWNGRADE</span>
+                          <div className="flex flex-wrap gap-2 items-center">
+                            <select
+                              value={changePlanKey}
+                              onChange={(e) => setChangePlanKey(e.target.value)}
+                              className="bg-black border border-white/5 rounded px-2 py-1 text-slate-300 text-xs focus:outline-none"
+                            >
+                              <option value="starter">starter</option>
+                              <option value="pro">pro</option>
+                              <option value="business">business</option>
+                            </select>
+
+                            <select
+                              value={changePlanCycle}
+                              onChange={(e) => setChangePlanCycle(e.target.value)}
+                              className="bg-black border border-white/5 rounded px-2 py-1 text-slate-300 text-xs focus:outline-none"
+                            >
+                              <option value="MONTHLY">monthly</option>
+                              <option value="QUARTERLY">quarterly</option>
+                              <option value="YEARLY">yearly</option>
+                            </select>
+                          </div>
+
+                          <div className="flex items-center gap-2 font-sans text-[10px]">
+                            <label className="flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={lifecycleRequestApproval}
+                                onChange={(e) => setLifecycleRequestApproval(e.target.checked)}
+                                className="accent-[#FF0055]"
+                              />
+                              Queue dual-approval
+                            </label>
+
+                            <button
+                              onClick={() => handlePlanChangeSubmit(userDetail.currentSubscription.id)}
+                              className="bg-[#FF0055] hover:bg-[#FF0055]/90 text-white font-bold py-1 px-2.5 rounded text-[10px] cursor-pointer transition uppercase"
+                            >
+                              Modify Tier
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Active Sessions */}
                 <div>
@@ -1548,6 +2180,85 @@ function AdminDashboard() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* -------------------- INVOICE / BILLING ADJUSTMENTS MODAL -------------------- */}
+      {invoiceEditDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <form onSubmit={handleInvoiceEditSubmit} className="w-full max-w-md rounded-[2.5rem] border border-[#222] bg-[#0d0d12] p-6 shadow-2xl space-y-4 font-mono text-xs text-slate-300">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2 font-sans uppercase">
+              <CreditCard className="w-5 h-5 text-[#FF0055]" />
+              EDIT BILLING STATEMENT
+            </h3>
+
+            <p className="text-xs text-slate-400">
+              Adjusting statement parameters for Order Reference: <span className="font-bold text-slate-200">{invoiceEditDialog.gateway_order_id}</span>
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Company Billing Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Acme Corp"
+                value={invoiceCompanyName}
+                onChange={(e) => setInvoiceCompanyName(e.target.value)}
+                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055] uppercase"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Corporate Tax ID / GSTIN</label>
+              <input
+                type="text"
+                placeholder="e.g. 22AAAAA0000A1Z5"
+                value={invoiceTaxId}
+                onChange={(e) => setInvoiceTaxId(e.target.value)}
+                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055] uppercase"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Invoice Status override</label>
+              <select
+                value={invoiceStatusOverride}
+                onChange={(e) => setInvoiceStatusOverride(e.target.value)}
+                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-slate-300 focus:outline-none focus:border-[#FF0055]"
+              >
+                <option value="CREATED">CREATED</option>
+                <option value="AUTHORIZED">AUTHORIZED</option>
+                <option value="CAPTURED">CAPTURED / PAID</option>
+                <option value="FAILED">FAILED</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Admin Audit Notes</label>
+              <textarea
+                rows={2}
+                placeholder="Billing audit note logs..."
+                value={invoiceNotes}
+                onChange={(e) => setInvoiceNotes(e.target.value)}
+                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055] uppercase"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setInvoiceEditDialog(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 border border-white/5 text-slate-400 hover:text-white transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2.5 rounded-xl bg-[#FF0055] text-white font-bold transition cursor-pointer"
+              >
+                SAVE INVOICE
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -1738,6 +2449,18 @@ function AdminDashboard() {
               />
             </div>
 
+            <div className="flex items-center gap-2 font-sans text-xs">
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={refundRequestApproval}
+                  onChange={(e) => setRefundRequestApproval(e.target.checked)}
+                  className="accent-[#FF0055]"
+                />
+                Queue dual-approval (Requires Finance Operator signoff)
+              </label>
+            </div>
+
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
@@ -1746,6 +2469,7 @@ function AdminDashboard() {
                   setRefundAmount("");
                   setRefundReason("");
                   setRefundPassword("");
+                  setRefundRequestApproval(false);
                 }}
                 className="px-4 py-2.5 rounded-xl bg-slate-900 border border-white/5 text-slate-400 hover:text-white transition cursor-pointer"
               >

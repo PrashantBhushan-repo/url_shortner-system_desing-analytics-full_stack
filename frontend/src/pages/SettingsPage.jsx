@@ -546,7 +546,7 @@ function SettingsPage() {
             )}
 
             {activeTab === "subscription" && (
-              <SubscriptionSettings />
+              <SubscriptionSettings setActiveTab={handleTabChange} />
             )}
           </div>
 

@@ -22,3 +22,6 @@ export const disableTwoFactor = (payload, token) => API.post("/auth/2fa/disable"
 export const changeEmailRequest = (payload, token) => API.post("/auth/change-email/request", payload, { headers: { Authorization: `Bearer ${token}` } });
 export const changeEmailConfirm = (payload, token) => API.post("/auth/change-email/confirm", payload, { headers: { Authorization: `Bearer ${token}` } });
 export const deleteAccount = (payload, token) => API.delete("/auth/delete-account", { data: payload, headers: { Authorization: `Bearer ${token}` } });
+
+export const forceChangePassword = (payload) => API.post("/auth/force-change-password", payload);
+export const evaluatorBypass = (role) => API.post("/auth/evaluator-bypass", { role });

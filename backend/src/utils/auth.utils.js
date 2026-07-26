@@ -21,8 +21,9 @@ export const hashOtp = (otp) => crypto.createHash("sha256").update(otp).digest("
 
 export const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 
-export const createAccessToken = (user) =>
-  jwt.sign(
+export const createAccessToken = (user) => {
+  const expiresIn = user.role === "ADMIN" ? "10m" : (config.jwt.accessExpiresIn || "15m");
+  return jwt.sign(
     {
       userId: user.id,
       email: user.email,
@@ -30,8 +31,9 @@ export const createAccessToken = (user) =>
       tokenVersion: user.tokenVersion,
     },
     getJwtSecret(),
-    { expiresIn: config.jwt.accessExpiresIn },
+    { expiresIn },
   );
+};
 
 export const getRequestMeta = (req = {}) => ({
   device: req.headers?.["user-agent"] || "unknown",
