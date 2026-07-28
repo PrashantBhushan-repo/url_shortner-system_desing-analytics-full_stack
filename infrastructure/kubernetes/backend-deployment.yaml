@@ -23,7 +23,7 @@ spec:
       initContainers:
         - name: db-migration-and-seed
           image: IMAGE_BACKEND
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command: ["sh", "-c", "npx prisma migrate deploy && node prisma/seed.js && node prisma/seedAdmin.js"]
           envFrom:
             - configMapRef:
@@ -40,7 +40,7 @@ spec:
       containers:
         - name: backend-api
           image: IMAGE_BACKEND
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 5000
               name: http

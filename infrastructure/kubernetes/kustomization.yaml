@@ -3,11 +3,13 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
+  - storageclass.yaml
   - configmap.yaml
   - secrets.yaml
   - postgres-pvc.yaml
   - postgres-deployment.yaml
   - postgres-service.yaml
+  - redis-pvc.yaml
   - redis-deployment.yaml
   - redis-service.yaml
   - backend-deployment.yaml

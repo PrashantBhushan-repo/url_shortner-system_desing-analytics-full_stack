@@ -18,7 +18,7 @@ spec:
       containers:
         - name: worker
           image: IMAGE_BACKEND
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command: ["npm", "run", "worker"]
           envFrom:
             - configMapRef:

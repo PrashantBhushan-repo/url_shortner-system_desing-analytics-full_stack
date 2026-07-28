@@ -13,25 +13,83 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          version: '1.27.0'
-      - name: Configure kubeconfig
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}
+            ghcr.io/${{ github.repository_owner }}/url_shortner-backend:latest
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          build-args: |
+            VITE_API_URL=https://api.snapurl.local/api
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}
+            ghcr.io/${{ github.repository_owner }}/url_shortner-frontend:latest
+
+      - name: Prepare SSH access to EC2 host
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         run: |
-          echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig
-          export KUBECONFIG=$PWD/kubeconfig
-          kubectl version --client
+          if [ -z "$EC2_HOST" ] || [ -z "$EC2_USERNAME" ] || [ -z "$EC2_SSH_PRIVATE_KEY" ]; then
+            echo "Missing EC2 deployment secrets. Please add EC2_HOST, EC2_USERNAME, and EC2_SSH_PRIVATE_KEY to GitHub Secrets."
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "$EC2_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          echo "EC2_HOST=$EC2_HOST" >> "$GITHUB_ENV"
+          echo "EC2_USERNAME=$EC2_USERNAME" >> "$GITHUB_ENV"
+
       - name: Render deployment manifests
         run: |
           mkdir -p deploy-manifests
           for file in infrastructure/kubernetes/*.yaml; do
+            if [ "$(basename "$file")" = "kustomization.yaml" ]; then
+              continue
+            fi
             sed -e "s|IMAGE_BACKEND|${BACKEND_IMAGE}|g" \
-                -e "s|IMAGE_FRONTEND|${FRONTEND_IMAGE}|g" "$file" > deploy-manifests/$(basename "$file")
+                -e "s|IMAGE_FRONTEND|${FRONTEND_IMAGE}|g" "$file" > "deploy-manifests/$(basename "$file")"
           done
-      - name: Apply manifests
+
+      - name: Copy manifests to EC2 host
         run: |
-          export KUBECONFIG=$PWD/kubeconfig
-          kubectl apply -f deploy-manifests
+          ssh -o StrictHostKeyChecking=no "${EC2_USERNAME}@${EC2_HOST}" "mkdir -p /tmp/snapurl-k8s"
+          scp -o StrictHostKeyChecking=no -r deploy-manifests/* "${EC2_USERNAME}@${EC2_HOST}:/tmp/snapurl-k8s/"
+
+      - name: Apply manifests on EC2 host
+        run: |
+          ssh -o StrictHostKeyChecking=no "${EC2_USERNAME}@${EC2_HOST}" '
+            set -e
+            kubectl apply -f /tmp/snapurl-k8s
+            kubectl rollout status deployment/frontend -n snapurl --timeout=5m || true
+            kubectl rollout status deployment/backend -n snapurl --timeout=5m || true
+            kubectl rollout status statefulset/postgres -n snapurl --timeout=5m || true
+            kubectl rollout status statefulset/redis -n snapurl --timeout=5m || true
+          '

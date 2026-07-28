@@ -1,11 +1,12 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: redis
   namespace: snapurl
   labels:
     app: redis
 spec:
+  serviceName: redis-service
   replicas: 1
   selector:
     matchLabels:
@@ -19,6 +20,7 @@ spec:
         - name: redis
           image: redis:alpine
           imagePullPolicy: IfNotPresent
+          command: ["redis-server", "--appendonly", "yes"]
           ports:
             - containerPort: 6379
               name: redis
@@ -44,4 +46,5 @@ spec:
               mountPath: /data
       volumes:
         - name: redis-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: redis-pvc
