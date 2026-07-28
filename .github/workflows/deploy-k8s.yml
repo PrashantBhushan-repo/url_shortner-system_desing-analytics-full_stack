@@ -51,21 +51,21 @@ jobs:
       - name: Prepare SSH access to EC2 host
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
-          if [ -z "$EC2_HOST" ] || [ -z "$EC2_USERNAME" ] || [ -z "$EC2_SSH_PRIVATE_KEY" ]; then
-            echo "Missing EC2 deployment secrets. Please add EC2_HOST, EC2_USERNAME, and EC2_SSH_PRIVATE_KEY to GitHub Secrets."
+          if [ -z "$EC2_HOST" ] || [ -z "$EC2_USER" ] || [ -z "$EC2_SSH_KEY" ]; then
+            echo "Missing EC2 deployment secrets. Please add EC2_HOST, EC2_USER, and EC2_SSH_KEY to GitHub Secrets."
             exit 1
           fi
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "$EC2_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
           echo "EC2_HOST=$EC2_HOST" >> "$GITHUB_ENV"
-          echo "EC2_USERNAME=$EC2_USERNAME" >> "$GITHUB_ENV"
+          echo "EC2_USER=$EC2_USER" >> "$GITHUB_ENV"
 
       - name: Render deployment manifests
         run: |
@@ -80,12 +80,12 @@ jobs:
 
       - name: Copy manifests to EC2 host
         run: |
-          ssh -o StrictHostKeyChecking=no "${EC2_USERNAME}@${EC2_HOST}" "mkdir -p /tmp/snapurl-k8s"
-          scp -o StrictHostKeyChecking=no -r deploy-manifests/* "${EC2_USERNAME}@${EC2_HOST}:/tmp/snapurl-k8s/"
+          ssh -o StrictHostKeyChecking=no "${EC2_USER}@${EC2_HOST}" "mkdir -p /tmp/snapurl-k8s"
+          scp -o StrictHostKeyChecking=no -r deploy-manifests/* "${EC2_USER}@${EC2_HOST}:/tmp/snapurl-k8s/"
 
       - name: Apply manifests on EC2 host
         run: |
-          ssh -o StrictHostKeyChecking=no "${EC2_USERNAME}@${EC2_HOST}" '
+          ssh -o StrictHostKeyChecking=no "${EC2_USER}@${EC2_HOST}" '
             set -e
             kubectl apply -f /tmp/snapurl-k8s
             kubectl rollout status deployment/frontend -n snapurl --timeout=5m || true
