@@ -76,6 +76,14 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           echo "EC2_HOST=$EC2_HOST" >> "$GITHUB_ENV"
           echo "EC2_USER=$EC2_USER" >> "$GITHUB_ENV"
+          echo "EC2_SSH_KEY_PATH=~/.ssh/id_rsa" >> "$GITHUB_ENV"
+
+      - name: Validate EC2 SSH connectivity
+        run: |
+          if ! ssh -i "$EC2_SSH_KEY_PATH" -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=15 "${EC2_USER}@${EC2_HOST}" 'echo SSH_OK'; then
+            echo "::error::Unable to connect to EC2 host via SSH. Confirm EC2_HOST is reachable from GitHub Actions and port 22 is open."
+            exit 1
+          fi
 
       - name: Render deployment manifests
         run: |
