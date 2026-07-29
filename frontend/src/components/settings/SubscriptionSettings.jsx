@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../../services/urlApi";
 import { useAuth } from "../../context/AuthContext";
-import { ShieldCheck, ShieldAlert, Sparkles, Building, Star, Zap, CheckCircle2, ChevronRight, CreditCard, Calendar, Clock, Download, Plus, Trash2, Receipt, HelpCircle, X, Check, Loader2, ArrowUpRight } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Sparkles, Building, Star, Zap, CheckCircle2, CreditCard, Download, Plus, Trash2, Receipt, X, Loader2, ArrowUpRight } from "lucide-react";
 
 function SubscriptionSettings({ setActiveTab }) {
   const { user: authUser } = useAuth();
