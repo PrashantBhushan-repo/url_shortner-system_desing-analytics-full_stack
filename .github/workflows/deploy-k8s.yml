@@ -98,12 +98,12 @@ jobs:
 
       - name: Copy manifests to EC2 host
         run: |
-          ssh -o StrictHostKeyChecking=no "${EC2_USER}@${EC2_HOST}" "mkdir -p /tmp/snapurl-k8s"
-          scp -o StrictHostKeyChecking=no -r deploy-manifests/* "${EC2_USER}@${EC2_HOST}:/tmp/snapurl-k8s/"
+          ssh -i "$EC2_SSH_KEY_PATH" -o StrictHostKeyChecking=no "${EC2_USER}@${EC2_HOST}" "mkdir -p /tmp/snapurl-k8s"
+          scp -i "$EC2_SSH_KEY_PATH" -o StrictHostKeyChecking=no -r deploy-manifests/* "${EC2_USER}@${EC2_HOST}:/tmp/snapurl-k8s/"
 
       - name: Apply manifests on EC2 host
         run: |
-          ssh -o StrictHostKeyChecking=no "${EC2_USER}@${EC2_HOST}" '
+          ssh -i "$EC2_SSH_KEY_PATH" -o StrictHostKeyChecking=no "${EC2_USER}@${EC2_HOST}" '
             set -e
             kubectl apply -f /tmp/snapurl-k8s
             kubectl rollout status deployment/frontend -n snapurl --timeout=5m || true
