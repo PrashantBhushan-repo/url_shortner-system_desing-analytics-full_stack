@@ -72,10 +72,8 @@ jobs:
           fi
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
           echo "EC2_HOST=$EC2_HOST" >> "$GITHUB_ENV"
           echo "EC2_USER=$EC2_USER" >> "$GITHUB_ENV"
 
