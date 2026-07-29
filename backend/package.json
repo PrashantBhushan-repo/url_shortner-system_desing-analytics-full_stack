@@ -34,7 +34,7 @@
     "otplib": "^13.4.1",
     "pg": "^8.22.0",
     "qrcode": "^1.5.4",
-    "rate-limit-redis": "^4.2.0",
+    "rate-limit-redis": "^6.0.0",
     "razorpay": "^2.9.8",
     "socket.io": "^4.8.3",
     "ua-parser-js": "^2.0.10",
