@@ -31,6 +31,7 @@ function TwoFactorSettings({
   const isEnabled = Boolean(user?.twoFactorEnabled);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEnableOtp("");
     setDisableOtp("");
   }, [isEnabled]);

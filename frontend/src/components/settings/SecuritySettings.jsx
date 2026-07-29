@@ -5,7 +5,6 @@ import {
   Laptop,
   Smartphone,
   Globe,
-  Clock,
   Trash2,
   Bell,
   CheckCircle,
@@ -14,9 +13,6 @@ import {
   MapPin,
   Activity,
   History,
-  UserX,
-  Lock,
-  ChevronRight,
   Monitor,
   ChevronDown,
   ChevronUp
@@ -50,7 +46,6 @@ function SecuritySettings({
   const safeLoginHistory = Array.isArray(loginHistory) ? loginHistory : [];
   const currentSession = safeSessions.find((session) => session.isCurrent);
   const otherSessions = safeSessions.filter((session) => !session.isCurrent);
-  const lastLogin = safeLoginHistory.find((h) => h.success);
   const isEmailAlertsEnabled = Boolean(user?.securityEmailAlerts);
 
   // Helper to determine device icon

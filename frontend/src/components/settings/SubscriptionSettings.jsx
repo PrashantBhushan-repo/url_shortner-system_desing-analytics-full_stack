@@ -7,7 +7,6 @@ import { ShieldCheck, ShieldAlert, Sparkles, Building, Star, Zap, CheckCircle2, 
 function SubscriptionSettings({ setActiveTab }) {
   const { user: authUser } = useAuth();
   const [data, setData] = useState(null);
-  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState("");
@@ -36,13 +35,9 @@ function SubscriptionSettings({ setActiveTab }) {
   const fetchSubscription = async () => {
     try {
       setLoading(true);
-      const [subRes, plansRes] = await Promise.all([
-        API.get("/subscription"),
-        API.get("/plans")
-      ]);
+      const subRes = await API.get("/subscription");
       setData(subRes.data?.data || null);
-      setPlans(plansRes.data?.data || []);
-    } catch (err) {
+    } catch {
       setError("Failed to fetch subscription status.");
     } finally {
       setLoading(false);
@@ -62,6 +57,7 @@ function SubscriptionSettings({ setActiveTab }) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchSubscription();
     fetchInvoices();
   }, []);
@@ -94,22 +90,6 @@ function SubscriptionSettings({ setActiveTab }) {
       await fetchSubscription();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to resume subscription auto-renewal.");
-    } finally {
-      setSwitching(false);
-    }
-  };
-
-  const handlePlanChange = async (planKey) => {
-    try {
-      setSwitching(true);
-      setError("");
-      setSuccess("");
-      const response = await API.post("/subscription/change", { planKey });
-      setSuccess(response.data?.message || "Plan updated successfully!");
-      await fetchSubscription();
-      await fetchInvoices();
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to switch plan.");
     } finally {
       setSwitching(false);
     }

@@ -19,7 +19,6 @@ import {
   AlertCircle,
   Lock,
   Globe,
-  Hourglass,
   ChevronDown,
   ChevronUp
 } from "lucide-react";
@@ -283,6 +282,7 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
     if (generateQr && shortUrl) {
       generateQrCode(shortUrl);
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQrDataUrl("");
     }
   }, [generateQr, shortUrl]);

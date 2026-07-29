@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import ForgotPasswordModal from "../components/auth/ForgotPasswordModal";
 import { loginUser, registerUser, resendOtp, verifyEmail, verifyLoginOtp, forceChangePassword } from "../services/authApi";
 import { useAuth } from "../context/AuthContext";
-import { Lock, Shield, AlertTriangle, Key } from "lucide-react";
+import { Lock, Shield } from "lucide-react";
 
 const initialState = {
   name: "",
@@ -24,6 +24,7 @@ function AuthPage() {
   useEffect(() => {
     const m = searchParams.get("mode");
     if (m === "register" || m === "signup") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMode("register");
     } else if (m === "login") {
       setMode("login");
@@ -41,6 +42,7 @@ function AuthPage() {
   const [resending, setResending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { login, token } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (token) {

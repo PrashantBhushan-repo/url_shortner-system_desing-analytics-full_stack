@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { getAccessToken } from "../services/urlApi";
@@ -11,8 +11,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  BarChart,
-  Bar,
   Cell,
   PieChart,
   Pie,
@@ -20,19 +18,15 @@ import {
 } from "recharts";
 import {
   ArrowLeft,
-  Calendar,
   BarChart3,
   Globe,
   Laptop,
   Smartphone,
   Eye,
-  Sparkles,
   AlertCircle,
-  Check,
   Download,
   Activity,
   Clock,
-  ShieldCheck,
   MousePointerClick,
   Compass
 } from "lucide-react";
@@ -99,9 +93,10 @@ function Analytics() {
   // Trigger load when range/ID changes
   useEffect(() => {
     if (urlId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchAnalyticsData();
     }
-  }, [urlId, range]);
+  }, [urlId, range, fetchAnalyticsData]);
 
   // Set up WebSockets for real-time click tracking
   useEffect(() => {

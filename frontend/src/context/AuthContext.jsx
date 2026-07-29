@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getProfile } from "../services/authApi";
 import { setAccessToken, getAccessToken } from "../services/urlApi";
@@ -59,7 +60,7 @@ export const AuthProvider = ({ children }) => {
           setUser(profile);
           setLoading(false);
           return;
-        } catch (error) {
+        } catch {
           setUser(null);
         }
       }
@@ -77,11 +78,11 @@ export const AuthProvider = ({ children }) => {
           try {
             const profileResponse = await getProfile(newAccessToken);
             setUser(profileResponse.data?.data || null);
-          } catch (profileError) {
+          } catch {
             setUser(null);
           }
         }
-      } catch (error) {
+      } catch {
         setAccessToken(null);
         setToken(null);
         setUser(null);
@@ -127,7 +128,7 @@ export const AuthProvider = ({ children }) => {
       try {
         const response = await getProfile(token);
         setUser(response.data?.data || null);
-      } catch (error) {
+      } catch {
         setAccessToken(null);
         setToken(null);
         setUser(null);

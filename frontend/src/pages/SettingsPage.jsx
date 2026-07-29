@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -73,7 +73,7 @@ function SettingsPage() {
   const [deleteError, setDeleteError] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
 
-  const loadAccountData = async () => {
+  const loadAccountData = useCallback(async () => {
     if (!token) return;
     try {
       const profileRes = await getProfile(token);
@@ -86,9 +86,9 @@ function SettingsPage() {
     } catch (error) {
       setProfileError(error.response?.data?.message || "Unable to load profile.");
     }
-  };
+  }, [token, setUser]);
 
-  const loadSecurityData = async () => {
+  const loadSecurityData = useCallback(async () => {
     if (!token) return;
     try {
       setSecurityMessage("");
@@ -102,19 +102,21 @@ function SettingsPage() {
     } finally {
       setLoadingSecurity(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadAccountData();
     loadSecurityData();
-  }, [token, setUser]);
+  }, [loadAccountData, loadSecurityData]);
 
   useEffect(() => {
     if (activeTab !== "security" || !token) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSecurityData();
-  }, [activeTab, token]);
+  }, [activeTab, token, loadSecurityData]);
 
-  const loadTwoFactorSetup = async () => {
+  const loadTwoFactorSetup = useCallback(async () => {
     if (!token || user?.twoFactorEnabled) {
       setTwoFactorSetup(null);
       setTwoFactorSetupError("");
@@ -132,12 +134,13 @@ function SettingsPage() {
     } finally {
       setLoadingTwoFactorSetup(false);
     }
-  };
+  }, [token, user?.twoFactorEnabled]);
 
   useEffect(() => {
     if (activeTab !== "twoFactor" || !token) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadTwoFactorSetup();
-  }, [activeTab, token, user?.twoFactorEnabled]);
+  }, [activeTab, token, user?.twoFactorEnabled, loadTwoFactorSetup]);
 
   const handleProfileSubmit = async (e) => {
     e.preventDefault();

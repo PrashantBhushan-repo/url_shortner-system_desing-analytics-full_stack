@@ -22,14 +22,12 @@ import {
   Shield,
   Clock,
   Search,
-  Filter,
   Ban,
   CheckCircle,
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
   User as UserIcon,
-  Info,
   Trash2,
   Lock,
   Calendar,
@@ -42,10 +40,8 @@ import {
   Download,
   RefreshCw,
   Plus,
-  Terminal,
   Cpu,
-  Server,
-  Zap
+  Server
 } from "lucide-react";
 
 const COLORS = ["#475569", "#6366f1", "#FF0055", "#10b981"]; // Free, Starter, Pro, Business
@@ -173,8 +169,8 @@ function AdminDashboard() {
       setError("");
       const response = await API.get("/admin/dashboard/overview");
       setOverviewData(response.data?.data || null);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to load dashboard overview.");
+    } catch {
+      setError("Failed to load dashboard overview.");
     } finally {
       setOverviewLoading(false);
     }
@@ -358,6 +354,7 @@ function AdminDashboard() {
     }
   };
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (activeTab === "overview") {
       fetchOverview();
@@ -380,6 +377,7 @@ function AdminDashboard() {
     } else if (activeTab === "audit") {
       fetchAuditLogs();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeTab,
     usersPage,
@@ -399,6 +397,7 @@ function AdminDashboard() {
     webhooksProcessedFilter,
     webhooksTypeFilter
   ]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Search submits
   const handleUsersSearchSubmit = (e) => {
@@ -437,7 +436,7 @@ function AdminDashboard() {
       document.body.appendChild(link);
       link.click();
       link.remove();
-    } catch (err) {
+    } catch {
       setError("Failed to export payments CSV file.");
     }
   };

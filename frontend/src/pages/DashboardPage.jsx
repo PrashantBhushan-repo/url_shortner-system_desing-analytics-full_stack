@@ -69,30 +69,28 @@ const mergeLinks = (serverLinks = [], localLinks = []) => {
 };
 
 function DashboardPage() {
-  const { user, logout, token } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [urls, setUrls] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [copiedCode, setCopiedCode] = useState(null);
-  const [activeQrUrl, setActiveQrUrl] = useState(null);
-  const [deletingCode, setDeletingCode] = useState(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
+  const [urls, setUrls] = useState(() => {
+    if (typeof window === "undefined") return [];
     try {
       const savedLinks = window.localStorage.getItem(RECENT_LINKS_STORAGE_KEY);
       if (savedLinks) {
         const parsed = JSON.parse(savedLinks);
         if (Array.isArray(parsed)) {
-          setUrls(mergeLinks(parsed));
+          return mergeLinks(parsed);
         }
       }
     } catch {
       window.localStorage.removeItem(RECENT_LINKS_STORAGE_KEY);
     }
-  }, []);
+    return [];
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [copiedCode, setCopiedCode] = useState(null);
+  const [activeQrUrl, setActiveQrUrl] = useState(null);
+  const [deletingCode, setDeletingCode] = useState(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/urlApi";
 import { useAuth } from "../context/AuthContext";
-import { Check, ShieldCheck, Zap, Star, ShieldAlert, Sparkles, Building, ArrowLeft, Ticket, Loader2, CreditCard, ChevronRight, X, Smartphone, Globe, Activity, Lock, Cpu, Database, Users } from "lucide-react";
+import { Check, ShieldCheck, Zap, Star, ShieldAlert, Sparkles, Building, ArrowLeft, Ticket, Loader2, CreditCard, X, Smartphone, Globe, Activity, Lock, Cpu, Database, Users } from "lucide-react";
 
 export default function PricingPage() {
   const { user } = useAuth();
@@ -28,7 +28,7 @@ export default function PricingPage() {
   const [mockOrder, setMockOrder] = useState(null); // { orderId, amount, currency, planKey, paymentId }
   const [mockPaymentMethod, setMockPaymentMethod] = useState("card"); // card, upi, wallet
   const [mockCardNumber, setMockCardNumber] = useState("4111 2222 3333 4444");
-  const [mockCardName, setMockCardName] = useState(user?.name || "CARDHOLDER NAME");
+  const [mockCardName] = useState(user?.name || "CARDHOLDER NAME");
   const [mockCardExpiry, setMockCardExpiry] = useState("12/29");
   const [mockCardCvv, setMockCardCvv] = useState("123");
   const [mockUpiId, setMockUpiId] = useState(user?.email ? `${user.email.split("@")[0]}@okaxis` : "snapurl@okaxis");
@@ -45,7 +45,7 @@ export default function PricingPage() {
         setLoading(true);
         const response = await API.get("/plans");
         setPlans(response.data?.data || []);
-      } catch (err) {
+      } catch {
         setError("Failed to load subscription plans. Please try again.");
       } finally {
         setLoading(false);

@@ -1,4 +1,3 @@
-import React from "react";
 import { Sun, Moon, Laptop, Check } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 

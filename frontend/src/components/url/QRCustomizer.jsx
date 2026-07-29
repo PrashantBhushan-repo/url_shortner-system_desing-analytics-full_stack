@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import QRCodeStyling from "qr-code-styling";
 import { 
   Palette, 
@@ -10,8 +10,6 @@ import {
   Trash2, 
   SlidersHorizontal, 
   Sparkles,
-  Info,
-  Maximize2,
   Share2
 } from "lucide-react";
 
@@ -105,7 +103,9 @@ function QRCustomizer({ url, onClose }) {
 
     return () => {
       window.removeEventListener('keydown', onKey);
-      try { qrRef.current = null; } catch(e) {}
+      try { qrRef.current = null; } catch {
+        // ignore cleanup error
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
@@ -126,7 +126,7 @@ function QRCustomizer({ url, onClose }) {
   const handleDownload = (ext) => {
     try {
       qrRef.current.download({ name: "short-url-qr", extension: ext });
-    } catch (err) {
+    } catch {
       qrRef.current.getRawData(ext).then((blob) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
