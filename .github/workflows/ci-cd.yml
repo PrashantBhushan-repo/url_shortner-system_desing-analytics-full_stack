@@ -132,10 +132,30 @@ jobs:
 
       - name: Set up SSH Key
         run: |
+          if [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
+            echo "ERROR: EC2_SSH_KEY secret is not set or empty in GitHub."
+            exit 1
+          fi
+          if [ -z "${{ secrets.EC2_HOST }}" ]; then
+            echo "ERROR: EC2_HOST secret is not set or empty in GitHub."
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          
+          echo "Scanning host keys for ${{ secrets.EC2_HOST }}..."
+          if ! ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts; then
+            echo "--------------------------------------------------------"
+            echo "ERROR: ssh-keyscan failed to reach the EC2 host."
+            echo "Please check:"
+            echo "1. Is your EC2 instance running?"
+            echo "2. Does the GitHub secret 'EC2_HOST' match your current EC2 Public IP address?"
+            echo "3. Does the EC2 Security Group allow inbound TCP traffic on port 22 (SSH) from the internet?"
+            echo "--------------------------------------------------------"
+            exit 1
+          fi
 
       - name: Copy Manifests to EC2
         run: |
