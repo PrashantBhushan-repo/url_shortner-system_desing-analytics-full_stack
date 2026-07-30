@@ -5,6 +5,7 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 env:
   REGISTRY: docker.io
@@ -100,3 +101,85 @@ jobs:
             docker.io/${{ secrets.DOCKER_USERNAME }}/url_shortner-frontend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to EC2 Kubernetes
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Determine image version
+        id: image-version
+        run: |
+          VERSION=$(node -p "require('./backend/package.json').version.split('.')[0]")
+          echo "IMAGE_VERSION=v${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Render Kubernetes Manifests
+        run: |
+          echo "Rendering manifests with Image Version: ${{ env.IMAGE_VERSION }}"
+          sed -i "s|IMAGE_BACKEND|docker.io/${{ secrets.DOCKER_USERNAME }}/url_shortner-backend:${{ env.IMAGE_VERSION }}|g" infrastructure/kubernetes/backend-deployment.yaml
+          sed -i "s|IMAGE_BACKEND|docker.io/${{ secrets.DOCKER_USERNAME }}/url_shortner-backend:${{ env.IMAGE_VERSION }}|g" infrastructure/kubernetes/worker-deployment.yaml
+          sed -i "s|IMAGE_FRONTEND|docker.io/${{ secrets.DOCKER_USERNAME }}/url_shortner-frontend:${{ env.IMAGE_VERSION }}|g" infrastructure/kubernetes/frontend-deployment.yaml
+
+      - name: Set up SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Copy Manifests to EC2
+        run: |
+          echo "Creating deployment directory on remote EC2 host..."
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p ~/deploy-snapurl/kubernetes"
+          echo "Copying Kubernetes manifests to remote EC2 host..."
+          scp -i ~/.ssh/id_rsa -r infrastructure/kubernetes/* ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/deploy-snapurl/kubernetes/
+
+      - name: Create or Update Kubernetes Secret
+        run: |
+          echo "Generating Kubernetes Secret manifest..."
+          kubectl create secret generic snapurl-secrets -n snapurl \
+            --from-literal=DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+            --from-literal=DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            --from-literal=REDIS_URL="${{ secrets.REDIS_URL }}" \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            --from-literal=SMTP_USER="${{ secrets.SMTP_USER }}" \
+            --from-literal=SMTP_PASS="${{ secrets.SMTP_PASS }}" \
+            --from-literal=RAZORPAY_KEY_ID="${{ secrets.RAZORPAY_KEY_ID }}" \
+            --from-literal=RAZORPAY_KEY_SECRET="${{ secrets.RAZORPAY_KEY_SECRET }}" \
+            --from-literal=RAZORPAY_WEBHOOK_SECRET="${{ secrets.RAZORPAY_WEBHOOK_SECRET }}" \
+            --from-literal=ADMIN_SEED_EMAIL="${{ secrets.ADMIN_SEED_EMAIL }}" \
+            --from-literal=ADMIN_SEED_PASSWORD="${{ secrets.ADMIN_SEED_PASSWORD }}" \
+            --from-literal=ADMIN_SEED_NAME="${{ secrets.ADMIN_SEED_NAME }}" \
+            --dry-run=client -o yaml > snapurl-secrets.yaml
+
+          echo "Applying namespace first to ensure it exists..."
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "kubectl apply -f ~/deploy-snapurl/kubernetes/namespace.yaml"
+
+          echo "Applying generated Secret to EC2 Kubernetes cluster..."
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "kubectl apply -f -" < snapurl-secrets.yaml
+
+      - name: Apply Kubernetes Manifests
+        run: |
+          echo "Applying Kubernetes manifests via Kustomize..."
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "kubectl apply -k ~/deploy-snapurl/kubernetes"
+
+      - name: Verify Rollout Status
+        run: |
+          echo "Verifying rollout status of services..."
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "
+            kubectl rollout status statefulset/postgres -n snapurl --timeout=60s && \
+            kubectl rollout status statefulset/redis -n snapurl --timeout=60s && \
+            kubectl rollout status deployment/backend -n snapurl --timeout=120s && \
+            kubectl rollout status deployment/worker -n snapurl --timeout=120s && \
+            kubectl rollout status deployment/frontend -n snapurl --timeout=120s
+          "
