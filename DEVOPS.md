@@ -10,8 +10,24 @@ Files added:
 - `.github/dependabot.yml` — weekly dependency updates
 
 Required GitHub secrets (set in repository Settings → Secrets → Actions):
-- `KUBE_CONFIG` — full kubeconfig YAML (if using deploy workflow)
-- `GHCR_TOKEN` or use default `GITHUB_TOKEN` (ensure package: write permission enabled for `GITHUB_TOKEN`)
+- `EC2_SSH_KEY` — Private SSH key for the EC2 deployment target
+- `EC2_HOST` — Public IP / Hostname of the EC2 instance
+- `EC2_USER` — Username for the EC2 instance (e.g. ubuntu)
+- `DOCKER_USERNAME` — Docker Hub username
+- `DOCKER_PASSWORD` — Docker Hub password / access token
+- **Application Environment Secrets** (dynamically applied to Kubernetes):
+  - `DB_PASSWORD` — Password for the PostgreSQL database
+  - `DATABASE_URL` — Full connection URL for PostgreSQL (referencing `postgres-service`)
+  - `REDIS_URL` — Full connection URL for Redis (referencing `redis-service`)
+  - `JWT_SECRET` — JWT secret signing key
+  - `SMTP_USER` — SMTP email username
+  - `SMTP_PASS` — SMTP email password
+  - `RAZORPAY_KEY_ID` — Razorpay Key ID
+  - `RAZORPAY_KEY_SECRET` — Razorpay Key Secret
+  - `RAZORPAY_WEBHOOK_SECRET` — Razorpay Webhook Secret (can be empty)
+  - `ADMIN_SEED_EMAIL` — Email for provisioning the default Admin user
+  - `ADMIN_SEED_PASSWORD` — Password for provisioning the default Admin user
+  - `ADMIN_SEED_NAME` — Name for provisioning the default Admin user
 
 Quick setup steps before pushing:
 1. Verify no local secrets are tracked. If an `.env` was previously committed, stop tracking it:

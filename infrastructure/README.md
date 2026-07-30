@@ -9,7 +9,7 @@ infrastructure/
 ├── kubernetes/
 │   ├── namespace.yaml             # Dedicated namespace 'snapurl'
 │   ├── configmap.yaml             # Non-sensitive app config variables
-│   ├── secrets.yaml               # Database credentials, API secrets, JWT key
+│   # ❌ No secrets.yaml (secrets generated dynamically via CI/CD)
 │   ├── postgres-pvc.yaml          # PostgreSQL persistent volume claim
 │   ├── postgres-deployment.yaml   # PostgreSQL DB pod definition
 │   ├── postgres-service.yaml      # Internal headless service for PostgreSQL
@@ -58,11 +58,26 @@ docker push <registry>/snapurl-frontend:latest
 Ensure you are logged into your Kubernetes context (`kubectl config current-context`).
 
 ### Step A: Apply Config & Secret
-Open `kubernetes/secrets.yaml` and configure your API keys (Razorpay, SMTP, etc.).
-Then apply the manifests with:
+Configure your secrets in GitHub Secrets (e.g., `DB_PASSWORD`, `DATABASE_URL`, `JWT_SECRET`, etc.).
+The CI/CD pipeline (`.github/workflows/deploy-k8s.yml`) will dynamically create the `snapurl-secrets` Secret on your cluster.
 
+If deploying manually, create the secret before applying manifests:
 ```bash
-# Apply all resources defined in Kustomization (namespace, configs, databases, deployments, ingress)
+kubectl create secret generic snapurl-secrets -n snapurl \
+  --from-literal=DB_PASSWORD="your-password" \
+  --from-literal=DATABASE_URL="postgresql://postgres:your-password@postgres-service:5432/url_shortener?schema=public" \
+  --from-literal=REDIS_URL="redis://redis-service:6379" \
+  --from-literal=JWT_SECRET="your-jwt-secret" \
+  --from-literal=SMTP_USER="smtp-user" \
+  --from-literal=SMTP_PASS="smtp-pass" \
+  --from-literal=RAZORPAY_KEY_ID="razorpay-key-id" \
+  --from-literal=RAZORPAY_KEY_SECRET="razorpay-key-secret" \
+  --from-literal=RAZORPAY_WEBHOOK_SECRET="" \
+  --from-literal=ADMIN_SEED_EMAIL="admin-email" \
+  --from-literal=ADMIN_SEED_PASSWORD="admin-password" \
+  --from-literal=ADMIN_SEED_NAME="Admin"
+
+# Then apply the remaining Kustomize manifests:
 kubectl apply -k infrastructure/kubernetes/
 ```
 
