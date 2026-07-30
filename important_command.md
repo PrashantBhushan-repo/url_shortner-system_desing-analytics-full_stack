@@ -2,7 +2,7 @@
 // communicatie with ubuntu server using this command :
 
 
-ssh -i .\k8s-master-key.pem ubuntu@16.16.139.145
+ssh -i .\k8s-master-key.pem ubuntu@16.170.126.193
 
 
 ### 12. redis-deployment.yaml

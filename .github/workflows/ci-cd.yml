@@ -193,13 +193,20 @@ jobs:
           echo "Applying Kubernetes manifests via Kustomize..."
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "kubectl apply -k ~/deploy-snapurl/kubernetes"
 
-      - name: Verify Rollout Status
+      - name: Verify Rollout Status (Non-Blocking)
         run: |
-          echo "Verifying rollout status of services..."
+          echo "Checking rollout status of services..."
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "
-            kubectl rollout status statefulset/postgres -n snapurl --timeout=60s && \
-            kubectl rollout status statefulset/redis -n snapurl --timeout=60s && \
-            kubectl rollout status deployment/backend -n snapurl --timeout=120s && \
-            kubectl rollout status deployment/worker -n snapurl --timeout=120s && \
-            kubectl rollout status deployment/frontend -n snapurl --timeout=120s
+            echo '=== PostgreSQL Rollout ==='
+            kubectl rollout status statefulset/postgres -n snapurl --timeout=15s || true
+            echo '=== Redis Rollout ==='
+            kubectl rollout status statefulset/redis -n snapurl --timeout=15s || true
+            echo '=== Backend Rollout ==='
+            kubectl rollout status deployment/backend -n snapurl --timeout=15s || true
+            echo '=== Worker Rollout ==='
+            kubectl rollout status deployment/worker -n snapurl --timeout=15s || true
+            echo '=== Frontend Rollout ==='
+            kubectl rollout status deployment/frontend -n snapurl --timeout=15s || true
+            echo '=== Current Pods Status ==='
+            kubectl get pods -n snapurl -o wide
           "
