@@ -13,14 +13,18 @@ const startServer = async () => {
   await initRedis();
 
   // Fork worker process so it runs in a separate process automatically
-  const workerProcess = fork(workerPath, [], {
-    env: { ...process.env, IS_CHILD_WORKER: "true" },
-    stdio: "inherit"
-  });
+  let workerProcess = null;
+  if (process.env.DISABLE_CHILD_WORKER !== "true") {
+    console.log("Starting background ingestion worker process...");
+    workerProcess = fork(workerPath, [], {
+      env: { ...process.env, IS_CHILD_WORKER: "true" },
+      stdio: "inherit"
+    });
 
-  workerProcess.on("error", (err) => {
-    console.error("Worker process error:", err);
-  });
+    workerProcess.on("error", (err) => {
+      console.error("Worker process error:", err);
+    });
+  }
 
   const { default: app } = await import("./src/app.js");
 
@@ -39,13 +43,13 @@ const startServer = async () => {
     } else {
       console.error("Server error:", err);
     }
-    workerProcess.kill("SIGTERM");
+    if (workerProcess) workerProcess.kill("SIGTERM");
     process.exit(1);
   });
 
   const shutdown = async (signal) => {
     console.log(`${signal} received, shutting down gracefully`);
-    workerProcess.kill("SIGTERM");
+    if (workerProcess) workerProcess.kill("SIGTERM");
     server.close(async () => {
       await closeRedisConnection();
       process.exit(0);
