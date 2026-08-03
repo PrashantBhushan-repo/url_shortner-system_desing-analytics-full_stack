@@ -23,7 +23,7 @@ const formatUrlResponse = (url) => ({
   id: url.id.toString(),
   longUrl: url.long_url,
   shortCode: url.short_code,
-  shortUrl: `${config.baseUrl}/${url.short_code}`,
+  shortUrl: `${config.baseUrl}/r/${url.short_code}`,
   customAlias: url.custom_alias,
   isActive: url.is_active,
   isAlive: url.is_alive ?? true,
@@ -266,6 +266,6 @@ export const generateUrlQrCode = async (shortCode, user = null) => {
   if (!url) {
     throw new AppError("URL not found", 404);
   }
-  const shortUrl = `${config.baseUrl}/${url.short_code}`;
+  const shortUrl = `${config.baseUrl}/r/${url.short_code}`;
   return await QRCode.toDataURL(shortUrl);
 };

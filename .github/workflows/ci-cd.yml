@@ -95,7 +95,7 @@ jobs:
           file: ./frontend/Dockerfile
           push: true
           build-args: |
-            VITE_API_URL=https://api.snapurl.local/api
+            VITE_API_URL=http://snapurl-alb-2077474442.eu-north-1.elb.amazonaws.com/api
           tags: |
             docker.io/${{ secrets.DOCKER_USERNAME }}/url_shortner-frontend:${{ env.IMAGE_VERSION }}
             docker.io/${{ secrets.DOCKER_USERNAME }}/url_shortner-frontend:latest

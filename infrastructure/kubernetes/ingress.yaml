@@ -11,10 +11,27 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 spec:
   rules:
-    # Frontend Ingress Rule
-    - host: snapurl.local
-      http:
+    - http:
         paths:
+          # Backend API Ingress Rule
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 5000
+
+          # Backend Redirect Ingress Rule
+          - path: /r
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 5000
+
+          # Frontend Ingress Rule
           - path: /
             pathType: Prefix
             backend:
@@ -22,16 +39,3 @@ spec:
                 name: frontend-service
                 port:
                   number: 80
-
-    # Backend API Ingress Rule
-    - host: api.snapurl.local
-      http:
-        paths:
-          # Match routes starting with /api or redirection URLs
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: backend-service
-                port:
-                  number: 5000

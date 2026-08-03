@@ -74,7 +74,7 @@ app.use("/api/domains", domainRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/payments", paymentsRoutes);
-app.get("/:shortCode", redirectLimiter, validateShortCodeParam, redirectUrl);
+app.get("/r/:shortCode", redirectLimiter, validateShortCodeParam, redirectUrl);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
