@@ -24,7 +24,7 @@ spec:
         - name: db-migration-and-seed
           image: IMAGE_BACKEND
           imagePullPolicy: Always
-          command: ["sh", "-c", "npx prisma migrate deploy && node prisma/seed.js && node prisma/seedAdmin.js"]
+          command: ["sh", "-c", "npx prisma db push --accept-data-loss && node prisma/seed.js && node prisma/seedAdmin.js"]
           envFrom:
             - configMapRef:
                 name: snapurl-config
