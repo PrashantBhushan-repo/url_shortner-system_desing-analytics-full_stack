@@ -783,3 +783,51 @@ Pods
                         ┌────────────┴────────────┐
                         ▼                         ▼
                    PostgreSQL                 Redis
+
+
+
+###
+
+Excellent! 🎉 Your SSL certificate is now Issued, which means:
+
+✅ Domain registered in GoDaddy
+✅ DNS managed by Route 53
+✅ SSL certificate issued by ACM
+
+Now there are 2 final steps.
+
+
+
+
+### why this step :
+
+
+
+After adding the HTTPS listener
+
+Go back to Listeners and rules.
+
+Edit the HTTP : 80 listener:
+
+Change the default action from Forward to Redirect to URL.
+Configure:
+Protocol: HTTPS
+Port: 443
+Status code: HTTP_301
+
+Save the changes.
+
+One question
+
+
+
+
+###
+
+
+✅ Bought the domain from GoDaddy.
+✅ Delegated DNS to AWS Route 53.
+✅ Requested and validated the ACM certificate.
+✅ Certificate status is Issued.
+✅ Added an HTTPS (443) listener to your ALB.
+✅ Configured HTTP (80) to redirect to HTTPS (443).
