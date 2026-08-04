@@ -658,3 +658,128 @@ Pods
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### latest workflow:
+
+
+                 Browser
+                     │
+          http://pburls.com
+                     │
+                     ▼
+        Application Load Balancer
+             Listener :80
+                     │
+                     ▼
+             Target Group
+              Healthy ✅
+                     │
+                     ▼
+            EC2 NodePort 32637
+                     │
+                     ▼
+             ingress-nginx
+                     │
+                     ▼
+                 Ingress
+                     │
+         ┌───────────┴───────────┐
+         ▼                       ▼
+ frontend-service          backend-service
+         │                       │
+         ▼                       ▼
+ Frontend Pods            Backend Pods
+                                 │
+                     ┌───────────┴───────────┐
+                     ▼                       ▼
+                PostgreSQL              Redis
+                     │
+                     ▼
+                  Worker
+
+
+
+
+
+
+
+
+### final security group : 
+
+
+
+
+
+
+                    Internet
+                        │
+                        │
+                  HTTP 80 / HTTPS 443
+                        │
+                        ▼
+        ┌─────────────────────────────────┐
+        │  ALB (snapurl-alb)              │
+        │                                 │
+        │ Security Group                  │
+        │ snapurl-alb-sg                  │
+        │                                 │
+        │ Inbound                         │
+        │ 80  ← Internet                  │
+        │ 443 ← Internet                  │
+        └───────────────┬─────────────────┘
+                        │
+                        │ HTTP:32637
+                        ▼
+              Target Group (Healthy)
+                        │
+                        ▼
+        ┌─────────────────────────────────┐
+        │ EC2 (k8s-master)                │
+        │                                 │
+        │ Security Group                  │
+        │ launch-wizard-1                 │
+        │                                 │
+        │ Inbound                         │
+        │ 32637 ← snapurl-alb-sg ✅       │
+        │ 22 ← Your laptop/GitHub         │
+        └───────────────┬─────────────────┘
+                        │
+                        ▼
+                NodePort :32637
+                        │
+                        ▼
+                 kube-proxy
+                        │
+                        ▼
+          ingress-nginx Service :80
+                        │
+                        ▼
+              Ingress Controller Pod
+                        │
+          ┌─────────────┴─────────────┐
+          ▼                           ▼
+   frontend-service             backend-service
+        :80                         :5000
+          │                           │
+          ▼                           ▼
+   Frontend Pods               Backend Pods
+                                     │
+                        ┌────────────┴────────────┐
+                        ▼                         ▼
+                   PostgreSQL                 Redis

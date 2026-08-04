@@ -6,9 +6,9 @@ metadata:
 data:
   PORT: "5000"
   # BASE_URL: "http://api.snapurl.local"
-  BASE_URL: "http://snapurl-alb-2077474442.eu-north-1.elb.amazonaws.com"
+  BASE_URL: "https://pburls.online"
   # CLIENT_URL: "http://snapurl.local"
-  CLIENT_URL: "http://snapurl-alb-2077474442.eu-north-1.elb.amazonaws.com"
+  CLIENT_URL: "https://pburls.online"
   DB_HOST: "postgres-service"
   DB_PORT: "5432"
   DB_NAME: "url_shortener"
