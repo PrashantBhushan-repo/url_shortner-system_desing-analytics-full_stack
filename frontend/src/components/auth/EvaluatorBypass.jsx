@@ -190,8 +190,7 @@ function EvaluatorBypass() {
               BHAGAT SINGH-FREEDOM GETWAY
             </div>
             <div className="text-[9px] font-bold text-[#00FF87] uppercase tracking-wider mt-0.5">
-          No Login. No Payment. Just Freedom..
-          Explore First. Sign In Later.
+          Explore First. Sign up Later.
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0" onMouseDown={(e) => e.stopPropagation()}>
