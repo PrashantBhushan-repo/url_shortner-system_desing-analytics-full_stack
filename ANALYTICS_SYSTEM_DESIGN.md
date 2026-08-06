@@ -100,3 +100,13 @@ As click logs grow indefinitely, the raw `Click` table will eventually degrade d
 ### Recommended Lifecycle Design:
 1. **Database Partitioning**: Partition the PostgreSQL `Click` table by month: `clicks_y2026m08`, `clicks_y2026m09`. Drop or detach old partitions cleanly without locking the main table.
 2. **Cold Data Offloading**: Keep pre-aggregated stats (`UrlStatsDaily`) in PostgreSQL indefinitely (as they are small). Move raw click logs older than 90 days out of PostgreSQL into a cold storage bucket (such as AWS S3 or Snowflake) for historical audits.
+
+
+#### Notes : 
+
+Key System Design Highlights Covered:
+1. Asynchronous Ingestion Buffering: Explains the mitigation of database write amplification and lock contention by buffering incoming telemetry inside Redis Lists/BullMQ, shielding PostgreSQL from spike loads.
+2. Cardinality Estimation (Redis HyperLogLog): Compares SQL COUNT(DISTINCT) complexity (O(N^2) memory/sort overhead) against Redis HyperLogLog (O(1) speed, standard error of 0.81%, and a fixed 12KB footprint).
+3. Database Pre-Aggregations (SQL Upserts): Explains how daily and hourly rollup tables are updated using atomic ON CONFLICT DO UPDATE commands to keep dashboard queries fast.
+4. WebSocket Scaling (Redis Pub/Sub): Outlines how the worker broadcasts real-time telemetry updates across multiple auto-scaled backend instances using the Redis Socket.io Adapter.
+5. Data Retention & Partitioning: Strategies for handling tables with billions of rows (PostgreSQL partitioning by date range and offloading cold logs to S3).
