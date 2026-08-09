@@ -1,4 +1,4 @@
-# 🔗 SnapURL — Enterprise-Grade SaaS URL Shortener & Real-Time Analytics
+# 🔗 pbURLs — Enterprise-Grade SaaS URL Shortener & Real-Time Analytics
 
 [![Node.js](https://img.shields.io/badge/Node.js-v20+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-v18-20232A?logo=react&logoColor=61DAFB)](https://react.dev/)
