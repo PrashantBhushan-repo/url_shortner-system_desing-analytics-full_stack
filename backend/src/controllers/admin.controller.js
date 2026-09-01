@@ -229,7 +229,7 @@ export const updateUserStatusAdmin = async (req, res, next) => {
             <div style="font-family: Arial, sans-serif; padding: 24px; color: #0f172a; background-color: #f8fafc; border-radius: 16px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0;">
               <h2 style="color: #b91c1c; font-weight: 800;">Account Status Update</h2>
               <p>Hello <strong>${user.name}</strong>,</p>
-              <p>Your SnapURL account status has been changed to <strong>${status}</strong>.</p>
+              <p>Your PBUrls account status has been changed to <strong>${status}</strong>.</p>
               ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
               <p style="color: #64748b; font-size: 14px; margin-top: 20px;">If you believe this was an error, please contact support.</p>
             </div>
@@ -457,8 +457,41 @@ export const listAuditLogsAdmin = async (req, res, next) => {
     }
 
     if (includeLogins === "true") {
-      const [logs, loginEvents] = await Promise.all([
-        prisma.adminAuditLog.findMany({
+      let adminUsers = [];
+      try {
+        adminUsers = await prisma.user.findMany({
+          where: { role: "ADMIN" },
+          select: { id: true, name: true, email: true },
+        });
+      } catch (userErr) {
+        console.warn("Error fetching admin users for login events:", userErr.message);
+      }
+
+      const adminUserIds = adminUsers.map((u) => u.id);
+      const adminUserMap = new Map(adminUsers.map((u) => [u.id, { name: u.name, email: u.email }]));
+
+      let loginWhere = {};
+      if (adminUserIds.length > 0) {
+        loginWhere.userId = { in: adminUserIds };
+      }
+      if (startDate || endDate) {
+        loginWhere.createdAt = {};
+        if (startDate) loginWhere.createdAt.gte = new Date(startDate);
+        if (endDate) loginWhere.createdAt.lte = new Date(endDate);
+      }
+      if (search) {
+        loginWhere.OR = [
+          { ip: { contains: search, mode: "insensitive" } },
+          { device: { contains: search, mode: "insensitive" } },
+          { location: { contains: search, mode: "insensitive" } },
+        ];
+      }
+
+      let logs = [];
+      let loginEvents = [];
+
+      try {
+        logs = await prisma.adminAuditLog.findMany({
           where,
           include: {
             admin: {
@@ -468,38 +501,28 @@ export const listAuditLogsAdmin = async (req, res, next) => {
               },
             },
           },
-        }),
-        prisma.loginEvent.findMany({
-          where: {
-            user: { role: "ADMIN" },
-            createdAt: startDate || endDate ? {
-              gte: startDate ? new Date(startDate) : undefined,
-              lte: endDate ? new Date(endDate) : undefined,
-            } : undefined,
-            OR: search ? [
-              { ip: { contains: search, mode: "insensitive" } },
-              { device: { contains: search, mode: "insensitive" } },
-              { location: { contains: search, mode: "insensitive" } },
-              { user: { name: { contains: search, mode: "insensitive" } } },
-              { user: { email: { contains: search, mode: "insensitive" } } },
-            ] : undefined,
-          },
-          include: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-              },
-            },
-          },
-        }),
-      ]);
+        });
+      } catch (logErr) {
+        console.warn("Audit logs query error:", logErr.message);
+      }
 
-      const mappedLogins = loginEvents.map(evt => ({
+      try {
+        if (adminUserIds.length > 0) {
+          loginEvents = await prisma.loginEvent.findMany({
+            where: loginWhere,
+            orderBy: { createdAt: "desc" },
+            take: 100,
+          });
+        }
+      } catch (loginErr) {
+        console.warn("Login events query error:", loginErr.message);
+      }
+
+      const mappedLogins = loginEvents.map((evt) => ({
         id: evt.id,
         created_at: evt.createdAt,
-        admin_id: evt.userId,
-        admin: evt.user,
+        admin_id: evt.userId || "system",
+        admin: adminUserMap.get(evt.userId) || { name: "System Administrator", email: "admin@pburls.com" },
         action: evt.success ? "auth.login_success" : "auth.login_failed",
         target_type: "AuthSession",
         target_id: evt.userId || "unknown",
@@ -526,7 +549,7 @@ export const listAuditLogsAdmin = async (req, res, next) => {
           total,
           page,
           limit,
-          pages: Math.ceil(total / limit),
+          pages: Math.ceil(total / limit) || 1,
         },
       });
     }
@@ -549,14 +572,14 @@ export const listAuditLogsAdmin = async (req, res, next) => {
       prisma.adminAuditLog.count({ where }),
     ]);
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: logs,
       pagination: {
         total,
         page,
         limit,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil(total / limit) || 1,
       },
     });
   } catch (err) {

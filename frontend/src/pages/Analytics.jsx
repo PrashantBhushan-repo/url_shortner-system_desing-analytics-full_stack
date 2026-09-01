@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { io } from "socket.io-client";
 import { getAccessToken } from "../services/urlApi";
 import API from "../services/urlApi";
@@ -212,11 +212,11 @@ function Analytics() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 md:px-8 py-8 text-white">
+    <div className="min-h-screen bg-black px-4 md:px-8 py-8 text-white">
       <div className="mx-auto max-w-7xl space-y-8">
         
         {/* Navigation & Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-white/5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6 border-b border-zinc-800">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => navigate("/dashboard")} 
@@ -224,6 +224,12 @@ function Analytics() {
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
+            <Link to="/" className="hover:opacity-90 transition-opacity">
+              <span className="font-black tracking-tight text-white text-2xl">
+                pb<span className="bg-gradient-to-r from-blue-500 via-indigo-400 to-purple-600 bg-clip-text text-transparent">Urls</span>
+              </span>
+            </Link>
+            <div className="h-8 w-px bg-white/10 hidden sm:block"></div>
             <div>
               <span className="text-xs uppercase tracking-[0.25em] text-blue-400 font-bold">Analytics Engine</span>
               <h1 className="text-2xl font-extrabold tracking-tight mt-0.5">Link Performance Console</h1>

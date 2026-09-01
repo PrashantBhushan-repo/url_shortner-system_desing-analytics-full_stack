@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: worker
-  namespace: snapurl
+  namespace: pburls
   labels:
     app: worker
 spec:
@@ -22,9 +22,9 @@ spec:
           command: ["npm", "run", "worker"]
           envFrom:
             - configMapRef:
-                name: snapurl-config
+                name: pburls-config
             - secretRef:
-                name: snapurl-secrets
+                name: pburls-secrets
           resources:
             limits:
               cpu: "200m"

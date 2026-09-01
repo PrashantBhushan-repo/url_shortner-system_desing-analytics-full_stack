@@ -5,7 +5,7 @@ import crypto from "crypto";
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const run = async () => {
-  const email = "prashant.llm.00@gmail.com";
+  const email = `prashant.llm.00+${Date.now()}@gmail.com`;
   const password = "Password123!";
 
   console.log("1. Init Redis & Clean up user from DB...");

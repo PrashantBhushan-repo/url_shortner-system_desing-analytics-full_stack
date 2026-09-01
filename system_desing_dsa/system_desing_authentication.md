@@ -1,6 +1,6 @@
-# 🏛️ SnapURL Authentication System Design Reference
+# 🏛️ PBUrls Authentication System Design Reference
 
-This document covers high-level system design considerations, scaling strategies, and security design patterns implemented for the SnapURL authentication system.
+This document covers high-level system design considerations, scaling strategies, and security design patterns implemented for the PBUrls authentication system.
 
 ---
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import UrlForm from "../components/url/UrlForm";
 import QRCustomizer from "../components/url/QRCustomizer";
@@ -22,10 +22,11 @@ import {
   AlertTriangle,
   User,
   Trash2,
-  X
+  X,
+  CreditCard
 } from "lucide-react";
 
-const RECENT_LINKS_STORAGE_KEY = "snapurl_recent_links";
+const RECENT_LINKS_STORAGE_KEY = "pburls_recent_links";
 
 const normalizeLink = (item) => {
   const shortCode = item.shortCode || item.short_code || item.id;
@@ -158,14 +159,22 @@ function DashboardPage() {
   const healthRatio = totalUrlsCount > 0 ? Math.round((healthyUrlsCount / totalUrlsCount) * 100) : 100;
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 md:px-8 py-8 text-white">
+    <div className="min-h-screen bg-black px-4 md:px-8 py-8 text-white">
       <div className="mx-auto max-w-7xl">
         
         {/* Main Header bar */}
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-8 border-b border-white/5 mb-8">
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.25em] text-blue-400 font-bold">SnapURL Console</p>
-            <h1 className="text-3xl font-extrabold tracking-tight">Welcome, {user?.name || "there"}</h1>
+         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-8 border-b border-zinc-800 mb-8">
+          <div className="flex items-center gap-4">
+            <Link to="/" className="hover:opacity-90 transition-opacity">
+              <span className="font-black tracking-tight text-white text-2xl">
+                pb<span className="bg-gradient-to-r from-blue-500 via-indigo-400 to-purple-600 bg-clip-text text-transparent">Urls</span>
+              </span>
+            </Link>
+            <div className="h-8 w-px bg-white/10 hidden sm:block"></div>
+            <div className="space-y-0.5">
+              <p className="text-xs uppercase tracking-[0.25em] text-blue-400 font-bold">Console Dashboard</p>
+              <h1 className="text-2xl font-extrabold tracking-tight">Welcome, {user?.name || "there"}</h1>
+            </div>
           </div>
           <div className="flex gap-3">
             {user?.role === "ADMIN" && (
@@ -176,6 +185,12 @@ function DashboardPage() {
                 <ShieldCheck className="w-4 h-4 text-red-400" /> Admin Center
               </button>
             )}
+            <button 
+              onClick={() => navigate("/billing")} 
+              className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm font-medium bg-slate-900 hover:bg-slate-800 hover:text-white transition duration-200 cursor-pointer"
+            >
+              <CreditCard className="w-4 h-4 text-[#E50914]" /> Billing &amp; Refunds
+            </button>
             <button 
               onClick={() => navigate("/settings")} 
               className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm font-medium bg-slate-900 hover:bg-slate-800 hover:text-white transition duration-200 cursor-pointer"

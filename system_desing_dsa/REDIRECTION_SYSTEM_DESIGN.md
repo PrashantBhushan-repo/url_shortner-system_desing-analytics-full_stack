@@ -1,6 +1,6 @@
-# 🏛️ SnapURL Redirection: System Design & DSA Reference
+# 🏛️ PBUrls Redirection: System Design & DSA Reference
 
-This document covers the mathematical models, database indexing designs, caching patterns, and algorithms (DSA) applied to implement the high-throughput URL shortening and redirection engine of SnapURL.
+This document covers the mathematical models, database indexing designs, caching patterns, and algorithms (DSA) applied to implement the high-throughput URL shortening and redirection engine of PBUrls.
 
 ---
 

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: snapurl
+  namespace: pburls
   labels:
     app: backend
 spec:
@@ -27,9 +27,9 @@ spec:
           command: ["sh", "-c", "npx prisma db push --accept-data-loss && node prisma/seed.js && node prisma/seedAdmin.js"]
           envFrom:
             - configMapRef:
-                name: snapurl-config
+                name: pburls-config
             - secretRef:
-                name: snapurl-secrets
+                name: pburls-secrets
           resources:
             limits:
               cpu: "250m"
@@ -46,9 +46,9 @@ spec:
               name: http
           envFrom:
             - configMapRef:
-                name: snapurl-config
+                name: pburls-config
             - secretRef:
-                name: snapurl-secrets
+                name: pburls-secrets
           readinessProbe:
             httpGet:
               path: /health

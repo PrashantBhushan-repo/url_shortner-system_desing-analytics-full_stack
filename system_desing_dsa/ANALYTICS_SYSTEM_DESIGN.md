@@ -1,6 +1,6 @@
-# 🏛️ SnapURL Analytics System Design Reference
+# 🏛️ PBUrls Analytics System Design Reference
 
-This document covers high-level system design patterns, bottleneck mitigations, data layout scaling, and processing optimizations implemented for the analytics and telemetry engine of SnapURL.
+This document covers high-level system design patterns, bottleneck mitigations, data layout scaling, and processing optimizations implemented for the analytics and telemetry engine of PBUrls.
 
 ---
 

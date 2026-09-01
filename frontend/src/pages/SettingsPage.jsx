@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   changePassword,
@@ -17,23 +17,54 @@ import {
   changeEmailConfirm,
   deleteAccount,
 } from "../services/authApi";
-import { User, Key, Shield, ShieldCheck, ArrowLeft, LogOut, Palette, CreditCard } from "lucide-react";
+import { User, Key, Shield, ShieldCheck, ArrowLeft, LogOut, Palette, CreditCard, Globe, Activity, Users } from "lucide-react";
 import ProfileSettings from "../components/settings/ProfileSettings.jsx";
 import PasswordSettings from "../components/settings/PasswordSettings.jsx";
 import SecuritySettings from "../components/settings/SecuritySettings.jsx";
 import TwoFactorSettings from "../components/settings/TwoFactorSettings.jsx";
 import ThemeSettings from "../components/settings/ThemeSettings.jsx";
 import SubscriptionSettings from "../components/settings/SubscriptionSettings.jsx";
+import DomainSettings from "../components/settings/DomainSettings.jsx";
+import ApiKeySettings from "../components/settings/ApiKeySettings.jsx";
+import WebhookSettings from "../components/settings/WebhookSettings.jsx";
+import TeamSettings from "../components/settings/TeamSettings.jsx";
 
 const initialProfileState = {
   name: "",
   profileImage: "",
 };
 
-function SettingsPage() {
+function SettingsPage({ defaultTab }) {
   const { token, user, logout, setUser } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("profile");
+  const [activeTab, setActiveTab] = useState(() => {
+    if (defaultTab) return defaultTab;
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "subscription" || tabParam === "refunds" || tabParam === "billing" || tabParam === "refund") {
+        return "subscription";
+      }
+      if (window.location.pathname.includes("refund") || window.location.pathname.includes("billing")) {
+        return "subscription";
+      }
+    }
+    return "profile";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam && tabParam !== activeTab) {
+        if (tabParam === "refunds" || tabParam === "billing" || tabParam === "refund") {
+          setActiveTab("subscription");
+        } else {
+          setActiveTab(tabParam);
+        }
+      }
+    }
+  }, [window.location.search]);
   const [profileForm, setProfileForm] = useState(initialProfileState);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [profileMessage, setProfileMessage] = useState("");
@@ -285,7 +316,11 @@ function SettingsPage() {
     { id: "password", label: "Password" },
     { id: "security", label: "Security" },
     { id: "twoFactor", label: "Two-factor" },
-    { id: "subscription", label: "Billing & Plans" },
+    { id: "subscription", label: "Billing, Plans & Refunds" },
+    { id: "domains", label: "Custom Domains" },
+    { id: "apiKeys", label: "API Developer Keys" },
+    { id: "webhooks", label: "Outgoing Webhooks" },
+    { id: "teams", label: "Team Space" },
     { id: "theme", label: "Appearance" },
   ];
 
@@ -402,16 +437,24 @@ function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 sm:px-6 py-10 text-white">
+    <div className="min-h-screen bg-black px-4 sm:px-6 py-10 text-white">
       <div className="mx-auto max-w-6xl space-y-8">
         
         {/* Sleek top header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-white/5 pb-6">
-          <div>
-            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-blue-400 font-bold">
-              Account Settings
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-zinc-800 pb-6">
+          <div className="flex items-center gap-4">
+            <Link to="/" className="hover:opacity-90 transition-opacity">
+              <span className="font-black tracking-tight text-white text-2xl">
+                pb<span className="bg-gradient-to-r from-blue-500 via-indigo-400 to-purple-600 bg-clip-text text-transparent">Urls</span>
+              </span>
+            </Link>
+            <div className="h-8 w-px bg-white/10 hidden sm:block"></div>
+            <div>
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[#E50914] font-black">
+                Account Settings
+              </div>
+              <h1 className="mt-2 text-2xl font-black tracking-tight">Control Center</h1>
             </div>
-            <h1 className="mt-2 text-2xl font-black tracking-tight">Control Center</h1>
           </div>
           <div className="flex gap-3">
             <button 
@@ -441,15 +484,19 @@ function SettingsPage() {
               if (tab.id === "security") Icon = Shield;
               if (tab.id === "twoFactor") Icon = ShieldCheck;
               if (tab.id === "subscription") Icon = CreditCard;
+              if (tab.id === "domains") Icon = Globe;
+              if (tab.id === "apiKeys") Icon = Key;
+              if (tab.id === "webhooks") Icon = Activity;
+              if (tab.id === "teams") Icon = Users;
               if (tab.id === "theme") Icon = Palette;
 
               return (
                 <button
                   key={tab.id}
                   onClick={() => handleTabChange(tab.id)}
-                  className={`flex items-center gap-3 rounded-xl px-4 py-3 text-xs font-semibold transition shrink-0 duration-150 w-full md:text-left ${
+                  className={`flex items-center gap-3 rounded-xl px-4 py-3 text-xs font-black transition shrink-0 duration-150 w-full md:text-left ${
                     isActive 
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-600/10" 
+                      ? "bg-[#E50914] text-white shadow-lg shadow-[#E50914]/15" 
                       : "text-slate-400 hover:bg-white/5 hover:text-white"
                   }`}
                 >
@@ -550,6 +597,22 @@ function SettingsPage() {
 
             {activeTab === "subscription" && (
               <SubscriptionSettings setActiveTab={handleTabChange} />
+            )}
+
+            {activeTab === "domains" && (
+              <DomainSettings />
+            )}
+
+            {activeTab === "apiKeys" && (
+              <ApiKeySettings />
+            )}
+
+            {activeTab === "webhooks" && (
+              <WebhookSettings />
+            )}
+
+            {activeTab === "teams" && (
+              <TeamSettings />
             )}
           </div>
 

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const ACCESS_TOKEN_STORAGE_KEY = "snapurl_access_token";
+const ACCESS_TOKEN_STORAGE_KEY = "pburls_access_token";
 let accessTokenInMemory = null;
 
 const readStoredAccessToken = () => {

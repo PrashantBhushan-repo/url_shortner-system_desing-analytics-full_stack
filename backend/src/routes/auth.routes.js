@@ -1,5 +1,6 @@
 import express from "express";
 import { changePassword, confirmEmailChangeController, disableTwoFactorController, enableTwoFactorController, forgotPassword, getProfile, getSecuritySessionsController, login, logout, refresh, register, requestEmailChangeController, resendOtpController, resetPassword, setupTwoFactorController, updateProfile, verifyEmail, verifyLoginOtp as verifyLoginOtpController, deleteAccountController, forceChangePasswordController, evaluatorBypassController } from "../controllers/auth.controller.js";
+import { redirectToProvider, handleProviderCallback } from "../controllers/oauth.controller.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { authGeneralLimiter, authLoginLimiter, authOtpLimiter, authSensitiveLimiter } from "../middlewares/rateLimit.middleware.js";
 import { validateBody } from "../middlewares/validateAuth.middleware.js";
@@ -7,6 +8,9 @@ import { z } from "zod";
 import { changePasswordSchema, emailChangeConfirmSchema, emailChangeRequestSchema, forgotPasswordSchema, loginSchema, logoutSchema, profileUpdateSchema, refreshSchema, registerSchema, resetPasswordSchema, twoFactorOtpSchema, verifyEmailSchema, verifyLoginOtpSchema, deleteAccountSchema, forceChangePasswordSchema } from "../validators/auth.validators.js";
 
 const router = express.Router();
+
+router.get("/oauth/:provider", redirectToProvider);
+router.get("/oauth/:provider/callback", handleProviderCallback);
 
 router.post("/register", authSensitiveLimiter, validateBody(registerSchema), register);
 router.post("/verify-email", authOtpLimiter, validateBody(verifyEmailSchema), verifyEmail);

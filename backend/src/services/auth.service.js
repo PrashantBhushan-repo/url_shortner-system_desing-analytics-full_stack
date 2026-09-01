@@ -18,7 +18,7 @@ import {
   updateUserProfile,
 } from "../repositories/user.repository.js";
 import { getRedisClient } from "../config/redisClient.js";
-import { sendEmail } from "../utils/mailer.js";
+import { sendEmail, isSmtpConfigured } from "../utils/mailer.js";
 import { config } from "../config/config.js";
 import { AppError } from "../utils/AppError.js";
 import jwt from "jsonwebtoken";
@@ -146,7 +146,7 @@ const createRefreshTokenRecord = async ({ userId, token, device, ip, browser, os
   });
 };
 
-const issueTokenPair = async (user, req = {}) => {
+export const issueTokenPair = async (user, req = {}) => {
   const refreshTokenValue = crypto.randomBytes(32).toString("hex");
   const meta = await parseRequestMeta(req);
 
@@ -213,8 +213,11 @@ const issueOtp = async ({ purpose, userId, email }) => {
         await sendOtpEmail({ userId, email, purpose, otp });
       } catch (err) {
         console.error(`❌ Email dispatch failed for ${email}:`, err.message);
-        if (config.nodeEnv !== "production") {
-          console.log("⚠️ Development mode: bypassing email dispatch failure so you can verify with the code logged above.");
+        const shouldBypass = config.nodeEnv !== "production" || 
+                             process.env.BYPASS_EMAIL_ERROR === "true" || 
+                             !isSmtpConfigured;
+        if (shouldBypass) {
+          console.log("⚠️ Bypassing email dispatch failure. You can verify with the code logged above:", otp);
         } else {
           throw err;
         }
@@ -458,7 +461,7 @@ const checkAndNotifyNewDeviceLogin = async (user, meta) => {
             <p style="font-size: 15px; line-height: 1.6; color: #334155;">
               ${isAdmin 
                 ? "A successful administrative login was established for your account. Due to the high privilege level, this notification is mandatory."
-                : "We detected a new successful sign-in to your SnapURL account from a device or location we don't recognize."}
+                : "We detected a new successful sign-in to your PBUrls account from a device or location we don't recognize."}
             </p>
             
             <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin: 24px 0;">
@@ -486,7 +489,7 @@ const checkAndNotifyNewDeviceLogin = async (user, meta) => {
             <p style="font-size: 14px; line-height: 1.6; color: #b91c1c; font-weight: bold;">If you did not authorize this login, please change your password immediately and revoke all other sessions in your account settings.</p>
             
             <div style="border-top: 1px solid #e2e8f0; margin-top: 32px; padding-top: 16px; text-align: center;">
-              <p style="font-size: 12px; color: #94a3b8; margin: 0;">SnapURL Security Operations Center</p>
+              <p style="font-size: 12px; color: #94a3b8; margin: 0;">PBUrls Security Operations Center</p>
             </div>
           </div>
         `,

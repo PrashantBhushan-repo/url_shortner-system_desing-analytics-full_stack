@@ -12,7 +12,7 @@ export const createDomain = async (req, res, next) => {
       throw new AppError("Domain name is required.", 400);
     }
 
-    const verificationToken = `snapurl-verification=${crypto.randomBytes(16).toString("hex")}`;
+    const verificationToken = `pburls-verification=${crypto.randomBytes(16).toString("hex")}`;
 
     const newDomain = await prisma.customDomain.create({
       data: {

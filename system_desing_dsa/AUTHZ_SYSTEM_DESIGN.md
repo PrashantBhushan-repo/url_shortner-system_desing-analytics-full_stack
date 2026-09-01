@@ -1,6 +1,6 @@
-# 🏛️ SnapURL Authorization System Design Reference
+# 🏛️ PBUrls Authorization System Design Reference
 
-This document covers the high-level system design concepts, data access choices, security mitigations, and performance optimizations implemented for the authorization engine of SnapURL.
+This document covers the high-level system design concepts, data access choices, security mitigations, and performance optimizations implemented for the authorization engine of PBUrls.
 
 ---
 

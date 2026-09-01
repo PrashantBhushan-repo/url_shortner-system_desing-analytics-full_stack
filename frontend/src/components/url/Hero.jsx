@@ -11,7 +11,7 @@ function Hero() {
         <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-indigo-500 bg-clip-text text-transparent">Measure Performance.</span>
       </h1>
       <p className="text-slate-400 text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
-        SnapURL is a high-speed redirection tool featuring real-time WebSockets analytics, automated destination health pings, and high-fidelity customizable QR Codes.
+        PBUrls is a high-speed redirection tool featuring real-time WebSockets analytics, automated destination health pings, and high-fidelity customizable QR Codes.
       </p>
     </div>
   );

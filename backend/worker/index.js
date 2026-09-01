@@ -1,5 +1,5 @@
 import { Worker, Queue } from "bullmq";
-import geoip from "geoip-lite";
+import { resolveGeoLocation } from "../src/utils/location.js";
 import { UAParser } from "ua-parser-js";
 import crypto from "crypto";
 import { PrismaClient } from "../src/generated/prisma/index.js";
@@ -104,41 +104,7 @@ const processClickEvent = async (job) => {
   }
 
   // 2. Parse GeoIP Location
-  let geo = geoip.lookup(ip) || {};
-
-  // If local or private IP, try fetching public IP location as a fallback for local testing
-  if (!geo.country || ip === "127.0.0.1" || ip === "::1" || ip === "localhost" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip.includes("127.0.0.1")) {
-    try {
-      const response = await fetch("https://ipapi.co/json/", { signal: AbortSignal.timeout(3000) });
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.country_code && !data.error) {
-          geo = {
-            country: data.country_code || "Unknown",
-            region: data.region_code || "Unknown",
-            city: data.city || "Unknown",
-            ll: [data.latitude, data.longitude],
-            timezone: data.timezone || "Unknown"
-          };
-          console.log(`[GeoIP] Resolved local IP fallback to public location: ${geo.city}, ${geo.country}`);
-        } else {
-          throw new Error(data?.reason || "Invalid location payload");
-        }
-      } else {
-        throw new Error(`HTTP status ${response.status}`);
-      }
-    } catch (err) {
-      console.warn("[GeoIP] Fallback GeoIP fetch failed, defaulting to Nagpur:", err.message);
-      // Fallback default for local testing (Nagpur, Maharashtra, India)
-      geo = {
-        country: "IN",
-        region: "MH",
-        city: "Nagpur",
-        ll: [21.1458, 79.0882],
-        timezone: "Asia/Kolkata"
-      };
-    }
-  }
+  const geo = await resolveGeoLocation(ip) || {};
 
   // 3. Bot Detection Heuristics (Exclude API clients if intended for dev testing, but count rate limit if needed)
   const isUaBot = isUserAgentBot(userAgent, parsedUa);
@@ -378,7 +344,7 @@ const checkLinkHealth = async (longUrl) => {
     const res = await fetch(longUrl, {
       method: "HEAD",
       signal: controller.signal,
-      headers: { "User-Agent": "SnapURL-Health-Bot/1.0" },
+      headers: { "User-Agent": "PBUrls-Health-Bot/1.0" },
     });
     clearTimeout(id);
     return res.status >= 200 && res.status < 400;
@@ -389,7 +355,7 @@ const checkLinkHealth = async (longUrl) => {
       const res = await fetch(longUrl, {
         method: "GET",
         signal: controller.signal,
-        headers: { "User-Agent": "SnapURL-Health-Bot/1.0" },
+        headers: { "User-Agent": "PBUrls-Health-Bot/1.0" },
       });
       clearTimeout(id);
       return res.status >= 200 && res.status < 400;

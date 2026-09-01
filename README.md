@@ -7,7 +7,7 @@
 [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
 [![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 
-SnapURL is a modern, high-performance, enterprise-ready Software-as-a-Service (SaaS) URL shortener designed to support low-latency link redirection, real-time geolocation analytics, multi-tenant team workspaces, custom domains, and integrated subscription billing. 
+PBUrls is a modern, high-performance, enterprise-ready Software-as-a-Service (SaaS) URL shortener designed to support low-latency link redirection, real-time geolocation analytics, multi-tenant team workspaces, custom domains, and integrated subscription billing. 
 
 Built with scalability, security, and developer experience in mind, this project represents an industry-standard implementation of a distributed, microservices-style full-stack application.
 
@@ -15,7 +15,7 @@ Built with scalability, security, and developer experience in mind, this project
 
 ## 🏗️ System Architecture
 
-SnapURL uses a decoupled, event-driven architecture designed to keep the redirect event loop highly optimized while offloading heavy processes (like telemetry, logging, and notifications) to background queues.
+PBUrls uses a decoupled, event-driven architecture designed to keep the redirect event loop highly optimized while offloading heavy processes (like telemetry, logging, and notifications) to background queues.
 
 ```mermaid
 graph TD
@@ -62,7 +62,7 @@ graph TD
 
 ## 🚀 Enterprise Feature Deep-Dive
 
-This section outlines the technical implementation details of all core services within the SnapURL ecosystem:
+This section outlines the technical implementation details of all core services within the PBUrls ecosystem:
 
 ### 1. Core Shortener & Redirect Engine
 *   **Decoupled Read/Write Path**: Separates link creation (write path) from client redirection (read path), optimizing each independently for maximum performance.
@@ -151,7 +151,7 @@ For deep-dive architectural blueprints, system designs, algorithm analyses, and 
 
 ## 🗄️ Database Schema Overview
 
-SnapURL uses a relational schema optimized with indexes for query speeds. Click records are structured for fast aggregations, and subscriptions bind features directly to users.
+PBUrls uses a relational schema optimized with indexes for query speeds. Click records are structured for fast aggregations, and subscriptions bind features directly to users.
 
 *   `User` & `RefreshToken`: Manages multi-device login sessions, TOTP/2FA settings (`twoFactorSecret`), role configurations, and billing credentials.
 *   `Url` & `Click`: Links short codes to target destinations. Relies on indexes for `short_code` lookup speed. Contains extensive browser/device/geographic telemetry fields.
@@ -174,8 +174,8 @@ The easiest way to spin up the entire application ecosystem locally is using Doc
 
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/your-username/snapurl.git
-   cd snapurl
+   git clone https://github.com/your-username/pburls.git
+   cd pburls
    ```
 
 2. **Configure Environment Variables:**
@@ -203,15 +203,15 @@ The easiest way to spin up the entire application ecosystem locally is using Doc
 
 ## ☸️ Production Deployment (Kubernetes)
 
-SnapURL is configured for Kubernetes deployments via **Kustomize**. Complete deployment manifests are stored inside the `infrastructure/kubernetes` directory.
+PBUrls is configured for Kubernetes deployments via **Kustomize**. Complete deployment manifests are stored inside the `infrastructure/kubernetes` directory.
 
 ### Manifest Configurations Includes:
-- **`namespace.yaml`:** Isolated environment resource context (`snapurl`).
+- **`namespace.yaml`:** Isolated environment resource context (`pburls`).
 - **`postgres-deployment.yaml` & `postgres-service.yaml`:** State persistence configuration via PVCs.
 - **`redis-deployment.yaml` & `redis-service.yaml`:** Internal headless service config for caching and job queuing.
 - **`backend-deployment.yaml` & `worker-deployment.yaml`:** Clustered REST API configurations with dynamic Prisma migration `initContainers` and independent task workers.
 - **`frontend-deployment.yaml`:** Serves the built Vite assets using a high-performance Nginx container.
-- **`ingress.yaml`:** Ingress controller rule mappings for `snapurl.local` and API routing.
+- **`ingress.yaml`:** Ingress controller rule mappings for `pburls.local` and API routing.
 
 ### To Deploy Manually:
 ```bash
@@ -219,7 +219,7 @@ SnapURL is configured for Kubernetes deployments via **Kustomize**. Complete dep
 kubectl config current-context
 
 # 2. Bind secrets securely in your cluster namespace
-kubectl create secret generic snapurl-secrets -n snapurl \
+kubectl create secret generic pburls-secrets -n pburls \
   --from-literal=DB_PASSWORD="your-secure-password" \
   --from-literal=DATABASE_URL="postgresql://postgres:your-secure-password@postgres-service:5432/url_shortener?schema=public" \
   --from-literal=REDIS_URL="redis://redis-service:6379" \
@@ -233,7 +233,7 @@ kubectl apply -k infrastructure/kubernetes/
 
 ## 🛠️ CI/CD Workflow (GitHub Actions)
 
-SnapURL uses continuous integration and delivery pipelines defined in `.github/workflows/`:
+PBUrls uses continuous integration and delivery pipelines defined in `.github/workflows/`:
 1.  **Continuous Integration (`ci-cd.yml`):** Automatically triggers on pushes to `main`. It lints both directories, executes unit checks, builds optimized production Docker images, and pushes them to GitHub Container Registry (GHCR) with standard hash tags.
 2.  **Continuous Deployment (`deploy-k8s.yml`):** Connects to the host target, updates the deployment manifest image hashes, creates namespace structures, updates environment configurations, and does rolling upgrades with zero-downtime.
 

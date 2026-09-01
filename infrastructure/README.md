@@ -1,13 +1,13 @@
-# SnapURL DevOps & Kubernetes Infrastructure
+# PBUrls DevOps & Kubernetes Infrastructure
 
-This directory contains the Kubernetes manifests and orchestration configuration for deploying SnapURL in a production or local cluster environment.
+This directory contains the Kubernetes manifests and orchestration configuration for deploying PBUrls in a production or local cluster environment.
 
 ## Directory Structure
 
 ```
 infrastructure/
 ├── kubernetes/
-│   ├── namespace.yaml             # Dedicated namespace 'snapurl'
+│   ├── namespace.yaml             # Dedicated namespace 'pburls'
 │   ├── configmap.yaml             # Non-sensitive app config variables
 │   # ❌ No secrets.yaml (secrets generated dynamically via CI/CD)
 │   ├── postgres-pvc.yaml          # PostgreSQL persistent volume claim
@@ -42,13 +42,13 @@ To build and push manually:
 
 ```bash
 # Build & Push Backend/Worker Image
-docker build -t <registry>/snapurl-backend:latest ./backend
-docker push <registry>/snapurl-backend:latest
+docker build -t <registry>/pburls-backend:latest ./backend
+docker push <registry>/pburls-backend:latest
 
 # Build & Push Frontend Image
 # Note: Pass the external API endpoint VITE_API_URL so frontend can contact backend
-docker build -t <registry>/snapurl-frontend:latest --build-arg VITE_API_URL=http://api.snapurl.local/api ./frontend
-docker push <registry>/snapurl-frontend:latest
+docker build -t <registry>/pburls-frontend:latest --build-arg VITE_API_URL=http://api.pburls.local/api ./frontend
+docker push <registry>/pburls-frontend:latest
 ```
 
 ---
@@ -59,11 +59,11 @@ Ensure you are logged into your Kubernetes context (`kubectl config current-cont
 
 ### Step A: Apply Config & Secret
 Configure your secrets in GitHub Secrets (e.g., `DB_PASSWORD`, `DATABASE_URL`, `JWT_SECRET`, etc.).
-The CI/CD pipeline (`.github/workflows/deploy-k8s.yml`) will dynamically create the `snapurl-secrets` Secret on your cluster.
+The CI/CD pipeline (`.github/workflows/deploy-k8s.yml`) will dynamically create the `pburls-secrets` Secret on your cluster.
 
 If deploying manually, create the secret before applying manifests:
 ```bash
-kubectl create secret generic snapurl-secrets -n snapurl \
+kubectl create secret generic pburls-secrets -n pburls \
   --from-literal=DB_PASSWORD="your-password" \
   --from-literal=DATABASE_URL="postgresql://postgres:your-password@postgres-service:5432/url_shortener?schema=public" \
   --from-literal=REDIS_URL="redis://redis-service:6379" \
@@ -85,8 +85,8 @@ kubectl apply -k infrastructure/kubernetes/
 Verify all components start up successfully:
 
 ```bash
-# Monitor deployment status in snapurl namespace
-kubectl get pods -n snapurl -w
+# Monitor deployment status in pburls namespace
+kubectl get pods -n pburls -w
 ```
 
 *Note: The `backend` container will wait for the `db-migration-and-seed` initContainer to finish running Prisma migrations and seeding before the API becomes ready.*
@@ -96,8 +96,8 @@ kubectl get pods -n snapurl -w
 ## 3. Exposing & Accessing the App (Local Testing)
 
 The ingress is configured to route traffic to:
-1. **Frontend**: `http://snapurl.local`
-2. **Backend API**: `http://api.snapurl.local`
+1. **Frontend**: `http://pburls.local`
+2. **Backend API**: `http://api.pburls.local`
 
 To access these domains locally:
 
@@ -105,7 +105,7 @@ To access these domains locally:
 Add the following line to your machine's hosts file (`C:\Windows\System32\drivers\etc\hosts` on Windows or `/etc/hosts` on macOS/Linux):
 
 ```text
-127.0.0.1   snapurl.local api.snapurl.local
+127.0.0.1   pburls.local api.pburls.local
 ```
 *(Replace `127.0.0.1` with the IP of your cluster ingress controller if running on a remote cluster, or minikube IP).*
 
@@ -121,4 +121,4 @@ If using **Docker Desktop**, install the Nginx Ingress controller:
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
 ```
 
-Now you can visit `http://snapurl.local` in your browser to interact with the URL Shortener!
+Now you can visit `http://pburls.local` in your browser to interact with the URL Shortener!

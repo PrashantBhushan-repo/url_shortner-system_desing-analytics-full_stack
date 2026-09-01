@@ -1,12 +1,12 @@
-# 💳 SnapURL Billing & Subscription Architecture (Razorpay Integration)
+# 💳 PBUrls Billing & Subscription Architecture (Razorpay Integration)
 
-This document outlines the system design, transactional data flows, security checks, and webhook processing mechanisms implemented for the billing and SaaS subscription engine in SnapURL.
+This document outlines the system design, transactional data flows, security checks, and webhook processing mechanisms implemented for the billing and SaaS subscription engine in PBUrls.
 
 ---
 
 ## 🏗️ Architectural Overview
 
-SnapURL implements a **dual-channel confirmation model** to guarantee subscription activation. This ensures that users are upgraded even if they close their browser mid-checkout:
+PBUrls implements a **dual-channel confirmation model** to guarantee subscription activation. This ensures that users are upgraded even if they close their browser mid-checkout:
 1. **Primary Sync Channel (Client-Side Verification)**: Once checkout is complete, the React frontend submits the Razorpay signatures. The backend verifies this using local HMAC keys and upgrades the user instantly.
 2. **Secondary Async Channel (Webhooks)**: Razorpay asynchronously pushes webhook events (e.g. `payment.captured`). The backend catches these, verifies signatures, and applies updates if the client-side call failed (ensures idempotency and resilience).
 

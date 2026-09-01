@@ -1,14 +1,17 @@
 import express from "express";
-import { createOrder, verifySignature, validateCoupon, verifyMockPayment, failMockPayment } from "../controllers/payments.controller.js";
-import { authMiddleware } from "../middlewares/auth.middleware.js";
+import { createOrder, verifySignature, validateCoupon, verifyMockPayment, failMockPayment, listActiveCouponsPublic } from "../controllers/payments.controller.js";
+import { authMiddleware, optionalAuthMiddleware } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
-router.use(authMiddleware);
+// Public / Guest accessible endpoints for pricing previews
+router.get("/active-coupons", listActiveCouponsPublic);
+router.post("/validate-coupon", optionalAuthMiddleware, validateCoupon);
 
+// Authenticated checkout endpoints
+router.use(authMiddleware);
 router.post("/create-order", createOrder);
 router.post("/verify", verifySignature);
-router.post("/validate-coupon", validateCoupon);
 router.post("/mock-verify", verifyMockPayment);
 router.post("/mock-fail", failMockPayment);
 

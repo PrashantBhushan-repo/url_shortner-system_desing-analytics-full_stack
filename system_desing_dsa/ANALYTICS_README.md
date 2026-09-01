@@ -1,12 +1,12 @@
-# 📊 SnapURL Real-Time Analytics & Telemetry Architecture
+# 📊 PBUrls Real-Time Analytics & Telemetry Architecture
 
-This document details the high-performance, asynchronous analytics processing engine implemented in SnapURL. It covers how link redirect telemetry is captured in sub-milliseconds and processed out-of-band using background workers, geographic maps, bot engines, unique visitor tracking, and pre-aggregated analytics tables.
+This document details the high-performance, asynchronous analytics processing engine implemented in PBUrls. It covers how link redirect telemetry is captured in sub-milliseconds and processed out-of-band using background workers, geographic maps, bot engines, unique visitor tracking, and pre-aggregated analytics tables.
 
 ---
 
 ## 🏗️ Architectural Overview
 
-To prevent analytical write latency from stalling link redirection (which must happen in under 5ms), SnapURL decouples the **Redirect Engine** from the **Analytics Processing Engine**:
+To prevent analytical write latency from stalling link redirection (which must happen in under 5ms), PBUrls decouples the **Redirect Engine** from the **Analytics Processing Engine**:
 
 ```
                        ┌─────────────────────────┐
@@ -129,7 +129,7 @@ The analytics pipeline registers three types of keys in Redis during processing:
 
 
 
-# 🔄 SnapURL Analytics Telemetry Workflows (Diagrams Reference)
+# 🔄 PBUrls Analytics Telemetry Workflows (Diagrams Reference)
 
 This file contains high-resolution **Mermaid diagrams** detailing the real-time click telemetry pipeline and background worker processing. Copy these directly into your project's main `README.md` or keep as a reference guide.
 

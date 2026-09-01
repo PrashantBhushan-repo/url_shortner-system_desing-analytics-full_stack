@@ -42,18 +42,20 @@ const validateCouponHelper = async (couponCode, planKey, userId) => {
     throw new AppError("Coupon is not applicable to this plan.", 400);
   }
 
-  // Check if already redeemed by this user
-  const existingRedemption = await prisma.couponRedemption.findUnique({
-    where: {
-      coupon_id_user_id: {
-        coupon_id: coupon.id,
-        user_id: userId,
+  // Check if already redeemed by this user (if user is authenticated)
+  if (userId) {
+    const existingRedemption = await prisma.couponRedemption.findUnique({
+      where: {
+        coupon_id_user_id: {
+          coupon_id: coupon.id,
+          user_id: userId,
+        },
       },
-    },
-  });
+    });
 
-  if (existingRedemption) {
-    throw new AppError("You have already redeemed this coupon.", 400);
+    if (existingRedemption) {
+      throw new AppError("You have already redeemed this coupon.", 400);
+    }
   }
 
   return coupon;
@@ -530,12 +532,52 @@ export const verifySignature = async (req, res, next) => {
 };
 
 /**
+ * List publicly available active discount coupons/vouchers
+ */
+export const listActiveCouponsPublic = async (req, res, next) => {
+  try {
+    const now = new Date();
+    const coupons = await prisma.coupon.findMany({
+      where: {
+        is_active: true,
+        valid_from: { lte: now },
+        OR: [
+          { valid_until: null },
+          { valid_until: { gte: now } },
+        ],
+      },
+      select: {
+        id: true,
+        code: true,
+        description: true,
+        discount_type: true,
+        discount_value: true,
+        applicable_plans: true,
+        max_redemptions: true,
+        times_redeemed: true,
+        valid_until: true,
+      },
+      orderBy: { created_at: "desc" },
+    });
+
+    const activeCoupons = coupons.filter(c => c.max_redemptions === null || c.times_redeemed < c.max_redemptions);
+
+    res.status(200).json({
+      success: true,
+      data: activeCoupons,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * Validate Coupon code (Read-only preview)
  */
 export const validateCoupon = async (req, res, next) => {
   try {
     const { couponCode, planKey } = req.body;
-    const userId = req.user.id;
+    const userId = req.user?.id || null;
 
     if (!couponCode || !planKey) {
       throw new AppError("couponCode and planKey are required.", 400);
@@ -550,6 +592,7 @@ export const validateCoupon = async (req, res, next) => {
         discountType: coupon.discount_type,
         discountValue: coupon.discount_value,
         description: coupon.description,
+        applicablePlans: coupon.applicable_plans,
       },
     });
   } catch (err) {

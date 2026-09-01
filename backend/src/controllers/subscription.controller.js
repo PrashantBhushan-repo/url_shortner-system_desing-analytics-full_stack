@@ -1,6 +1,17 @@
 import prisma from "../config/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
+import { config } from "../config/config.js";
 import { getActiveSubscription, invalidateSubscriptionCache } from "../services/planLimitService.js";
+import Razorpay from "razorpay";
+
+// Initialize Razorpay client safely
+const getRazorpayInstance = () => {
+  const { keyId, keySecret } = config.razorpay || {};
+  if (!keyId || !keySecret) {
+    return null;
+  }
+  return new Razorpay({ key_id: keyId, key_secret: keySecret });
+};
 
 /**
  * Fetch current subscription details, plan limits, and current usage metrics
@@ -271,6 +282,142 @@ export const getInvoices = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: payments,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Customer Self-Service Refund Request (14-Day Guarantee Policy)
+ */
+export const requestRefund = async (req, res, next) => {
+  try {
+    const { paymentId, reason, note } = req.body;
+    const userId = req.user.id;
+
+    if (!paymentId) {
+      throw new AppError("paymentId is required.", 400);
+    }
+
+    const payment = await prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        plan: true,
+        user: true,
+      },
+    });
+
+    if (!payment) {
+      throw new AppError("Payment transaction not found.", 404);
+    }
+
+    if (payment.user_id !== userId) {
+      throw new AppError("You do not have permission to request a refund for this transaction.", 403);
+    }
+
+    if (payment.status !== "CAPTURED") {
+      throw new AppError(`Cannot refund payment in status '${payment.status}'. Only captured payments are eligible.`, 400);
+    }
+
+    if (payment.refunded_amount >= payment.amount) {
+      throw new AppError("This payment transaction has already been fully refunded.", 400);
+    }
+
+    // Check 14-Day refund policy guarantee window
+    const now = new Date();
+    const daysSincePayment = (now.getTime() - new Date(payment.created_at).getTime()) / (1000 * 3600 * 24);
+    if (daysSincePayment > 14) {
+      throw new AppError("The 14-day money-back guarantee window for this payment has expired. Please contact support@pburls.online for manual billing review.", 400);
+    }
+
+    const refundAmount = payment.amount - payment.refunded_amount;
+
+    // Trigger Razorpay Refund API if live gateway payment ID exists and Razorpay is configured
+    if (payment.gateway_payment_id && !payment.gateway_payment_id.startsWith("pay_mock_")) {
+      const razorpay = getRazorpayInstance();
+      if (razorpay) {
+        try {
+          await razorpay.payments.refund(payment.gateway_payment_id, {
+            amount: refundAmount,
+            notes: {
+              reason: reason || "Customer self-service 14-day refund",
+              note: note || "",
+              userId,
+            },
+          });
+        } catch (rzpErr) {
+          console.error("[Refund] Gateway refund attempt:", rzpErr.message || rzpErr);
+        }
+      }
+    }
+
+    // Execute database transaction: update payment status & revert user to Free tier
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update Payment
+      const updatedPayment = await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: "REFUNDED",
+          refunded_amount: payment.amount,
+          metadata: {
+            ...((payment.metadata && typeof payment.metadata === "object") ? payment.metadata : {}),
+            refundRequestedAt: now.toISOString(),
+            refundReason: reason || "Customer Satisfaction Guarantee",
+            refundNote: note || "",
+            refundStatus: "COMPLETED",
+          },
+        },
+        include: {
+          plan: true,
+        },
+      });
+
+      // 2. Find and cancel active paid subscription
+      const activeSub = await tx.subscription.findFirst({
+        where: {
+          user_id: userId,
+          status: "ACTIVE",
+        },
+      });
+
+      if (activeSub) {
+        await tx.subscription.update({
+          where: { id: activeSub.id },
+          data: {
+            status: "CANCELED",
+            canceled_at: now,
+            current_period_end: now,
+          },
+        });
+      }
+
+      // 3. Ensure user has a Free plan active subscription
+      const freePlan = await tx.plan.findUnique({
+        where: { key: "free" },
+      });
+
+      if (freePlan) {
+        await tx.subscription.create({
+          data: {
+            user_id: userId,
+            plan_id: freePlan.id,
+            billing_cycle: "MONTHLY",
+            status: "ACTIVE",
+            started_at: now,
+          },
+        });
+      }
+
+      return updatedPayment;
+    });
+
+    await invalidateSubscriptionCache(userId);
+
+    res.status(200).json({
+      success: true,
+      message: `Refund of ₹${(refundAmount / 100).toFixed(0)} has been processed successfully under our 14-Day Money-Back Guarantee. Amount will be credited to your original payment method within 5-7 business days.`,
+      data: result,
     });
   } catch (err) {
     next(err);

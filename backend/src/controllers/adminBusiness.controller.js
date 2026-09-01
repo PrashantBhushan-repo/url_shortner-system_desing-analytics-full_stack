@@ -24,12 +24,14 @@ export const getDashboardOverview = async (req, res, next) => {
     if (isRedisReady()) {
       try {
         const redis = getRedisClient();
-        const cachedData = await redis.get(cacheKey);
-        if (cachedData) {
-          return res.status(200).json({
-            success: true,
-            data: JSON.parse(cachedData),
-          });
+        if (redis) {
+          const cachedData = await redis.get(cacheKey);
+          if (cachedData) {
+            return res.status(200).json({
+              success: true,
+              data: JSON.parse(cachedData),
+            });
+          }
         }
       } catch (cacheErr) {
         console.error("Dashboard overview read cache error:", cacheErr.message);
@@ -39,49 +41,59 @@ export const getDashboardOverview = async (req, res, next) => {
     const now = new Date();
     
     // 1. Calculate Active Subscriber Count by Plan & MRR
-    const activeSubs = await prisma.subscription.findMany({
-      where: { status: "ACTIVE" },
-      include: { plan: true },
-    });
+    let activeSubs = [];
+    try {
+      activeSubs = await prisma.subscription.findMany({
+        where: { status: "ACTIVE" },
+        include: { plan: true },
+      });
+    } catch (dbErr) {
+      console.warn("Active subs query error:", dbErr.message);
+    }
 
     let totalMrr = 0;
     const subscribersByPlan = { free: 0, starter: 0, pro: 0, business: 0 };
 
     for (const sub of activeSubs) {
-      const planKey = sub.plan.key;
+      const planKey = sub.plan?.key || "free";
       if (subscribersByPlan[planKey] !== undefined) {
         subscribersByPlan[planKey]++;
       }
 
-      if (planKey === "free") continue;
+      if (planKey === "free" || !sub.plan) continue;
 
       let subMrr = 0;
       if (sub.billing_cycle === "MONTHLY") {
-        subMrr = sub.plan.price_monthly;
+        subMrr = sub.plan.price_monthly || 0;
       } else if (sub.billing_cycle === "QUARTERLY") {
-        subMrr = Math.round((sub.plan.price_quarterly || (sub.plan.price_monthly * 3)) / 3);
+        subMrr = Math.round((sub.plan.price_quarterly || ((sub.plan.price_monthly || 0) * 3)) / 3);
       } else if (sub.billing_cycle === "YEARLY") {
-        subMrr = Math.round((sub.plan.price_yearly || (sub.plan.price_monthly * 12)) / 12);
+        subMrr = Math.round((sub.plan.price_yearly || ((sub.plan.price_monthly || 0) * 12)) / 12);
       }
       totalMrr += subMrr;
     }
 
     // 2. MRR Trend (Total Captured Payments in each month for the last 12 months)
     const twelveMonthsAgo = new Date();
-    twelveMonthsAgo.setMonth(now.getMonth() - 11); // Last 12 months inclusive
+    twelveMonthsAgo.setMonth(now.getMonth() - 11);
     twelveMonthsAgo.setDate(1);
     twelveMonthsAgo.setHours(0, 0, 0, 0);
 
-    const paymentsLast12Months = await prisma.payment.findMany({
-      where: {
-        status: "CAPTURED",
-        created_at: { gte: twelveMonthsAgo },
-      },
-      select: {
-        amount: true,
-        created_at: true,
-      },
-    });
+    let paymentsLast12Months = [];
+    try {
+      paymentsLast12Months = await prisma.payment.findMany({
+        where: {
+          status: "CAPTURED",
+          created_at: { gte: twelveMonthsAgo },
+        },
+        select: {
+          amount: true,
+          created_at: true,
+        },
+      });
+    } catch (payErr) {
+      console.warn("Payments query error:", payErr.message);
+    }
 
     const mrrTrendMap = {};
     for (let i = 11; i >= 0; i--) {
@@ -91,102 +103,123 @@ export const getDashboardOverview = async (req, res, next) => {
     }
 
     for (const p of paymentsLast12Months) {
+      if (!p.created_at) continue;
       const key = p.created_at.toLocaleString("default", { month: "short", year: "numeric" });
       if (mrrTrendMap[key] !== undefined) {
-        mrrTrendMap[key] += p.amount;
+        mrrTrendMap[key] += (p.amount || 0);
       }
     }
 
     const mrrTrend = Object.entries(mrrTrendMap).map(([month, revenue]) => ({
       month,
-      revenue, // stored in paise
+      revenue: revenue || 0,
     }));
 
     // 3. New Subscriptions vs Cancellations this month, Churn rate
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const newSubsThisMonth = await prisma.subscription.count({
-      where: {
-        started_at: { gte: startOfMonth },
-        status: "ACTIVE",
-      },
-    });
+    let newSubsThisMonth = 0;
+    let canceledSubsThisMonth = 0;
+    let activeAtStart = 0;
 
-    const canceledSubsThisMonth = await prisma.subscription.count({
-      where: {
-        canceled_at: { gte: startOfMonth },
-      },
-    });
+    try {
+      newSubsThisMonth = await prisma.subscription.count({
+        where: {
+          started_at: { gte: startOfMonth },
+          status: "ACTIVE",
+        },
+      });
 
-    const activeAtStart = await prisma.subscription.count({
-      where: {
-        started_at: { lt: startOfMonth },
-        OR: [
-          { canceled_at: null },
-          { canceled_at: { gte: startOfMonth } },
-        ],
-      },
-    });
+      canceledSubsThisMonth = await prisma.subscription.count({
+        where: {
+          canceled_at: { gte: startOfMonth },
+        },
+      });
+
+      activeAtStart = await prisma.subscription.count({
+        where: {
+          started_at: { lt: startOfMonth },
+          OR: [
+            { canceled_at: null },
+            { canceled_at: { gte: startOfMonth } },
+          ],
+        },
+      });
+    } catch (cntErr) {
+      console.warn("Subscription count error:", cntErr.message);
+    }
 
     const churnRate = activeAtStart > 0 ? parseFloat(((canceledSubsThisMonth / activeAtStart) * 100).toFixed(2)) : 0;
 
-    // 4. Failed payments in the last 7 days (count + total attempted amount)
+    // 4. Failed payments in the last 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(now.getDate() - 7);
     sevenDaysAgo.setHours(0, 0, 0, 0);
 
-    const failedPaymentsData = await prisma.payment.aggregate({
-      where: {
-        status: "FAILED",
-        created_at: { gte: sevenDaysAgo },
-      },
-      _count: { id: true },
-      _sum: { amount: true },
-    });
+    let failedCount = 0;
+    let failedAmount = 0;
 
-    const failedCount = failedPaymentsData._count.id || 0;
-    const failedAmount = failedPaymentsData._sum.amount || 0;
+    try {
+      const failedPaymentsData = await prisma.payment.aggregate({
+        where: {
+          status: "FAILED",
+          created_at: { gte: sevenDaysAgo },
+        },
+        _count: { id: true },
+        _sum: { amount: true },
+      });
+      failedCount = failedPaymentsData._count?.id || 0;
+      failedAmount = failedPaymentsData._sum?.amount || 0;
+    } catch (fErr) {
+      console.warn("Failed payments aggregate error:", fErr.message);
+    }
 
-    // 5. Total revenue this month vs last month (excluding refunds)
+    // 5. Total revenue this month vs last month
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-    const revenueThisMonthData = await prisma.payment.aggregate({
-      where: {
-        status: "CAPTURED",
-        created_at: { gte: startOfMonth },
-      },
-      _sum: { amount: true },
-    });
+    let revenueThisMonth = 0;
+    let revenueLastMonth = 0;
 
-    const revenueLastMonthData = await prisma.payment.aggregate({
-      where: {
-        status: "CAPTURED",
-        created_at: { gte: startOfLastMonth, lte: endOfLastMonth },
-      },
-      _sum: { amount: true },
-    });
+    try {
+      const revenueThisMonthData = await prisma.payment.aggregate({
+        where: {
+          status: "CAPTURED",
+          created_at: { gte: startOfMonth },
+        },
+        _sum: { amount: true },
+      });
+      revenueThisMonth = revenueThisMonthData._sum?.amount || 0;
 
-    const revenueThisMonth = revenueThisMonthData._sum.amount || 0;
-    const revenueLastMonth = revenueLastMonthData._sum.amount || 0;
+      const revenueLastMonthData = await prisma.payment.aggregate({
+        where: {
+          status: "CAPTURED",
+          created_at: { gte: startOfLastMonth, lte: endOfLastMonth },
+        },
+        _sum: { amount: true },
+      });
+      revenueLastMonth = revenueLastMonthData._sum?.amount || 0;
+    } catch (revErr) {
+      console.warn("Revenue aggregate error:", revErr.message);
+    }
 
     const data = {
-      mrr: totalMrr,
+      mrr: totalMrr || 0,
       subscribers: subscribersByPlan,
       mrrTrend,
       growth: {
-        newSubscriptions: newSubsThisMonth,
-        cancellations: canceledSubsThisMonth,
-        churnRate,
+        newSubscriptions: newSubsThisMonth || 0,
+        cancellations: canceledSubsThisMonth || 0,
+        churnRate: churnRate || 0,
       },
       failedPayments: {
-        count: failedCount,
-        amount: failedAmount,
+        count: failedCount || 0,
+        amount: failedAmount || 0,
       },
       revenue: {
-        thisMonth: revenueThisMonth,
-        lastMonth: revenueLastMonth,
+        thisMonth: revenueThisMonth || 0,
+        lastMonth: revenueLastMonth || 0,
       },
     };
 
@@ -194,13 +227,15 @@ export const getDashboardOverview = async (req, res, next) => {
     if (isRedisReady()) {
       try {
         const redis = getRedisClient();
-        await redis.set(cacheKey, JSON.stringify(data), "EX", 300);
+        if (redis) {
+          await redis.set(cacheKey, JSON.stringify(data), "EX", 300);
+        }
       } catch (cacheErr) {
         console.error("Dashboard overview set cache error:", cacheErr.message);
       }
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data,
     });

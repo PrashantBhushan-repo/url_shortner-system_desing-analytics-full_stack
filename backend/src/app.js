@@ -57,7 +57,7 @@ app.use((req, res, next) => {
 app.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "SnapURL API is running",
+    message: "PBUrls API is running",
     timestamp: new Date().toISOString(),
   });
 });

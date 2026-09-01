@@ -277,3 +277,45 @@ export const listTeamMembers = async (req, res, next) => {
     next(err);
   }
 };
+
+/**
+ * List all teams the user belongs to
+ */
+export const listUserTeams = async (req, res, next) => {
+  try {
+    const memberships = await prisma.teamMember.findMany({
+      where: {
+        user_id: req.user.id,
+      },
+      include: {
+        team: {
+          include: {
+            owner: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: memberships.map((m) => ({
+        id: m.team.id,
+        name: m.team.name,
+        role: m.role,
+        status: m.status,
+        owner: m.team.owner,
+        invitedAt: m.invited_at,
+        joinedAt: m.joined_at,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

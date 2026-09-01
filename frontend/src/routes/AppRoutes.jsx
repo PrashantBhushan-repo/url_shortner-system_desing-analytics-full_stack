@@ -2,6 +2,7 @@
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import Home from "../pages/Home";
 import AuthPage from "../pages/AuthPage";
+import OAuthCallbackPage from "../pages/OAuthCallbackPage";
 import DashboardPage from "../pages/DashboardPage";
 import SettingsPage from "../pages/SettingsPage";
 import AnalyticsPage from "../pages/Analytics";
@@ -18,12 +19,16 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/p/:shortCode" element={<PasswordProtectedPage />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/analytics/:urlId" element={<AnalyticsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/refunds" element={<SettingsPage defaultTab="subscription" />} />
+          <Route path="/refund" element={<SettingsPage defaultTab="subscription" />} />
+          <Route path="/billing" element={<SettingsPage defaultTab="subscription" />} />
           <Route element={<AdminRoute />}>
             <Route path="/admin" element={<AdminDashboard />} />
           </Route>

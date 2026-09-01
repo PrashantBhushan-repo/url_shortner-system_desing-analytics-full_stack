@@ -1,12 +1,12 @@
-# 🔗 SnapURL Redirection & Shortening Architecture
+# 🔗 PBUrls Redirection & Shortening Architecture
 
-This document provides a complete technical reference for the core URL shortening and low-latency redirect engine implemented in SnapURL.
+This document provides a complete technical reference for the core URL shortening and low-latency redirect engine implemented in PBUrls.
 
 ---
 
 ## 🏗️ Core Engine Architecture
 
-SnapURL separates the write path (Shortening) from the read path (Redirecting) to maximize throughput and ensure sub-millisecond response loops.
+PBUrls separates the write path (Shortening) from the read path (Redirecting) to maximize throughput and ensure sub-millisecond response loops.
 
 ```
        [ SHORTENING LOOP - WRITE PATH ]

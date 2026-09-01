@@ -1,6 +1,6 @@
-# 🏁 SnapURL QR Code Engine: System Design & DSA Reference
+# 🏁 PBUrls QR Code Engine: System Design & DSA Reference
 
-This document covers the end-to-end workflow, mathematical designs, system scaling architectures, and algorithms (DSA) applied to generate, render, and track QR Code interactions in SnapURL.
+This document covers the end-to-end workflow, mathematical designs, system scaling architectures, and algorithms (DSA) applied to generate, render, and track QR Code interactions in PBUrls.
 
 ---
 
@@ -24,7 +24,7 @@ The system handles QR Codes in two separate pipelines: **Generation** (creating 
   ┌──────────────┐
   │ Mobile Phone │ (Scans Code)
   └──────┬───────┘
-         │ Hits: http://snapurl.com/r/abc123?qr=true
+         │ Hits: http://pburls.com/r/abc123?qr=true
          ▼
   ┌──────────────────────┐
   │ Express Redirector   │ ──► Enqueues Telemetry Job (isQrScan: true)
@@ -70,7 +70,7 @@ When designing a QR code feature for a SaaS dashboard, system architects face a 
 | **Dynamic Domains** | **Seamless** (If a user maps a custom domain, the generated QR instantly encodes the new domain name). | **Complex** (Requires invalidating and re-rendering stored image files). |
 
 ### Optimization & Caching Strategy:
-Because SnapURL implements **On-the-Fly Generation**, standard clients caching handles the load:
+Because PBUrls implements **On-the-Fly Generation**, standard clients caching handles the load:
 * **HTTP Cache Control**: Responses are served with `Cache-Control: public, max-age=86400` headers. The visitor's browser or CDNs cache the QR base64 response, avoiding CPU usage on repeat lookups.
 
 ---
@@ -81,7 +81,7 @@ A primary feature of SaaS analytics is letting customers see: *"How many people 
 
 ### Implementation Workflow:
 1. **Embedding**: When generating the QR code payload, the system encodes the short link with a query flag:
-   `http://snapurl.com/r/abc123?qr=true`
+   `http://pburls.com/r/abc123?qr=true`
 2. **Detection**: In `url.controller.js` on incoming redirect requests:
    ```javascript
    const isQrScan = req.query.qr === "true";

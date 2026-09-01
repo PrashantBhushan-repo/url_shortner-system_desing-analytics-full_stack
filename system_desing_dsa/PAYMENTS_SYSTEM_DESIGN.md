@@ -1,6 +1,6 @@
-# 🏛️ SnapURL SaaS Billing: System Design & DSA Reference
+# 🏛️ PBUrls SaaS Billing: System Design & DSA Reference
 
-This document details the system design principles, data structures, and algorithms (DSA) applied to implement a secure, idempotent, and highly performant subscription and coupon validation engine in SnapURL.
+This document details the system design principles, data structures, and algorithms (DSA) applied to implement a secure, idempotent, and highly performant subscription and coupon validation engine in PBUrls.
 
 ---
 

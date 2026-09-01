@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
-import { KeyRound, ShieldAlert, ArrowRight, ShieldCheck } from "lucide-react";
+import { useParams, useSearchParams, Link } from "react-router-dom";
+import { KeyRound, ShieldAlert, ArrowRight, ShieldCheck, ArrowLeft } from "lucide-react";
 
 function PasswordProtectedPage() {
   const { shortCode } = useParams();
@@ -15,17 +15,36 @@ function PasswordProtectedPage() {
     const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
     // Construct redirect directly to base URL gateway (removing '/api' suffix)
     const baseRedirectUrl = apiUrl.replace(/\/api\/?$/, "");
-    window.location.href = `${baseRedirectUrl}/${shortCode}?password=${encodeURIComponent(password)}`;
+    window.location.href = `${baseRedirectUrl}/r/${shortCode}?password=${encodeURIComponent(password)}`;
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4 relative overflow-hidden text-white">
-      
+    <div className="min-h-screen bg-black flex items-center justify-center px-4 relative overflow-hidden text-white">
+      {/* Floating Back to Home button */}
+      <div className="absolute top-6 left-6 z-50">
+        <Link 
+          to="/" 
+          className="flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-900/90 hover:bg-zinc-800 px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white transition duration-150 shadow-md cursor-pointer select-none"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Back to Home</span>
+        </Link>
+      </div>
+
       {/* Glow Effects */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] rounded-full bg-blue-600/10 blur-[120px]" />
 
       <div className="max-w-md w-full relative z-10 space-y-6">
         
+        {/* Brand Logo */}
+        <div className="flex justify-center mb-2">
+          <Link to="/" className="hover:opacity-90 transition-opacity">
+            <span className="font-black tracking-tighter text-white text-4xl">
+              pb<span className="bg-gradient-to-r from-blue-500 via-indigo-400 to-purple-600 bg-clip-text text-transparent">Urls</span>
+            </span>
+          </Link>
+        </div>
+
         {/* Logo and Status */}
         <div className="text-center space-y-3">
           <div className="mx-auto w-14 h-14 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center shadow-lg">
@@ -73,7 +92,7 @@ function PasswordProtectedPage() {
 
         {/* Footer info */}
         <p className="text-[10px] text-center text-slate-600 font-semibold tracking-wider uppercase flex items-center justify-center gap-1.5">
-          <ShieldCheck className="h-3.5 w-3.5" /> SECURED BY SNAPURL
+          <ShieldCheck className="h-3.5 w-3.5" /> SECURED BY PBURLS
         </p>
 
       </div>

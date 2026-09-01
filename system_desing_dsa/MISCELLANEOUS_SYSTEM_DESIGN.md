@@ -1,12 +1,12 @@
-# 🏛️ SnapURL DevOps, CI/CD & Database Seeding System Design (Miscellaneous)
+# 🏛️ PBUrls DevOps, CI/CD & Database Seeding System Design (Miscellaneous)
 
-This document covers the system designs, configurations, and scripts for the miscellaneous subsystems of SnapURL: **DevOps Containerization**, **Production Orchestration (Kubernetes)**, **CI/CD Automation (GitHub Actions)**, and **Database Seeding/Migrations**.
+This document covers the system designs, configurations, and scripts for the miscellaneous subsystems of PBUrls: **DevOps Containerization**, **Production Orchestration (Kubernetes)**, **CI/CD Automation (GitHub Actions)**, and **Database Seeding/Migrations**.
 
 ---
 
 ## 1. DevOps & Multi-Stage Dockerization
 
-To optimize deployment speeds and reduce container size in production clusters, SnapURL utilizes **Multi-Stage Docker Builds** for the Node.js backend.
+To optimize deployment speeds and reduce container size in production clusters, PBUrls utilizes **Multi-Stage Docker Builds** for the Node.js backend.
 
 ### Dockerfile Design Decisions:
 1. **Base Layer Optimization**: Uses `node:20-alpine` as the base image. The Alpine distribution reduces the base OS size from ~1GB to ~100MB, minimizing build times and the vulnerability attack surface.
@@ -19,7 +19,7 @@ To optimize deployment speeds and reduce container size in production clusters, 
 
 ## 2. Production Orchestration: Kubernetes & Kustomize
 
-SnapURL deploys to Kubernetes clusters using **Kustomize** to overlay configuration values across environments (Development, Staging, Production).
+PBUrls deploys to Kubernetes clusters using **Kustomize** to overlay configuration values across environments (Development, Staging, Production).
 
 ### Infrastructure Component Layout:
 *   **Headless Services**: Used for Redis and PostgreSQL cluster connections to reduce network routing hops within the cluster network.

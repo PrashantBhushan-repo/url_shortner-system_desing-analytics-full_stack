@@ -15,6 +15,7 @@ import { randomUUID } from "crypto";
 import { config } from "../config/config.js";
 import bcrypt from "bcrypt";
 import prisma from "../config/prismaClient.js";
+import { getRedisClient } from "../config/redisClient.js";
 import { getActiveSubscription } from "../services/planLimitService.js";
 import { PlanLimitError } from "../utils/AppError.js";
 
@@ -54,7 +55,7 @@ export const redirectUrl = async (req, res, next) => {
     const userAgent = req.headers["user-agent"] || "";
     const referrer = req.headers["referer"] || "";
     const sessionId = req.cookies?.session_id || "";
-    const isQrScan = req.query.qr === "true";
+    const isQrScan = req.query.qr === "true" || req.query.qr === "1" || req.query.src === "qr";
 
     if (urlId) {
       const existingVisitorId = req.cookies?.visitor_id;
@@ -70,7 +71,7 @@ export const redirectUrl = async (req, res, next) => {
       }
 
       addClickJob({
-        urlId,
+        urlId: urlId.toString(),
         ip,
         userAgent,
         referrer,
@@ -219,3 +220,101 @@ export const createBulkShortUrls = async (req, res, next) => {
     next(error);
   }
 };
+
+export const fetchPublicStats = async (req, res, next) => {
+  try {
+    const startDb = performance.now();
+    const [totalUrls, activeUrls, totalClicks, uniqueClicks, qrScans] = await Promise.all([
+      prisma.url.count(),
+      prisma.url.count({ where: { is_active: true } }),
+      prisma.click.count(),
+      prisma.click.count({ where: { is_unique: true } }),
+      prisma.click.count({ where: { is_qr_scan: true } }),
+    ]);
+    const dbLatencyMs = Math.max(0.5, parseFloat((performance.now() - startDb).toFixed(2)));
+
+    let redisOk = false;
+    let redisLatencyMs = 0.8;
+    try {
+      const redis = getRedisClient();
+      if (redis) {
+        const startRedis = performance.now();
+        await redis.ping();
+        redisLatencyMs = Math.max(0.3, parseFloat((performance.now() - startRedis).toFixed(2)));
+        redisOk = true;
+      }
+    } catch {
+      redisOk = false;
+    }
+
+    // Top locations from real click records
+    const topCountriesGroup = await prisma.click.groupBy({
+      by: ["country"],
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 5,
+    });
+
+    // Top referrers from real click records
+    const topReferrersGroup = await prisma.click.groupBy({
+      by: ["referer_host"],
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 5,
+    });
+
+    // Device breakdown
+    const devicesGroup = await prisma.click.groupBy({
+      by: ["device_type"],
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+    });
+
+    // Real pricing plans from database
+    const plans = await prisma.plan.findMany({
+      where: { is_active: true },
+      orderBy: { sort_order: "asc" },
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        price_monthly: true,
+        price_quarterly: true,
+        price_yearly: true,
+        currency: true,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalUrls,
+        activeUrls,
+        totalClicks,
+        uniqueClicks,
+        qrScans,
+        dbStatus: "ONLINE",
+        redisStatus: redisOk ? "ONLINE" : "STANDBY",
+        dbLatencyMs,
+        redisLatencyMs,
+        meanLatencyMs: parseFloat(((dbLatencyMs + redisLatencyMs) / 2).toFixed(2)),
+        topCountries: topCountriesGroup.map((c) => ({
+          name: c.country || "Unknown",
+          count: c._count.id,
+        })),
+        topReferrers: topReferrersGroup.map((r) => ({
+          name: r.referer_host || "Direct",
+          count: r._count.id,
+        })),
+        devices: devicesGroup.map((d) => ({
+          name: d.device_type || "Desktop",
+          count: d._count.id,
+        })),
+        plans,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

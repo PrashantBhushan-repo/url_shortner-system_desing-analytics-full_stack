@@ -6,7 +6,7 @@ import { findUserById, updateUserProfile } from "../repositories/user.repository
 import { AppError } from "../utils/AppError.js";
 import { decryptSecret, encryptSecret, toAuthError } from "../utils/auth.utils.js";
 
-const APP_NAME = "SnapURL";
+const APP_NAME = "PBUrls";
 const PENDING_2FA_TTL_SECONDS = 60 * 10;
 const pendingSetupKey = (userId) => `2fa_setup:${userId}`;
 

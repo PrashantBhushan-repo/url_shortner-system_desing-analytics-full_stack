@@ -32,7 +32,7 @@ function ThemeSettings() {
     <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
       <div className="border-b border-white/10 pb-5">
         <h2 className="text-xl font-bold text-white">Appearance</h2>
-        <p className="mt-1 text-xs text-slate-400">Customize the visual theme of your SnapURL analytics dashboard.</p>
+        <p className="mt-1 text-xs text-slate-400">Customize the visual theme of your PBUrls analytics dashboard.</p>
       </div>
 
       <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">

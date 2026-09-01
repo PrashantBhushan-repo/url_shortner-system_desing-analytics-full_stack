@@ -4,8 +4,8 @@ import { getProfile } from "../services/authApi";
 import { setAccessToken, getAccessToken } from "../services/urlApi";
 import axios from "axios";
 
-const AUTH_USER_STORAGE_KEY = "snapurl_user";
-const AUTH_TOKEN_STORAGE_KEY = "snapurl_access_token";
+const AUTH_USER_STORAGE_KEY = "pburls_user";
+const AUTH_TOKEN_STORAGE_KEY = "pburls_access_token";
 
 const AuthContext = createContext(null);
 
@@ -150,7 +150,7 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setUser(null);
     if (typeof window !== "undefined") {
-      window.localStorage.removeItem("snapurl_evaluator_session");
+      window.localStorage.removeItem("pburls_evaluator_session");
     }
   };
 

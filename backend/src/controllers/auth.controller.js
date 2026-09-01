@@ -217,7 +217,7 @@ export const evaluatorBypassController = async (req, res, next) => {
         user = await prisma.user.create({
           data: {
             name: "Evaluator Administrator",
-            email: "admin@snapurl.com",
+            email: "admin@pburls.com",
             passwordHash: "$2b$10$abcdefghijklmnopqrstuv",
             role: "ADMIN",
             emailVerified: true,
@@ -227,13 +227,13 @@ export const evaluatorBypassController = async (req, res, next) => {
       }
     } else {
       user = await prisma.user.findUnique({
-        where: { email: "evaluator.demo@snapurl.com" }
+        where: { email: "evaluator.demo@pburls.com" }
       });
       if (!user) {
         user = await prisma.user.create({
           data: {
             name: "Evaluator Inspector",
-            email: "evaluator.demo@snapurl.com",
+            email: "evaluator.demo@pburls.com",
             passwordHash: "$2b$10$abcdefghijklmnopqrstuv",
             role: "USER",
             emailVerified: true,

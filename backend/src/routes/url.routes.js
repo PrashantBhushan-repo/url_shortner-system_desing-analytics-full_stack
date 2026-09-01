@@ -10,6 +10,7 @@ import {
   fetchUrlById,
   getUrlQrCode,
   createBulkShortUrls,
+  fetchPublicStats,
 } from "../controllers/url.controller.js";
 
 import { validateCreateUrl, validateUpdateUrl } from "../middlewares/validate.middleware.js";
@@ -22,9 +23,11 @@ import prisma from "../config/prismaClient.js";
 
 const router = express.Router();
 
+router.get("/public-stats", fetchPublicStats);
 router.get("/me", authMiddleware, fetchUserUrls);
 router.post("/bulk", authMiddleware, requireFeature("bulk_url_creation"), createBulkShortUrls);
 router.post("/", authMiddleware, enforceUrlLimit, createUrlLimiter, validateCreateUrl, createShortUrl);
+
 
 router.get("/:id/health", authMiddleware, requireOwnership("Url", async (req) => {
   const url = await prisma.url.findUnique({ where: { id: BigInt(req.params.id) } });

@@ -361,7 +361,7 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
                       onChange={(e) => setCustomDomainId(e.target.value)}
                       className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500"
                     >
-                      <option value="">Default (snapurl.me)</option>
+                      <option value="">Default (pburls.me)</option>
                       {userDomains.map((d) => (
                         <option key={d.id} value={d.id}>{d.domain}</option>
                       ))}
@@ -410,7 +410,7 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
                       <option value="7d">7 Days (Default)</option>
                       <option value="30d">30 Days</option>
                       <option value="custom" disabled={!limits?.custom_expiry_allowed}>
-                        Custom Expiry {!limits?.custom_expiry_allowed ? "🔒" : ""}
+                        Custom Expiry {!limits?.custom_expiry_allowed ? "(PRO)" : ""}
                       </option>
                       {limits?.custom_expiry_allowed && <option value="none">No Expiry</option>}
                     </select>

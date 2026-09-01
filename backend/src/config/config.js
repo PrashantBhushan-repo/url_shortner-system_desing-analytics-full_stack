@@ -55,4 +55,27 @@ export const config = {
   },
 
   cacheTtl: toNumber(process.env.CACHE_TTL_SECONDS, 6 * 60 * 60),
+
+  oauth: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      redirectUri: process.env.GOOGLE_REDIRECT_URI || "",
+    },
+    github: {
+      clientId: process.env.GITHUB_CLIENT_ID || "",
+      clientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+      redirectUri: process.env.GITHUB_REDIRECT_URI || "",
+    },
+    microsoft: {
+      clientId: process.env.MICROSOFT_CLIENT_ID || "",
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
+      redirectUri: process.env.MICROSOFT_REDIRECT_URI || "",
+    },
+    amazon: {
+      clientId: process.env.AMAZON_CLIENT_ID || "",
+      clientSecret: process.env.AMAZON_CLIENT_SECRET || "",
+      redirectUri: process.env.AMAZON_REDIRECT_URI || "",
+    },
+  },
 };

@@ -30,7 +30,7 @@ export const getActiveSubscription = async (userId) => {
     select: { email: true, role: true }
   });
 
-  if (user && (user.email === "evaluator.demo@snapurl.com" || user.role === "ADMIN")) {
+  if (user && (user.email === "evaluator.demo@pburls.com" || user.role === "ADMIN")) {
     const businessPlan = await prisma.plan.findFirst({
       where: { key: "business", is_active: true },
       include: { limit: true }

@@ -1,12 +1,12 @@
-# 🔐 SnapURL Enterprise Authorization Architecture
+# 🔐 PBUrls Enterprise Authorization Architecture
 
-This document outlines the **Role-Based Access Control (RBAC)** and **Relationship-Based Access Control (ReBAC)** authorization architecture implemented in SnapURL. It acts as an industry-standard blueprint showing how user permissions, workspace team roles, ownership boundaries, and admin controls are validated across the system.
+This document outlines the **Role-Based Access Control (RBAC)** and **Relationship-Based Access Control (ReBAC)** authorization architecture implemented in PBUrls. It acts as an industry-standard blueprint showing how user permissions, workspace team roles, ownership boundaries, and admin controls are validated across the system.
 
 ---
 
 ## 🏛️ Architecture Design Patterns
 
-SnapURL does not rely on a heavy, complex permission-matrix database structure. Instead, it implements a highly performant **decoupled authorization hybrid** that validates access using:
+PBUrls does not rely on a heavy, complex permission-matrix database structure. Instead, it implements a highly performant **decoupled authorization hybrid** that validates access using:
 1. **Platform Role-Based Access Control (RBAC)**: Enforces global permissions based on user accounts (`USER` vs `ADMIN`).
 2. **Attribute-Based / Resource Ownership (ABAC/Ownership)**: Validates if the authenticated user owns the resource they are trying to access.
 3. **Relationship-Based Access Control (ReBAC / Team Workspaces)**: Restricts workspace access based on team membership and invitations (`OWNER`, `ADMIN`, `MEMBER`).

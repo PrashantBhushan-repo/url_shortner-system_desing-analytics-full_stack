@@ -1,4 +1,4 @@
-# 🔄 SnapURL Authentication Workflows (Diagrams Reference)
+# 🔄 PBUrls Authentication Workflows (Diagrams Reference)
 
 This file contains high-resolution **Mermaid diagrams** detailing every flow of the authentication process. Copy these directly into your project's main `README.md` file.
 
@@ -72,15 +72,15 @@ flowchart TD
     class CheckRedis,SetCache cache;
     class SessionSave,QueryDbStatus,ValidateDbToken,RotateToken,DelDbToken db;
 ```
-# 🔒 SnapURL Authentication & Session Architecture
+# 🔒 PBUrls Authentication & Session Architecture
 
-This document provides a complete technical reference for the authentication system implemented in SnapURL. It covers the data flows, storage mechanisms, cache rules, and security configurations across the Frontend (React), Backend (Express), PostgreSQL, and Redis layers.
+This document provides a complete technical reference for the authentication system implemented in PBUrls. It covers the data flows, storage mechanisms, cache rules, and security configurations across the Frontend (React), Backend (Express), PostgreSQL, and Redis layers.
 
 ---
 
 ## 🏗️ Architectural Overview
 
-SnapURL implements a **Hybrid Token Authentication Model** combining:
+PBUrls implements a **Hybrid Token Authentication Model** combining:
 1. **Short-Lived Access Tokens (JWT)**: Passed in-memory via the HTTP `Authorization: Bearer <token>` header for stateless, sub-millisecond API request validation.
 2. **Long-Lived Refresh Tokens (Stateful & Rotated)**: Sent via an `HttpOnly`, `Secure` cookie, saved in PostgreSQL, and verified against user account statuses cached in **Redis** for fast security checking and instant revocation.
 

@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import RedisStore from "rate-limit-redis";
 import { getRedisClient } from "../config/redisClient.js";
 import { hasFeature, checkUrlLimit, getApiRateLimit, getActiveSubscription } from "../services/planLimitService.js";
@@ -63,7 +63,7 @@ export const apiRateLimiter = rateLimit({
     }
   },
   keyGenerator: (req) => {
-    return req.apiKeyHash || req.user?.id || req.ip;
+    return req.apiKeyHash || req.user?.id || ipKeyGenerator(req.ip);
   },
   standardHeaders: true,
   legacyHeaders: false,

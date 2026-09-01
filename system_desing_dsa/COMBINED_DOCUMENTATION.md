@@ -5,15 +5,15 @@ This file contains the contents of all non-README Markdown files in the reposito
 
 ## ANALYTICS_README.md
 
-# 📊 SnapURL Real-Time Analytics & Telemetry Architecture
+# 📊 PBUrls Real-Time Analytics & Telemetry Architecture
 
-This document details the high-performance, asynchronous analytics processing engine implemented in SnapURL. It covers how link redirect telemetry is captured in sub-milliseconds and processed out-of-band using background workers, geographic maps, bot engines, unique visitor tracking, and pre-aggregated analytics tables.
+This document details the high-performance, asynchronous analytics processing engine implemented in PBUrls. It covers how link redirect telemetry is captured in sub-milliseconds and processed out-of-band using background workers, geographic maps, bot engines, unique visitor tracking, and pre-aggregated analytics tables.
 
 ---
 
 ## 🏗️ Architectural Overview
 
-To prevent analytical write latency from stalling link redirection (which must happen in under 5ms), SnapURL decouples the **Redirect Engine** from the **Analytics Processing Engine**:
+To prevent analytical write latency from stalling link redirection (which must happen in under 5ms), PBUrls decouples the **Redirect Engine** from the **Analytics Processing Engine**:
 
 ```
                        ┌─────────────────────────┐
@@ -136,7 +136,7 @@ The analytics pipeline registers three types of keys in Redis during processing:
 
 
 
-# 🔄 SnapURL Analytics Telemetry Workflows (Diagrams Reference)
+# 🔄 PBUrls Analytics Telemetry Workflows (Diagrams Reference)
 
 This file contains high-resolution **Mermaid diagrams** detailing the real-time click telemetry pipeline and background worker processing. Copy these directly into your project's main `README.md` or keep as a reference guide.
 
@@ -269,9 +269,9 @@ sequenceDiagram
 
 ## ANALYTICS_SYSTEM_DESIGN.md
 
-# 🏛️ SnapURL Analytics System Design Reference
+# 🏛️ PBUrls Analytics System Design Reference
 
-This document covers high-level system design patterns, bottleneck mitigations, data layout scaling, and processing optimizations implemented for the analytics and telemetry engine of SnapURL.
+This document covers high-level system design patterns, bottleneck mitigations, data layout scaling, and processing optimizations implemented for the analytics and telemetry engine of PBUrls.
 
 ---
 
@@ -385,7 +385,7 @@ Key System Design Highlights Covered:
 
 ## authentication_workflow.md
 
-# 🔄 SnapURL Authentication Workflows (Diagrams Reference)
+# 🔄 PBUrls Authentication Workflows (Diagrams Reference)
 
 This file contains high-resolution **Mermaid diagrams** detailing every flow of the authentication process. Copy these directly into your project's main `README.md` file.
 
@@ -459,15 +459,15 @@ flowchart TD
     class CheckRedis,SetCache cache;
     class SessionSave,QueryDbStatus,ValidateDbToken,RotateToken,DelDbToken db;
 ```
-# 🔒 SnapURL Authentication & Session Architecture
+# 🔒 PBUrls Authentication & Session Architecture
 
-This document provides a complete technical reference for the authentication system implemented in SnapURL. It covers the data flows, storage mechanisms, cache rules, and security configurations across the Frontend (React), Backend (Express), PostgreSQL, and Redis layers.
+This document provides a complete technical reference for the authentication system implemented in PBUrls. It covers the data flows, storage mechanisms, cache rules, and security configurations across the Frontend (React), Backend (Express), PostgreSQL, and Redis layers.
 
 ---
 
 ## 🏗️ Architectural Overview
 
-SnapURL implements a **Hybrid Token Authentication Model** combining:
+PBUrls implements a **Hybrid Token Authentication Model** combining:
 1. **Short-Lived Access Tokens (JWT)**: Passed in-memory via the HTTP `Authorization: Bearer <token>` header for stateless, sub-millisecond API request validation.
 2. **Long-Lived Refresh Tokens (Stateful & Rotated)**: Sent via an `HttpOnly`, `Secure` cookie, saved in PostgreSQL, and verified against user account statuses cached in **Redis** for fast security checking and instant revocation.
 
@@ -585,15 +585,15 @@ If you want to review or modify the authentication logic, reference these files:
 
 ## AUTHZ_README.md
 
-# 🔐 SnapURL Enterprise Authorization Architecture
+# 🔐 PBUrls Enterprise Authorization Architecture
 
-This document outlines the **Role-Based Access Control (RBAC)** and **Relationship-Based Access Control (ReBAC)** authorization architecture implemented in SnapURL. It acts as an industry-standard blueprint showing how user permissions, workspace team roles, ownership boundaries, and admin controls are validated across the system.
+This document outlines the **Role-Based Access Control (RBAC)** and **Relationship-Based Access Control (ReBAC)** authorization architecture implemented in PBUrls. It acts as an industry-standard blueprint showing how user permissions, workspace team roles, ownership boundaries, and admin controls are validated across the system.
 
 ---
 
 ## 🏛️ Architecture Design Patterns
 
-SnapURL does not rely on a heavy, complex permission-matrix database structure. Instead, it implements a highly performant **decoupled authorization hybrid** that validates access using:
+PBUrls does not rely on a heavy, complex permission-matrix database structure. Instead, it implements a highly performant **decoupled authorization hybrid** that validates access using:
 1. **Platform Role-Based Access Control (RBAC)**: Enforces global permissions based on user accounts (`USER` vs `ADMIN`).
 2. **Attribute-Based / Resource Ownership (ABAC/Ownership)**: Validates if the authenticated user owns the resource they are trying to access.
 3. **Relationship-Based Access Control (ReBAC / Team Workspaces)**: Restricts workspace access based on team membership and invitations (`OWNER`, `ADMIN`, `MEMBER`).
@@ -716,9 +716,9 @@ The authorization engine is implemented in these key locations:
 
 ## AUTHZ_SYSTEM_DESIGN.md
 
-# 🏛️ SnapURL Authorization System Design Reference
+# 🏛️ PBUrls Authorization System Design Reference
 
-This document covers the high-level system design concepts, data access choices, security mitigations, and performance optimizations implemented for the authorization engine of SnapURL.
+This document covers the high-level system design concepts, data access choices, security mitigations, and performance optimizations implemented for the authorization engine of PBUrls.
 
 ---
 
@@ -823,15 +823,15 @@ For high-sensitivity endpoints (such as deleting an account or editing API secur
 
 ## MISCELLANEOUS_SYSTEM_DESIGN.md
 
-# 🏛️ SnapURL DevOps, CI/CD & Database Seeding System Design (Miscellaneous)
+# 🏛️ PBUrls DevOps, CI/CD & Database Seeding System Design (Miscellaneous)
 
-This document covers the system designs, configurations, and scripts for the miscellaneous subsystems of SnapURL: **DevOps Containerization**, **Production Orchestration (Kubernetes)**, **CI/CD Automation (GitHub Actions)**, and **Database Seeding/Migrations**.
+This document covers the system designs, configurations, and scripts for the miscellaneous subsystems of PBUrls: **DevOps Containerization**, **Production Orchestration (Kubernetes)**, **CI/CD Automation (GitHub Actions)**, and **Database Seeding/Migrations**.
 
 ---
 
 ## 1. DevOps & Multi-Stage Dockerization
 
-To optimize deployment speeds and reduce container size in production clusters, SnapURL utilizes **Multi-Stage Docker Builds** for the Node.js backend.
+To optimize deployment speeds and reduce container size in production clusters, PBUrls utilizes **Multi-Stage Docker Builds** for the Node.js backend.
 
 ### Dockerfile Design Decisions:
 1. **Base Layer Optimization**: Uses `node:20-alpine` as the base image. The Alpine distribution reduces the base OS size from ~1GB to ~100MB, minimizing build times and the vulnerability attack surface.
@@ -844,7 +844,7 @@ To optimize deployment speeds and reduce container size in production clusters, 
 
 ## 2. Production Orchestration: Kubernetes & Kustomize
 
-SnapURL deploys to Kubernetes clusters using **Kustomize** to overlay configuration values across environments (Development, Staging, Production).
+PBUrls deploys to Kubernetes clusters using **Kustomize** to overlay configuration values across environments (Development, Staging, Production).
 
 ### Infrastructure Component Layout:
 *   **Headless Services**: Used for Redis and PostgreSQL cluster connections to reduce network routing hops within the cluster network.
@@ -928,15 +928,15 @@ Database updates are managed by Prisma ORM.
 
 ## PAYMENTS_README.md
 
-# 💳 SnapURL Billing & Subscription Architecture (Razorpay Integration)
+# 💳 PBUrls Billing & Subscription Architecture (Razorpay Integration)
 
-This document outlines the system design, transactional data flows, security checks, and webhook processing mechanisms implemented for the billing and SaaS subscription engine in SnapURL.
+This document outlines the system design, transactional data flows, security checks, and webhook processing mechanisms implemented for the billing and SaaS subscription engine in PBUrls.
 
 ---
 
 ## 🏗️ Architectural Overview
 
-SnapURL implements a **dual-channel confirmation model** to guarantee subscription activation. This ensures that users are upgraded even if they close their browser mid-checkout:
+PBUrls implements a **dual-channel confirmation model** to guarantee subscription activation. This ensures that users are upgraded even if they close their browser mid-checkout:
 1. **Primary Sync Channel (Client-Side Verification)**: Once checkout is complete, the React frontend submits the Razorpay signatures. The backend verifies this using local HMAC keys and upgrades the user instantly.
 2. **Secondary Async Channel (Webhooks)**: Razorpay asynchronously pushes webhook events (e.g. `payment.captured`). The backend catches these, verifies signatures, and applies updates if the client-side call failed (ensures idempotency and resilience).
 
@@ -1090,9 +1090,9 @@ Here is who is sending, receiving, storing, and removing data during subscriptio
 
 ## PAYMENTS_SYSTEM_DESIGN.md
 
-# 🏛️ SnapURL SaaS Billing: System Design & DSA Reference
+# 🏛️ PBUrls SaaS Billing: System Design & DSA Reference
 
-This document details the system design principles, data structures, and algorithms (DSA) applied to implement a secure, idempotent, and highly performant subscription and coupon validation engine in SnapURL.
+This document details the system design principles, data structures, and algorithms (DSA) applied to implement a secure, idempotent, and highly performant subscription and coupon validation engine in PBUrls.
 
 ---
 
@@ -1213,9 +1213,9 @@ SELECT COUNT(*) FROM urls WHERE user_id = userId; -- O(N) database aggregation
 
 ## QR_CODE_SYSTEM_DESIGN.md
 
-# 🏁 SnapURL QR Code Engine: System Design & DSA Reference
+# 🏁 PBUrls QR Code Engine: System Design & DSA Reference
 
-This document covers the end-to-end workflow, mathematical designs, system scaling architectures, and algorithms (DSA) applied to generate, render, and track QR Code interactions in SnapURL.
+This document covers the end-to-end workflow, mathematical designs, system scaling architectures, and algorithms (DSA) applied to generate, render, and track QR Code interactions in PBUrls.
 
 ---
 
@@ -1239,7 +1239,7 @@ The system handles QR Codes in two separate pipelines: **Generation** (creating 
   ┌──────────────┐
   │ Mobile Phone │ (Scans Code)
   └──────┬───────┘
-         │ Hits: http://snapurl.com/r/abc123?qr=true
+         │ Hits: http://pburls.com/r/abc123?qr=true
          ▼
   ┌──────────────────────┐
   │ Express Redirector   │ ──► Enqueues Telemetry Job (isQrScan: true)
@@ -1285,7 +1285,7 @@ When designing a QR code feature for a SaaS dashboard, system architects face a 
 | **Dynamic Domains** | **Seamless** (If a user maps a custom domain, the generated QR instantly encodes the new domain name). | **Complex** (Requires invalidating and re-rendering stored image files). |
 
 ### Optimization & Caching Strategy:
-Because SnapURL implements **On-the-Fly Generation**, standard clients caching handles the load:
+Because PBUrls implements **On-the-Fly Generation**, standard clients caching handles the load:
 * **HTTP Cache Control**: Responses are served with `Cache-Control: public, max-age=86400` headers. The visitor's browser or CDNs cache the QR base64 response, avoiding CPU usage on repeat lookups.
 
 ---
@@ -1296,7 +1296,7 @@ A primary feature of SaaS analytics is letting customers see: *"How many people 
 
 ### Implementation Workflow:
 1. **Embedding**: When generating the QR code payload, the system encodes the short link with a query flag:
-   `http://snapurl.com/r/abc123?qr=true`
+   `http://pburls.com/r/abc123?qr=true`
 2. **Detection**: In `url.controller.js` on incoming redirect requests:
    ```javascript
    const isQrScan = req.query.qr === "true";
@@ -1308,9 +1308,9 @@ A primary feature of SaaS analytics is letting customers see: *"How many people 
 
 ## QUEUE_WORKER_BRIDGE.md
 
-# ⚙️ SnapURL Queue-Worker Bridge Architecture
+# ⚙️ PBUrls Queue-Worker Bridge Architecture
 
-This document explains the technical details of the **Queue-Worker Bridge** (powered by **BullMQ** on top of **Redis**) in SnapURL. It shows how the Express API (Producer) hands off jobs to Redis, and how the Worker Process (Consumer) pulls, locks, processes, and completes those jobs asynchronously.
+This document explains the technical details of the **Queue-Worker Bridge** (powered by **BullMQ** on top of **Redis**) in PBUrls. It shows how the Express API (Producer) hands off jobs to Redis, and how the Worker Process (Consumer) pulls, locks, processes, and completes those jobs asynchronously.
 
 ---
 
@@ -1433,15 +1433,15 @@ sequenceDiagram
 
 ## REDIRECTION_README.md
 
-# 🔗 SnapURL Redirection & Shortening Architecture
+# 🔗 PBUrls Redirection & Shortening Architecture
 
-This document provides a complete technical reference for the core URL shortening and low-latency redirect engine implemented in SnapURL.
+This document provides a complete technical reference for the core URL shortening and low-latency redirect engine implemented in PBUrls.
 
 ---
 
 ## 🏗️ Core Engine Architecture
 
-SnapURL separates the write path (Shortening) from the read path (Redirecting) to maximize throughput and ensure sub-millisecond response loops.
+PBUrls separates the write path (Shortening) from the read path (Redirecting) to maximize throughput and ensure sub-millisecond response loops.
 
 ```
        [ SHORTENING LOOP - WRITE PATH ]
@@ -1555,9 +1555,9 @@ To generate short codes, the system uses a Base62 algorithm generating a 6-chara
 
 ## REDIRECTION_SYSTEM_DESIGN.md
 
-# 🏛️ SnapURL Redirection: System Design & DSA Reference
+# 🏛️ PBUrls Redirection: System Design & DSA Reference
 
-This document covers the mathematical models, database indexing designs, caching patterns, and algorithms (DSA) applied to implement the high-throughput URL shortening and redirection engine of SnapURL.
+This document covers the mathematical models, database indexing designs, caching patterns, and algorithms (DSA) applied to implement the high-throughput URL shortening and redirection engine of PBUrls.
 
 ---
 
@@ -1654,15 +1654,15 @@ Thousands of concurrent requests see a Redis cache miss at the exact same millis
 
 ## SECURITY_TRACKING_SYSTEM_DESIGN.md
 
-# 🏛️ SnapURL Security, Live Tracking & Worker Engines Reference
+# 🏛️ PBUrls Security, Live Tracking & Worker Engines Reference
 
-This document covers the system designs, data structures, algorithms (DSA), and workflows for three core pillars of the SnapURL ecosystem: **Security Hardening Systems**, **Live Telemetry Tracking (WebSockets)**, and the **Background Health Checking Engine**.
+This document covers the system designs, data structures, algorithms (DSA), and workflows for three core pillars of the PBUrls ecosystem: **Security Hardening Systems**, **Live Telemetry Tracking (WebSockets)**, and the **Background Health Checking Engine**.
 
 ---
 
 ## 1. Live Click Tracking & WebSocket Clustering
 
-To support real-time dashboards that stream live click analytics without overloading backend API threads, SnapURL implements a **Decoupled WebSocket Pub/Sub Architecture**.
+To support real-time dashboards that stream live click analytics without overloading backend API threads, PBUrls implements a **Decoupled WebSocket Pub/Sub Architecture**.
 
 ```
              ┌────────────────────────────────────────────────────────┐
@@ -1732,7 +1732,7 @@ To secure system provisioning, administrative accounts can be restricted using a
 
 ## 3. Background URL Health Checking Engine
 
-To ensure shortened links do not point to broken or hijacked landing pages, SnapURL runs a periodic, non-blocking **Url Health Checker**.
+To ensure shortened links do not point to broken or hijacked landing pages, PBUrls runs a periodic, non-blocking **Url Health Checker**.
 
 ### System Design Workflow:
 1. **Cron Scheduling**: A BullMQ Queue registers a repeating cron job:
@@ -1756,9 +1756,9 @@ To ensure shortened links do not point to broken or hijacked landing pages, Snap
 
 ## system_desing_authentication.md
 
-# 🏛️ SnapURL Authentication System Design Reference
+# 🏛️ PBUrls Authentication System Design Reference
 
-This document covers high-level system design considerations, scaling strategies, and security design patterns implemented for the SnapURL authentication system.
+This document covers high-level system design considerations, scaling strategies, and security design patterns implemented for the PBUrls authentication system.
 
 ---
 

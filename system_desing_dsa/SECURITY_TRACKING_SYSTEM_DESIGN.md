@@ -1,12 +1,12 @@
-# 🏛️ SnapURL Security, Live Tracking & Worker Engines Reference
+# 🏛️ PBUrls Security, Live Tracking & Worker Engines Reference
 
-This document covers the system designs, data structures, algorithms (DSA), and workflows for three core pillars of the SnapURL ecosystem: **Security Hardening Systems**, **Live Telemetry Tracking (WebSockets)**, and the **Background Health Checking Engine**.
+This document covers the system designs, data structures, algorithms (DSA), and workflows for three core pillars of the PBUrls ecosystem: **Security Hardening Systems**, **Live Telemetry Tracking (WebSockets)**, and the **Background Health Checking Engine**.
 
 ---
 
 ## 1. Live Click Tracking & WebSocket Clustering
 
-To support real-time dashboards that stream live click analytics without overloading backend API threads, SnapURL implements a **Decoupled WebSocket Pub/Sub Architecture**.
+To support real-time dashboards that stream live click analytics without overloading backend API threads, PBUrls implements a **Decoupled WebSocket Pub/Sub Architecture**.
 
 ```
              ┌────────────────────────────────────────────────────────┐
@@ -76,7 +76,7 @@ To secure system provisioning, administrative accounts can be restricted using a
 
 ## 3. Background URL Health Checking Engine
 
-To ensure shortened links do not point to broken or hijacked landing pages, SnapURL runs a periodic, non-blocking **Url Health Checker**.
+To ensure shortened links do not point to broken or hijacked landing pages, PBUrls runs a periodic, non-blocking **Url Health Checker**.
 
 ### System Design Workflow:
 1. **Cron Scheduling**: A BullMQ Queue registers a repeating cron job:

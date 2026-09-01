@@ -1,6 +1,6 @@
-# ⚙️ SnapURL Queue-Worker Bridge Architecture
+# ⚙️ PBUrls Queue-Worker Bridge Architecture
 
-This document explains the technical details of the **Queue-Worker Bridge** (powered by **BullMQ** on top of **Redis**) in SnapURL. It shows how the Express API (Producer) hands off jobs to Redis, and how the Worker Process (Consumer) pulls, locks, processes, and completes those jobs asynchronously.
+This document explains the technical details of the **Queue-Worker Bridge** (powered by **BullMQ** on top of **Redis**) in PBUrls. It shows how the Express API (Producer) hands off jobs to Redis, and how the Worker Process (Consumer) pulls, locks, processes, and completes those jobs asynchronously.
 
 ---
 

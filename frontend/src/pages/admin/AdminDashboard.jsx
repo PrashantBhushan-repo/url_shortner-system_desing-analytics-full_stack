@@ -168,9 +168,22 @@ function AdminDashboard() {
       setOverviewLoading(true);
       setError("");
       const response = await API.get("/admin/dashboard/overview");
-      setOverviewData(response.data?.data || null);
-    } catch {
-      setError("Failed to load dashboard overview.");
+      if (response.data?.data) {
+        setOverviewData(response.data.data);
+      } else {
+        setOverviewData({
+          mrr: 0,
+          revenue: { thisMonth: 0, lastMonth: 0 },
+          failedPayments: { count: 0, amount: 0 },
+          growth: { newSubscriptions: 0, cancellations: 0, churnRate: 0 },
+          subscribers: { free: 0, starter: 0, pro: 0, business: 0 },
+          mrrTrend: [],
+        });
+      }
+    } catch (err) {
+      console.error("Failed to load dashboard overview:", err);
+      const errMsg = err.response?.data?.message || err.message || "Failed to load dashboard overview.";
+      setError(errMsg);
     } finally {
       setOverviewLoading(false);
     }
@@ -573,25 +586,31 @@ function AdminDashboard() {
       setError("");
       setSuccess("");
 
+      const plansArray = Array.isArray(newCoupon.applicable_plans)
+        ? newCoupon.applicable_plans
+        : typeof newCoupon.applicable_plans === "string" && newCoupon.applicable_plans.trim()
+        ? newCoupon.applicable_plans.split(",").map(p => p.trim()).filter(Boolean)
+        : [];
+
       const payload = {
-        code: newCoupon.code,
+        code: newCoupon.code.toUpperCase().trim().replace(/[^A-Z0-9_-]/g, ""),
         description: newCoupon.description || undefined,
         discount_type: newCoupon.discount_type,
         discount_value: newCoupon.discount_type === "FLAT" ? parseInt(newCoupon.discount_value) * 100 : parseInt(newCoupon.discount_value),
-        applicable_plans: newCoupon.applicable_plans ? newCoupon.applicable_plans.split(",").map(p => p.trim()) : [],
+        applicable_plans: plansArray,
         max_redemptions: newCoupon.max_redemptions ? parseInt(newCoupon.max_redemptions) : undefined,
         valid_until: newCoupon.valid_until || undefined,
       };
 
       await API.post("/admin/coupons", payload);
-      setSuccess("Coupon created successfully.");
+      setSuccess(`Promo voucher '${payload.code}' created successfully.`);
       setCouponFormOpen(false);
       setNewCoupon({
         code: "",
         description: "",
         discount_type: "PERCENT",
         discount_value: "",
-        applicable_plans: "",
+        applicable_plans: [],
         max_redemptions: "",
         valid_until: "",
       });
@@ -757,38 +776,38 @@ function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#08080C] text-slate-300 font-sans p-4 md:p-8 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-100 dark:bg-zinc-950 text-slate-900 dark:text-slate-200 font-sans p-4 md:p-8 relative overflow-hidden transition-colors duration-200">
       
       {/* Background grids */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#111_1px,transparent_1px),linear-gradient(to_bottom,#111_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_80%,transparent_100%)] opacity-20 pointer-events-none" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#cbd5e1_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e1_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#27272a_1px,transparent_1px),linear-gradient(to_bottom,#27272a_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_80%,transparent_100%)] opacity-30 dark:opacity-20 pointer-events-none" />
 
       <div className="max-w-7xl mx-auto space-y-6 relative z-10">
 
         {/* Telemetry status bar */}
-        <div className="bg-[#0c0d12] border border-[#1b1e25] rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs text-slate-400">
+        <div className="bg-white dark:bg-zinc-900/90 border border-slate-300 dark:border-zinc-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs text-slate-700 dark:text-slate-300 shadow-lg">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600 dark:bg-emerald-500"></span>
               </span>
-              <span className="font-black text-[#00FF87] tracking-widest">SYS_TELEMETRY: ACTIVE</span>
+              <span className="font-black text-emerald-700 dark:text-emerald-400 tracking-wider">SYS_TELEMETRY: ACTIVE</span>
             </div>
-            <div className="h-4 w-px bg-[#1b1e25] hidden md:block" />
-            <div>SECURE_CONN: <span className="text-[#00F0FF]">ESTABLISHED</span></div>
-            <div className="h-4 w-px bg-[#1b1e25] hidden md:block" />
-            <div>OPERATOR: <span className="text-slate-200">{user?.name} (ADMIN)</span></div>
+            <div className="h-4 w-px bg-slate-300 dark:bg-zinc-700 hidden md:block" />
+            <div>SECURE_CONN: <span className="text-cyan-700 dark:text-cyan-400 font-bold">ESTABLISHED</span></div>
+            <div className="h-4 w-px bg-slate-300 dark:bg-zinc-700 hidden md:block" />
+            <div>OPERATOR: <span className="text-slate-900 dark:text-white font-bold">{user?.name} (ADMIN)</span></div>
           </div>
           <div className="flex items-center gap-3 w-full md:w-auto justify-end">
             <button
               onClick={() => navigate("/dashboard")}
-              className="bg-slate-900/60 border border-white/5 hover:border-white/10 text-slate-300 py-1.5 px-3 rounded-lg hover:text-white transition flex items-center gap-1.5 cursor-pointer font-semibold"
+              className="bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-zinc-700 text-slate-800 dark:text-slate-200 py-1.5 px-3.5 rounded-xl hover:text-slate-950 dark:hover:text-white transition flex items-center gap-1.5 cursor-pointer font-bold shadow-sm"
             >
-              <Layers className="w-3.5 h-3.5" /> APP PANEL
+              <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> APP PANEL
             </button>
             <button
               onClick={logout}
-              className="bg-slate-900/60 border border-white/5 hover:border-[#FF0055]/30 hover:bg-[#FF0055]/5 text-slate-300 py-1.5 px-3 rounded-lg hover:text-[#FF0055] transition flex items-center gap-1.5 cursor-pointer font-semibold"
+              className="bg-slate-100 hover:bg-rose-100 dark:bg-zinc-800 dark:hover:bg-rose-950/30 border border-slate-300 dark:border-zinc-700 hover:border-rose-400 text-slate-800 hover:text-rose-700 dark:text-slate-300 dark:hover:text-rose-400 py-1.5 px-3.5 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
             >
               <LogOut className="w-3.5 h-3.5" /> SHUTDOWN
             </button>
@@ -797,20 +816,36 @@ function AdminDashboard() {
 
         {/* Global Notifications */}
         {error && (
-          <div className="p-4 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-300 text-xs flex items-center gap-3 font-mono">
-            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-            <div>{error}</div>
+          <div className="p-4 rounded-2xl border border-rose-300 dark:border-rose-500/40 bg-rose-100 dark:bg-rose-950/40 text-rose-950 dark:text-rose-200 text-xs flex items-center justify-between gap-3 font-mono shadow-sm">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-rose-700 dark:text-rose-400 shrink-0" />
+              <div className="font-bold">{error}</div>
+            </div>
+            <button
+              onClick={() => setError("")}
+              className="text-rose-800 hover:text-rose-950 dark:text-rose-300 dark:hover:text-white text-xs font-bold px-2.5 py-1 rounded-lg bg-rose-200/80 dark:bg-rose-900/40 cursor-pointer transition uppercase"
+            >
+              DISMISS
+            </button>
           </div>
         )}
         {success && (
-          <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-300 text-xs flex items-center gap-3 font-mono">
-            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div>{success}</div>
+          <div className="p-4 rounded-2xl border border-emerald-300 dark:border-emerald-500/40 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-200 text-xs flex items-center justify-between gap-3 font-mono shadow-sm">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+              <div className="font-bold">{success}</div>
+            </div>
+            <button
+              onClick={() => setSuccess("")}
+              className="text-emerald-800 hover:text-emerald-950 dark:text-emerald-300 dark:hover:text-white text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-200/80 dark:bg-emerald-900/40 cursor-pointer transition uppercase"
+            >
+              DISMISS
+            </button>
           </div>
         )}
 
         {/* Industrial Tab Controls */}
-        <div className="flex border-b border-[#1b1e25] gap-1 overflow-x-auto pb-px">
+        <div className="flex border-b border-slate-300 dark:border-zinc-800 gap-1.5 overflow-x-auto pb-px scrollbar-none">
           {[
             { id: "overview", label: "Overview", icon: TrendingUp },
             { id: "users", label: "Users Registry", icon: Users },
@@ -818,9 +853,9 @@ function AdminDashboard() {
             { id: "payments", label: "Payments Logs", icon: CreditCard },
             { id: "coupons", label: "Coupons Manager", icon: Ticket },
             { id: "webhooks", label: "Webhook Diagnostics", icon: Activity },
-            { id: "revops", label: "RevOps reports", icon: Cpu },
+            { id: "revops", label: "RevOps Reports", icon: Cpu },
             { id: "reconcile", label: "Reconciliation", icon: Server },
-            { id: "approvals", label: "Approvals queue", icon: Shield },
+            { id: "approvals", label: "Approvals Queue", icon: Shield },
             { id: "audit", label: "Audit Registry", icon: Clock }
           ].map((tab) => {
             const Icon = tab.icon;
@@ -829,13 +864,13 @@ function AdminDashboard() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold transition cursor-pointer whitespace-nowrap border-b-2 uppercase tracking-wider ${
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold transition cursor-pointer whitespace-nowrap border-b-2 uppercase tracking-wider rounded-t-xl ${
                   isActive
-                    ? "border-[#FF0055] text-white bg-slate-900/10"
-                    : "border-transparent text-slate-500 hover:text-slate-300"
+                    ? "border-[#E50914] text-slate-900 dark:text-white bg-white dark:bg-zinc-900/90 shadow-md font-black"
+                    : "border-transparent text-slate-700 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-zinc-900/40"
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? "text-[#FF0055]" : ""}`} />
+                <Icon className={`w-4 h-4 ${isActive ? "text-[#E50914]" : "text-slate-600 dark:text-slate-400"}`} />
                 {tab.label}
               </button>
             );
@@ -848,57 +883,73 @@ function AdminDashboard() {
         {activeTab === "overview" && (
           <div className="space-y-6">
             {overviewLoading ? (
-              <div className="p-20 flex flex-col items-center justify-center gap-3">
-                <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
-                <span className="text-xs text-slate-500 font-mono tracking-wider uppercase">Loading system metrics...</span>
+              <div className="p-20 flex flex-col items-center justify-center gap-3 bg-white dark:bg-zinc-900/60 rounded-3xl border border-slate-300 dark:border-zinc-800 shadow-sm">
+                <RefreshCw className="h-7 w-7 animate-spin text-[#E50914]" />
+                <span className="text-xs text-slate-700 dark:text-slate-400 font-mono tracking-wider uppercase font-bold">Loading system metrics...</span>
               </div>
             ) : !overviewData ? (
-              <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 border border-[#1b1e25] rounded-3xl font-mono text-xs">
-                FAIL_FETCH: OVERVIEW_METRICS_DATA
+              <div className="p-12 text-center text-slate-800 dark:text-slate-400 bg-white dark:bg-zinc-900/60 border border-slate-300 dark:border-zinc-800 rounded-3xl font-mono text-xs shadow-sm flex flex-col items-center justify-center gap-3">
+                <span className="font-bold text-sm">FAIL_FETCH: OVERVIEW_METRICS_DATA</span>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Failed to connect to analytics telemetry endpoint.</p>
+                <button
+                  onClick={fetchOverview}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase transition cursor-pointer shadow-md font-mono flex items-center gap-2"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Retry Loading Metrics
+                </button>
               </div>
             ) : (
               <div className="space-y-6 animate-fade-in">
+                {/* Metric Summary Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {[
-                    { label: "Normalized MRR", val: `₹${(overviewData.mrr / 100).toLocaleString("en-IN")}`, sub: "Active recurrent plan value", color: "border-cyan-500/20 text-[#00F0FF]" },
-                    { label: "Revenue This Month", val: `₹${(overviewData.revenue.thisMonth / 100).toLocaleString("en-IN")}`, sub: `Prev: ₹${(overviewData.revenue.lastMonth / 100).toLocaleString("en-IN")}`, color: "border-[#00FF87] text-[#00FF87]" },
-                    { label: "Failed Invoices (7d)", val: overviewData.failedPayments.count, sub: `Attempted: ₹${(overviewData.failedPayments.amount / 100).toLocaleString("en-IN")}`, color: "border-[#FF0055] text-[#FF0055]" },
-                    { label: "Net growth (Month)", val: `+${overviewData.growth.newSubscriptions - overviewData.growth.cancellations}`, sub: `Churn Rate: ${overviewData.growth.churnRate}%`, color: "border-[#FFB800] text-[#FFB800]" }
+                    { label: "Normalized MRR", val: `₹${(overviewData.mrr / 100).toLocaleString("en-IN")}`, sub: "Active recurrent plan value", color: "border-cyan-500/40 text-cyan-700 dark:text-cyan-400" },
+                    { label: "Revenue This Month", val: `₹${(overviewData.revenue.thisMonth / 100).toLocaleString("en-IN")}`, sub: `Prev: ₹${(overviewData.revenue.lastMonth / 100).toLocaleString("en-IN")}`, color: "border-emerald-500/40 text-emerald-700 dark:text-emerald-400" },
+                    { label: "Failed Invoices (7d)", val: overviewData.failedPayments.count, sub: `Attempted: ₹${(overviewData.failedPayments.amount / 100).toLocaleString("en-IN")}`, color: "border-[#E50914]/40 text-rose-700 dark:text-[#E50914]" },
+                    { label: "Net Growth (Month)", val: `+${overviewData.growth.newSubscriptions - overviewData.growth.cancellations}`, sub: `Churn Rate: ${overviewData.growth.churnRate}%`, color: "border-amber-500/40 text-amber-700 dark:text-amber-400" }
                   ].map((card, idx) => (
-                    <div key={idx} className={`bg-black/40 border ${card.color.split(" ")[0]} p-5 rounded-2xl relative overflow-hidden flex flex-col justify-between min-h-[120px]`}>
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500 block">{card.label}</span>
+                    <div key={idx} className={`bg-white dark:bg-zinc-900/80 border border-slate-300 dark:${card.color.split(" ")[0]} p-5 rounded-2xl relative overflow-hidden flex flex-col justify-between min-h-[125px] shadow-md`}>
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 block">{card.label}</span>
                       <h2 className={`text-3xl font-black font-mono tracking-tight mt-2 ${card.color.split(" ")[1]}`}>
                         {card.val}
                       </h2>
-                      <p className="text-[9px] font-mono text-slate-500 mt-2 uppercase">{card.sub}</p>
+                      <p className="text-[10px] font-mono text-slate-600 dark:text-slate-400 mt-2 uppercase font-semibold">{card.sub}</p>
                     </div>
                   ))}
                 </div>
 
+                {/* Charts Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2 bg-black/40 border border-[#1b1e25] p-6 rounded-3xl">
+                  <div className="lg:col-span-2 bg-zinc-900/80 border border-zinc-800 p-6 rounded-3xl shadow-xl">
                     <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 font-mono">REVENUE TELEMETRY (12m Trend)</h3>
-                      <span className="text-[9px] font-mono text-slate-500 bg-slate-900 border border-white/5 px-2 py-0.5 rounded">UNIT: INR PAISA</span>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-white font-mono flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-[#E50914]" /> REVENUE TELEMETRY (12m Trend)
+                      </h3>
+                      <button
+                        onClick={fetchOverview}
+                        className="text-[10px] font-mono text-slate-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-2.5 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Refresh
+                      </button>
                     </div>
                     <div className="h-80 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={overviewData.mrrTrend}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#121317" />
-                          <XAxis dataKey="month" stroke="#475569" fontSize={9} fontClassName="font-mono" />
-                          <YAxis stroke="#475569" fontSize={9} fontClassName="font-mono" tickFormatter={(v) => `₹${v / 100}`} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                          <XAxis dataKey="month" stroke="#94a3b8" fontSize={10} fontClassName="font-mono" />
+                          <YAxis stroke="#94a3b8" fontSize={10} fontClassName="font-mono" tickFormatter={(v) => `₹${v / 100}`} />
                           <Tooltip 
-                            contentStyle={{ backgroundColor: "#08080C", borderColor: "#1b1e25", borderRadius: "12px", fontFamily: "monospace", fontSize: "11px" }}
+                            contentStyle={{ backgroundColor: "#09090b", borderColor: "#27272a", borderRadius: "12px", fontFamily: "monospace", fontSize: "12px", color: "#f8fafc" }}
                             formatter={(v) => [`₹${(v / 100).toFixed(0)}`, "Revenue"]}
                           />
-                          <Line type="monotone" dataKey="revenue" stroke="#FF0055" strokeWidth={2.5} activeDot={{ r: 6 }} dot={{ r: 3 }} />
+                          <Line type="monotone" dataKey="revenue" stroke="#E50914" strokeWidth={3} activeDot={{ r: 6 }} dot={{ r: 3 }} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
 
-                  <div className="bg-black/40 border border-[#1b1e25] p-6 rounded-3xl flex flex-col justify-between">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 mb-4 font-mono">ACTIVE SUBSCRIPTIONS MIX</h3>
+                  <div className="bg-zinc-900/80 border border-zinc-800 p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-white mb-4 font-mono">ACTIVE SUBSCRIPTIONS MIX</h3>
                     <div className="h-52 w-full flex justify-center items-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -915,16 +966,16 @@ function AdminDashboard() {
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip contentStyle={{ backgroundColor: "#08080C", borderColor: "#1b1e25", fontFamily: "monospace", fontSize: "11px" }} />
+                          <Tooltip contentStyle={{ backgroundColor: "#09090b", borderColor: "#27272a", borderRadius: "12px", fontFamily: "monospace", fontSize: "12px", color: "#f8fafc" }} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-[10px] font-mono border-t border-[#1b1e25] pt-4 mt-2">
+                    <div className="grid grid-cols-2 gap-2 text-xs font-mono border-t border-zinc-800 pt-4 mt-2">
                       {Object.entries(overviewData.subscribers).map(([key, value], idx) => (
                         <div key={key} className="flex items-center gap-1.5">
                           <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                          <span className="text-slate-500 capitalize">{key}:</span>
-                          <span className="font-bold text-slate-200">{value}</span>
+                          <span className="text-slate-400 capitalize">{key}:</span>
+                          <span className="font-bold text-white">{value}</span>
                         </div>
                       ))}
                     </div>
@@ -938,15 +989,15 @@ function AdminDashboard() {
         {/* Users Registry Tab */}
         {activeTab === "users" && (
           <div className="space-y-6 animate-fade-in">
-            <form onSubmit={handleUsersSearchSubmit} className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex flex-wrap gap-4 items-center">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+            <form onSubmit={handleUsersSearchSubmit} className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl flex flex-wrap gap-4 items-center shadow-lg">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
                   placeholder="SEARCH USERS BY EMAIL OR NAME..."
                   value={usersSearch}
                   onChange={(e) => setUsersSearch(e.target.value)}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-[#FF0055] w-full font-mono uppercase"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#E50914] w-full font-mono uppercase placeholder-slate-500"
                 />
               </div>
 
@@ -954,7 +1005,7 @@ function AdminDashboard() {
                 <select
                   value={usersStatusFilter}
                   onChange={(e) => { setUsersStatusFilter(e.target.value); setUsersPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-slate-400 focus:outline-none focus:border-[#FF0055] font-mono"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-[#E50914] font-mono"
                 >
                   <option value="">ALL STATUSES</option>
                   <option value="ACTIVE">ACTIVE</option>
@@ -965,7 +1016,7 @@ function AdminDashboard() {
                 <select
                   value={usersRoleFilter}
                   onChange={(e) => { setUsersRoleFilter(e.target.value); setUsersPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-slate-400 focus:outline-none focus:border-[#FF0055] font-mono"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-[#E50914] font-mono"
                 >
                   <option value="">ALL ROLES</option>
                   <option value="USER">USER</option>
@@ -975,7 +1026,7 @@ function AdminDashboard() {
                 <select
                   value={usersPlanFilter}
                   onChange={(e) => { setUsersPlanFilter(e.target.value); setUsersPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-slate-400 focus:outline-none focus:border-[#FF0055] font-mono"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-[#E50914] font-mono"
                 >
                   <option value="">ALL PLANS</option>
                   <option value="free">FREE</option>
@@ -986,26 +1037,26 @@ function AdminDashboard() {
 
                 <button
                   type="submit"
-                  className="bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-200 font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer"
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition cursor-pointer shadow-md uppercase font-mono"
                 >
                   RUN QUERY
                 </button>
               </div>
             </form>
 
-            <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-xl">
               {usersLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
-                  <span className="text-xs text-slate-500 font-mono tracking-wider">FETCHING USER REGISTERS...</span>
+                  <RefreshCw className="h-7 w-7 animate-spin text-[#E50914]" />
+                  <span className="text-xs text-slate-400 font-mono tracking-wider uppercase">Fetching user registers...</span>
                 </div>
               ) : usersList.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 font-mono text-xs">NO_REGISTRY_RESULTS</div>
+                <div className="p-12 text-center text-slate-400 bg-zinc-900/40 font-mono text-xs">NO_REGISTRY_RESULTS</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse font-mono text-xs">
                     <thead>
-                      <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                      <tr className="border-b border-zinc-800 bg-zinc-950/80 text-slate-400 uppercase tracking-wider text-[10px]">
                         <th className="p-4 font-bold">User Information</th>
                         <th className="p-4 font-bold">Security Role</th>
                         <th className="p-4 font-bold">Active Plan</th>
@@ -1013,26 +1064,26 @@ function AdminDashboard() {
                         <th className="p-4 font-bold text-right">Moderation Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#12141a]">
+                    <tbody className="divide-y divide-zinc-800/80">
                       {usersList.map((usr) => (
-                        <tr key={usr.id} className="hover:bg-slate-900/10 transition">
+                        <tr key={usr.id} className="hover:bg-zinc-800/40 transition">
                           <td className="p-4">
-                            <div className="font-bold text-slate-200">{usr.name}</div>
-                            <div className="text-slate-500 text-[10px] lowercase mt-0.5">{usr.email}</div>
+                            <div className="font-bold text-white">{usr.name}</div>
+                            <div className="text-slate-400 text-xs lowercase mt-0.5">{usr.email}</div>
                           </td>
                           <td className="p-4">
-                            <span className={`px-2 py-0.5 rounded border text-[10px] font-bold ${
-                              usr.role === "ADMIN" ? "bg-red-950/20 border-red-500/20 text-[#FF0055]" : "bg-slate-950 border-white/5 text-slate-400"
+                            <span className={`px-2.5 py-0.5 rounded-md border text-[10px] font-bold ${
+                              usr.role === "ADMIN" ? "bg-red-950/30 border-red-500/40 text-[#E50914]" : "bg-zinc-800 border-zinc-700 text-slate-300"
                             }`}>
                               {usr.role}
                             </span>
                           </td>
-                          <td className="p-4 uppercase text-slate-300 font-bold">{usr.planKey || "free"}</td>
+                          <td className="p-4 uppercase text-slate-200 font-bold">{usr.planKey || "free"}</td>
                           <td className="p-4 text-center">
-                            <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
-                              usr.status === "ACTIVE" ? "bg-[#00FF87]/5 border-[#00FF87]/20 text-[#00FF87]" :
-                              usr.status === "BANNED" ? "bg-[#FF0055]/5 border-[#FF0055]/20 text-[#FF0055]" :
-                              "bg-amber-500/5 border-amber-500/20 text-amber-400"
+                            <span className={`px-2.5 py-0.5 rounded-full border text-[9px] font-bold ${
+                              usr.status === "ACTIVE" ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-400" :
+                              usr.status === "BANNED" ? "bg-rose-950/30 border-rose-500/40 text-rose-400" :
+                              "bg-amber-950/30 border-amber-500/40 text-amber-400"
                             }`}>
                               {usr.status}
                             </span>
@@ -1040,7 +1091,7 @@ function AdminDashboard() {
                           <td className="p-4 text-right space-x-3">
                             <button
                               onClick={() => { setSelectedUser(usr); fetchUserDetail(usr.id); }}
-                              className="text-[#00F0FF] hover:underline uppercase font-bold text-[10px] cursor-pointer"
+                              className="text-cyan-400 hover:text-cyan-300 hover:underline uppercase font-bold text-xs cursor-pointer"
                             >
                               Profile
                             </button>
@@ -1048,7 +1099,7 @@ function AdminDashboard() {
                             {usr.status === "BANNED" ? (
                               <button
                                 onClick={() => setStatusDialog({ userId: usr.id, targetStatus: "ACTIVE", userEmail: usr.email })}
-                                className="text-[#00FF87] hover:underline uppercase font-bold text-[10px] cursor-pointer"
+                                className="text-emerald-400 hover:text-emerald-300 hover:underline uppercase font-bold text-xs cursor-pointer"
                               >
                                 Unban
                               </button>
@@ -1056,7 +1107,7 @@ function AdminDashboard() {
                               usr.role !== "ADMIN" && (
                                 <button
                                   onClick={() => setStatusDialog({ userId: usr.id, targetStatus: "BANNED", userEmail: usr.email })}
-                                  className="text-[#FF0055] hover:underline uppercase font-bold text-[10px] cursor-pointer"
+                                  className="text-rose-400 hover:text-rose-300 hover:underline uppercase font-bold text-xs cursor-pointer"
                                 >
                                   Ban
                                 </button>
@@ -1073,20 +1124,20 @@ function AdminDashboard() {
 
             {/* Pagination */}
             {usersTotalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 font-mono text-xs">
-                <span className="text-slate-500">Page {usersPage} of {usersTotalPages}</span>
+              <div className="flex items-center justify-between pt-4 font-mono text-xs text-slate-400">
+                <span>Page {usersPage} of {usersTotalPages}</span>
                 <div className="flex gap-2">
                   <button
                     disabled={usersPage === 1}
                     onClick={() => setUsersPage(prev => Math.max(prev - 1, 1))}
-                    className="p-2 rounded-lg border border-[#1b1e25] bg-black disabled:opacity-30 hover:bg-slate-950 transition cursor-pointer"
+                    className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 disabled:opacity-30 hover:bg-zinc-800 transition cursor-pointer text-white"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     disabled={usersPage === usersTotalPages}
                     onClick={() => setUsersPage(prev => Math.min(prev + 1, usersTotalPages))}
-                    className="p-2 rounded-lg border border-[#1b1e25] bg-black disabled:opacity-30 hover:bg-slate-950 transition cursor-pointer"
+                    className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 disabled:opacity-30 hover:bg-zinc-800 transition cursor-pointer text-white"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1099,15 +1150,15 @@ function AdminDashboard() {
         {/* URLs Moderation Tab */}
         {activeTab === "urls" && (
           <div className="space-y-6 animate-fade-in">
-            <form onSubmit={handleUrlsSearchSubmit} className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex flex-wrap gap-4 items-center">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+            <form onSubmit={handleUrlsSearchSubmit} className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl flex flex-wrap gap-4 items-center shadow-lg">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
                   placeholder="SEARCH LINKS BY KEYWORD, ALIAS, CODE..."
                   value={urlsSearch}
                   onChange={(e) => setUrlsSearch(e.target.value)}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-[#FF0055] w-full font-mono uppercase"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#E50914] w-full font-mono uppercase placeholder-slate-500"
                 />
               </div>
 
@@ -1115,7 +1166,7 @@ function AdminDashboard() {
                 <select
                   value={urlsStatusFilter}
                   onChange={(e) => { setUrlsStatusFilter(e.target.value); setUrlsPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-slate-400 focus:outline-none focus:border-[#FF0055] font-mono"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-[#E50914] font-mono"
                 >
                   <option value="">ALL STATUSES</option>
                   <option value="ACTIVE">ACTIVE</option>
@@ -1124,26 +1175,26 @@ function AdminDashboard() {
 
                 <button
                   type="submit"
-                  className="bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-200 font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer"
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition cursor-pointer shadow-md uppercase font-mono"
                 >
                   RUN QUERY
                 </button>
               </div>
             </form>
 
-            <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-xl">
               {urlsLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
-                  <span className="text-xs text-slate-500 font-mono tracking-wider">PULLING TELEMETRY LOGS...</span>
+                  <RefreshCw className="h-7 w-7 animate-spin text-[#E50914]" />
+                  <span className="text-xs text-slate-400 font-mono tracking-wider uppercase">Pulling link telemetry logs...</span>
                 </div>
               ) : urlsList.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 font-mono text-xs">NO_SHORTURL_ENTRIES</div>
+                <div className="p-12 text-center text-slate-400 bg-zinc-900/40 font-mono text-xs">NO_SHORTURL_ENTRIES</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse font-mono text-xs">
                     <thead>
-                      <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                      <tr className="border-b border-zinc-800 bg-zinc-950/80 text-slate-400 uppercase tracking-wider text-[10px]">
                         <th className="p-4 font-bold">Shortened Link</th>
                         <th className="p-4 font-bold">Destination URL</th>
                         <th className="p-4 font-bold">Created At</th>
@@ -1151,31 +1202,31 @@ function AdminDashboard() {
                         <th className="p-4 font-bold text-right">Moderation</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#12141a]">
+                    <tbody className="divide-y divide-zinc-800/80">
                       {urlsList.map((url) => (
-                        <tr key={url.id} className="hover:bg-slate-900/10 transition">
+                        <tr key={url.id} className="hover:bg-zinc-800/40 transition">
                           <td className="p-4">
                             <a
-                              href={`http://localhost:5000/r/${url.short_code}`}
+                              href={`/r/${url.short_code}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-[#00F0FF] hover:underline font-bold"
+                              className="text-cyan-400 hover:text-cyan-300 hover:underline font-bold"
                             >
                               /{url.short_code}
                             </a>
                             {url.custom_alias && (
-                              <span className="text-[8px] uppercase tracking-wider border border-cyan-500/30 text-[#00F0FF] bg-cyan-500/5 px-1 ml-2 rounded">
+                              <span className="text-[8px] uppercase tracking-wider border border-cyan-500/40 text-cyan-400 bg-cyan-950/30 px-1.5 py-0.5 ml-2 rounded font-mono">
                                 ALIAS
                               </span>
                             )}
                           </td>
-                          <td className="p-4 max-w-xs truncate text-slate-400 lowercase">{url.long_url}</td>
-                          <td className="p-4 text-slate-500 text-[10px]">{new Date(url.created_at).toLocaleDateString("en-GB")}</td>
-                          <td className="p-4 text-center font-bold text-slate-200">{url.clicks_count?.toLocaleString()}</td>
+                          <td className="p-4 max-w-xs truncate text-slate-300 lowercase">{url.long_url}</td>
+                          <td className="p-4 text-slate-400 text-xs">{new Date(url.created_at).toLocaleDateString("en-GB")}</td>
+                          <td className="p-4 text-center font-bold text-white">{url.clicks_count?.toLocaleString()}</td>
                           <td className="p-4 text-right">
                             <button
                               onClick={() => setDeleteUrlDialog({ urlId: url.id, shortCode: url.short_code })}
-                              className="text-[#FF0055] border border-[#FF0055]/30 bg-[#FF0055]/5 hover:bg-[#FF0055]/10 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                              className="text-rose-400 border border-rose-500/30 bg-rose-950/20 hover:bg-rose-900/30 px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition uppercase"
                             >
                               Delete
                             </button>
@@ -1190,20 +1241,20 @@ function AdminDashboard() {
 
             {/* Pagination */}
             {urlsTotalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 font-mono text-xs">
-                <span className="text-slate-500">Page {urlsPage} of {urlsTotalPages}</span>
+              <div className="flex items-center justify-between pt-4 font-mono text-xs text-slate-400">
+                <span>Page {urlsPage} of {urlsTotalPages}</span>
                 <div className="flex gap-2">
                   <button
                     disabled={urlsPage === 1}
                     onClick={() => setUrlsPage(prev => Math.max(prev - 1, 1))}
-                    className="p-2 rounded-lg border border-[#1b1e25] bg-black disabled:opacity-30 hover:bg-slate-950 transition cursor-pointer"
+                    className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 disabled:opacity-30 hover:bg-zinc-800 transition cursor-pointer text-white"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     disabled={urlsPage === urlsTotalPages}
                     onClick={() => setUrlsPage(prev => Math.min(prev + 1, urlsTotalPages))}
-                    className="p-2 rounded-lg border border-[#1b1e25] bg-black disabled:opacity-30 hover:bg-slate-950 transition cursor-pointer"
+                    className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 disabled:opacity-30 hover:bg-zinc-800 transition cursor-pointer text-white"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1212,19 +1263,18 @@ function AdminDashboard() {
             )}
           </div>
         )}
-
         {/* Payments Logs Tab */}
         {activeTab === "payments" && (
           <div className="space-y-6 animate-fade-in">
-            <form onSubmit={handlePaymentsSearchSubmit} className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex flex-wrap gap-4 items-center">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+            <form onSubmit={handlePaymentsSearchSubmit} className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl flex flex-wrap gap-4 items-center shadow-lg">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
                   placeholder="SEARCH PAYMENTS BY EMAIL..."
                   value={paymentsEmail}
                   onChange={(e) => setPaymentsEmail(e.target.value)}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-[#FF0055] w-full font-mono uppercase"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#E50914] w-full font-mono uppercase placeholder-slate-500"
                 />
               </div>
 
@@ -1232,7 +1282,7 @@ function AdminDashboard() {
                 <select
                   value={paymentsStatusFilter}
                   onChange={(e) => { setPaymentsStatusFilter(e.target.value); setPaymentsPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-slate-400 focus:outline-none focus:border-[#FF0055] font-mono"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-[#E50914] font-mono"
                 >
                   <option value="">ALL STATUSES</option>
                   <option value="CREATED">CREATED</option>
@@ -1245,7 +1295,7 @@ function AdminDashboard() {
                 <select
                   value={paymentsPlanFilter}
                   onChange={(e) => { setPaymentsPlanFilter(e.target.value); setPaymentsPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-slate-400 focus:outline-none focus:border-[#FF0055] font-mono"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-[#E50914] font-mono"
                 >
                   <option value="">ALL PLANS</option>
                   <option value="starter">STARTER</option>
@@ -1256,32 +1306,32 @@ function AdminDashboard() {
                 <button
                   type="button"
                   onClick={handleExportPaymentsCsv}
-                  className="bg-slate-950 border border-white/5 hover:bg-slate-900 text-slate-300 font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1"
+                  className="bg-zinc-800 border border-zinc-700 hover:bg-zinc-750 text-slate-200 font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
                 >
-                  <Download className="w-3.5 h-3.5" /> CSV EXPORT
+                  <Download className="w-3.5 h-3.5 text-cyan-400" /> CSV EXPORT
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#FF0055] text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer"
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition cursor-pointer shadow-md uppercase font-mono"
                 >
                   RUN QUERY
                 </button>
               </div>
             </form>
 
-            <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-xl">
               {paymentsLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
-                  <span className="text-xs text-slate-500 font-mono tracking-wider">RETRIEVING TRANSACTION AUDIT LOGS...</span>
+                  <RefreshCw className="h-7 w-7 animate-spin text-[#E50914]" />
+                  <span className="text-xs text-slate-400 font-mono tracking-wider uppercase">Retrieving transaction audit logs...</span>
                 </div>
               ) : paymentsList.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 font-mono text-xs">NO_PAYMENT_RECORDS</div>
+                <div className="p-12 text-center text-slate-400 bg-zinc-900/40 font-mono text-xs">NO_PAYMENT_RECORDS</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse font-mono text-xs">
                     <thead>
-                      <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                      <tr className="border-b border-zinc-800 bg-zinc-950/80 text-slate-400 uppercase tracking-wider text-[10px]">
                         <th className="p-4 font-bold">Transaction IDs</th>
                         <th className="p-4 font-bold">Payer Account</th>
                         <th className="p-4 font-bold">Plan Details</th>
@@ -1290,38 +1340,38 @@ function AdminDashboard() {
                         <th className="p-4 font-bold text-right">Accounting Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#12141a]">
+                    <tbody className="divide-y divide-zinc-800/80">
                       {paymentsList.map((pay) => {
                         const meta = pay.metadata || {};
                         return (
-                          <tr key={pay.id} className="hover:bg-slate-900/10 transition">
+                          <tr key={pay.id} className="hover:bg-zinc-800/40 transition">
                             <td className="p-4 space-y-0.5">
-                              <div className="text-[9px] text-slate-500 uppercase">ORD: {pay.gateway_order_id}</div>
+                              <div className="text-[10px] text-slate-400 uppercase font-bold">ORD: {pay.gateway_order_id}</div>
                               {pay.gateway_payment_id && (
                                 <div className="text-[10px] text-slate-300 uppercase">PAY: {pay.gateway_payment_id}</div>
                               )}
                             </td>
                             <td className="p-4">
-                              <div className="font-bold text-slate-200 lowercase">{pay.user.email}</div>
-                              <div className="text-[9px] text-slate-500 lowercase">Name: {pay.user.name}</div>
+                              <div className="font-bold text-white lowercase">{pay.user?.email || "N/A"}</div>
+                              <div className="text-slate-400 text-[10px] lowercase">Name: {pay.user?.name || "N/A"}</div>
                             </td>
-                            <td className="p-4 uppercase text-slate-300 font-bold">
-                              {pay.plan.name} ({pay.billing_cycle})
+                            <td className="p-4 uppercase text-slate-200 font-bold">
+                              {pay.plan?.name || "Tier"} ({pay.billing_cycle})
                             </td>
-                            <td className="p-4 font-bold text-slate-100">
+                            <td className="p-4 font-bold text-emerald-400 text-sm">
                               ₹{(pay.amount / 100).toFixed(0)}
                             </td>
                             <td className="p-4 text-center">
-                              <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
-                                pay.status === "CAPTURED" ? "bg-[#00FF87]/5 border-[#00FF87]/20 text-[#00FF87]" :
-                                pay.status === "FAILED" ? "bg-[#FF0055]/5 border-[#FF0055]/20 text-[#FF0055]" :
-                                pay.status === "REFUNDED" ? "bg-cyan-500/5 border-cyan-500/20 text-[#00F0FF]" :
-                                "bg-amber-500/5 border-amber-500/20 text-amber-400"
+                              <span className={`px-2.5 py-0.5 rounded-full border text-[9px] font-bold ${
+                                pay.status === "CAPTURED" ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-400" :
+                                pay.status === "FAILED" ? "bg-rose-950/30 border-rose-500/40 text-rose-400" :
+                                pay.status === "REFUNDED" ? "bg-cyan-950/30 border-cyan-500/40 text-cyan-400" :
+                                "bg-amber-950/30 border-amber-500/40 text-amber-400"
                               }`}>
                                 {pay.status}
                               </span>
                               {meta.writtenOff && (
-                                <span className="ml-1 text-[8px] border border-slate-500/20 bg-slate-950 text-slate-500 px-1 rounded">
+                                <span className="ml-1 text-[8px] border border-zinc-700 bg-zinc-950 text-slate-400 px-1.5 py-0.5 rounded font-bold">
                                   WRITTEN-OFF
                                 </span>
                               )}
@@ -1329,7 +1379,7 @@ function AdminDashboard() {
                             <td className="p-4 text-right space-x-2">
                               <button
                                 onClick={() => openInvoiceEdit(pay)}
-                                className="text-[#00F0FF] hover:underline text-[10px] font-bold uppercase cursor-pointer"
+                                className="text-cyan-400 hover:text-cyan-300 hover:underline text-xs font-bold uppercase cursor-pointer"
                               >
                                 Edit Statement
                               </button>
@@ -1337,7 +1387,7 @@ function AdminDashboard() {
                               {pay.status === "CAPTURED" && (
                                 <button
                                   onClick={() => setRefundDialog({ paymentId: pay.id, amount: pay.amount, currency: pay.currency })}
-                                  className="text-slate-400 hover:text-[#FF0055] border border-white/5 bg-slate-950 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                  className="text-slate-300 hover:text-rose-400 border border-zinc-700 bg-zinc-800 px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition uppercase"
                                 >
                                   Refund
                                 </button>
@@ -1347,13 +1397,13 @@ function AdminDashboard() {
                                 <>
                                   <button
                                     onClick={() => triggerDunningRetryAction(pay.id)}
-                                    className="text-amber-400 hover:text-white border border-amber-500/20 bg-slate-950 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                    className="text-amber-400 hover:text-amber-300 border border-amber-500/30 bg-amber-950/20 px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition uppercase"
                                   >
                                     Retry Invc
                                   </button>
                                   <button
                                     onClick={() => triggerWriteOffAction(pay.id)}
-                                    className="text-rose-400 hover:text-white border border-rose-500/20 bg-slate-950 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                    className="text-rose-400 hover:text-rose-300 border border-rose-500/30 bg-rose-950/20 px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition uppercase"
                                   >
                                     Write Off
                                   </button>
@@ -1371,20 +1421,20 @@ function AdminDashboard() {
 
             {/* Pagination */}
             {paymentsTotalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 font-mono text-xs">
-                <span className="text-slate-500">Page {paymentsPage} of {paymentsTotalPages}</span>
+              <div className="flex items-center justify-between pt-4 font-mono text-xs text-slate-400">
+                <span>Page {paymentsPage} of {paymentsTotalPages}</span>
                 <div className="flex gap-2">
                   <button
                     disabled={paymentsPage === 1}
                     onClick={() => setPaymentsPage(prev => Math.max(prev - 1, 1))}
-                    className="p-2 rounded-lg border border-[#1b1e25] bg-black disabled:opacity-30 hover:bg-slate-950 transition cursor-pointer"
+                    className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 disabled:opacity-30 hover:bg-zinc-800 transition cursor-pointer text-white"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     disabled={paymentsPage === paymentsTotalPages}
                     onClick={() => setPaymentsPage(prev => Math.min(prev + 1, paymentsTotalPages))}
-                    className="p-2 rounded-lg border border-[#1b1e25] bg-black disabled:opacity-30 hover:bg-slate-950 transition cursor-pointer"
+                    className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 disabled:opacity-30 hover:bg-zinc-800 transition cursor-pointer text-white"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1397,32 +1447,34 @@ function AdminDashboard() {
         {/* Coupons Manager Tab */}
         {activeTab === "coupons" && (
           <div className="space-y-6 animate-fade-in">
-            <div className="flex justify-between items-center bg-black/45 border border-[#1b1e25] p-4 rounded-2xl">
+            <div className="flex justify-between items-center bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl shadow-lg">
               <div>
-                <h3 className="text-xs font-black font-mono uppercase tracking-wider text-slate-300">DISCOUNT VOUCHERS REGISTRY</h3>
-                <p className="text-[10px] text-slate-500 mt-1 uppercase">Manage 100% discount bypasses and percentage promotionals.</p>
+                <h3 className="text-xs font-black font-mono uppercase tracking-wider text-white flex items-center gap-2">
+                  <Ticket className="w-4 h-4 text-[#E50914]" /> DISCOUNT VOUCHERS REGISTRY
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">Manage 100% discount bypasses and percentage promotionals.</p>
               </div>
               <button
                 onClick={() => setCouponFormOpen(true)}
-                className="flex items-center gap-1.5 bg-[#FF0055] hover:bg-[#FF0055]/90 text-white font-bold text-xs py-2 px-4 rounded-xl transition cursor-pointer"
+                className="flex items-center gap-1.5 bg-[#E50914] hover:bg-[#F40B16] text-white font-bold text-xs py-2.5 px-4 rounded-xl transition cursor-pointer shadow-lg shadow-[#E50914]/25 uppercase font-mono"
               >
                 <Plus className="w-4 h-4" /> CREATE VOUCHER
               </button>
             </div>
 
-            <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-xl">
               {couponsLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
-                  <span className="text-xs text-slate-500 font-mono tracking-wider">RETRIEVING COUPON DEFINITIONS...</span>
+                  <RefreshCw className="h-7 w-7 animate-spin text-[#E50914]" />
+                  <span className="text-xs text-slate-400 font-mono tracking-wider uppercase">Retrieving coupon definitions...</span>
                 </div>
               ) : couponsList.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 font-mono text-xs">NO_COUPONS_SEEDED</div>
+                <div className="p-12 text-center text-slate-400 bg-zinc-900/40 font-mono text-xs">NO_COUPONS_SEEDED</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse font-mono text-xs">
                     <thead>
-                      <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                      <tr className="border-b border-zinc-800 bg-zinc-950/80 text-slate-400 uppercase tracking-wider text-[10px]">
                         <th className="p-4 font-bold">Promo Code</th>
                         <th className="p-4 font-bold">Voucher Description</th>
                         <th className="p-4 font-bold">Discount Rate</th>
@@ -1432,23 +1484,23 @@ function AdminDashboard() {
                         <th className="p-4 font-bold text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#12141a]">
+                    <tbody className="divide-y divide-zinc-800/80">
                       {couponsList.map((cp) => (
-                        <tr key={cp.id} className="hover:bg-slate-900/10 transition">
-                          <td className="p-4 font-bold text-slate-200 tracking-wider text-sm uppercase">{cp.code}</td>
-                          <td className="p-4 text-slate-400 lowercase">{cp.description || "—"}</td>
-                          <td className="p-4 text-slate-200">
+                        <tr key={cp.id} className="hover:bg-zinc-800/40 transition">
+                          <td className="p-4 font-bold text-white tracking-wider text-sm uppercase">{cp.code}</td>
+                          <td className="p-4 text-slate-300">{cp.description || "—"}</td>
+                          <td className="p-4 text-emerald-400 font-bold">
                             {cp.discount_type === "PERCENT" ? `${cp.discount_value}%` : `₹${(cp.discount_value / 100).toFixed(0)}`}
                           </td>
                           <td className="p-4 text-slate-300">
                             {cp.times_redeemed} / {cp.max_redemptions !== null ? cp.max_redemptions : "∞"}
                           </td>
-                          <td className="p-4 text-slate-500 text-[10px]">
+                          <td className="p-4 text-slate-400 text-xs">
                             {cp.valid_until ? new Date(cp.valid_until).toLocaleDateString("en-GB") : "LIFETIME"}
                           </td>
                           <td className="p-4 text-center">
-                            <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
-                              cp.is_active ? "bg-[#00FF87]/5 border-[#00FF87]/20 text-[#00FF87]" : "bg-rose-950/20 border-rose-500/20 text-[#FF0055]"
+                            <span className={`px-2.5 py-0.5 rounded-full border text-[9px] font-bold ${
+                              cp.is_active ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-400" : "bg-rose-950/30 border-rose-500/40 text-rose-400"
                             }`}>
                               {cp.is_active ? "ACTIVE" : "INACTIVE"}
                             </span>
@@ -1456,7 +1508,7 @@ function AdminDashboard() {
                           <td className="p-4 text-right">
                             <button
                               onClick={() => handleToggleCoupon(cp.id, cp.is_active)}
-                              className="text-slate-400 hover:text-white border border-white/5 bg-slate-950 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                              className="text-slate-300 hover:text-white border border-zinc-700 bg-zinc-800 px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition uppercase"
                             >
                               {cp.is_active ? "Deactivate" : "Activate"}
                             </button>
@@ -1474,17 +1526,19 @@ function AdminDashboard() {
         {/* Webhook Diagnostics Tab */}
         {activeTab === "webhooks" && (
           <div className="space-y-6 animate-fade-in">
-            <div className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex flex-wrap gap-4 items-center text-xs">
-              <div className="flex-1 min-w-[200px]">
-                <h3 className="font-bold text-slate-300 uppercase font-mono tracking-wider">GATEWAY WEBHOOK TELEMETRY</h3>
-                <p className="text-[10px] text-slate-500 mt-1 uppercase">Monitor live callbacks from payment gateways for subscription verification.</p>
+            <div className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl flex flex-wrap gap-4 items-center text-xs shadow-lg">
+              <div className="flex-1 min-w-[220px]">
+                <h3 className="font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-cyan-400" /> GATEWAY WEBHOOK TELEMETRY
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">Monitor live callbacks from payment gateways for subscription verification.</p>
               </div>
 
               <div className="flex gap-3 items-center">
                 <select
                   value={webhooksProcessedFilter}
                   onChange={(e) => { setWebhooksProcessedFilter(e.target.value); setWebhooksPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-slate-400 focus:outline-none focus:border-[#FF0055] font-mono"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-[#E50914] font-mono"
                 >
                   <option value="">ALL EVENTS</option>
                   <option value="true">PROCESSED SUCCESSFULLY</option>
@@ -1494,7 +1548,7 @@ function AdminDashboard() {
                 <select
                   value={webhooksTypeFilter}
                   onChange={(e) => { setWebhooksTypeFilter(e.target.value); setWebhooksPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-slate-400 focus:outline-none focus:border-[#FF0055] font-mono"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-[#E50914] font-mono"
                 >
                   <option value="">ALL CALLBACK TYPES</option>
                   <option value="payment.captured">PAYMENT.CAPTURED</option>
@@ -1504,48 +1558,48 @@ function AdminDashboard() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-xl">
               {webhooksLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
-                  <span className="text-xs text-slate-500 font-mono tracking-wider font-bold">ANALYZING WEBHOOK INGESTION LOGS...</span>
+                  <RefreshCw className="h-7 w-7 animate-spin text-[#E50914]" />
+                  <span className="text-xs text-slate-400 font-mono tracking-wider font-bold uppercase">Analyzing webhook ingestion logs...</span>
                 </div>
               ) : webhooksList.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 font-mono text-xs">NO_WEBHOOK_CALLBACKS</div>
+                <div className="p-12 text-center text-slate-400 bg-zinc-900/40 font-mono text-xs">NO_WEBHOOK_CALLBACKS</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse font-mono text-xs">
                     <thead>
-                      <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                      <tr className="border-b border-zinc-800 bg-zinc-950/80 text-slate-400 uppercase tracking-wider text-[10px]">
                         <th className="p-4 font-bold">Event ID & Gateway</th>
-                        <th className="p-4 font-bold">Callback Action type</th>
+                        <th className="p-4 font-bold">Callback Action Type</th>
                         <th className="p-4 font-bold text-center">Execution Status</th>
                         <th className="p-4 font-bold">Received At</th>
                         <th className="p-4 font-bold">System Log Error</th>
                         <th className="p-4 font-bold text-right">Reprocess</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#12141a]">
+                    <tbody className="divide-y divide-zinc-800/80">
                       {webhooksList.map((wh) => (
-                        <tr key={wh.id} className="hover:bg-slate-900/10 transition">
+                        <tr key={wh.id} className="hover:bg-zinc-800/40 transition">
                           <td className="p-4">
-                            <div className="font-bold text-slate-300 uppercase">{wh.event_id}</div>
-                            <div className="text-[9px] text-slate-500 uppercase">Provider: {wh.gateway}</div>
+                            <div className="font-bold text-white uppercase">{wh.event_id}</div>
+                            <div className="text-[10px] text-slate-400 uppercase">Provider: {wh.gateway}</div>
                           </td>
                           <td className="p-4 text-slate-200 font-bold uppercase">{wh.event_type}</td>
                           <td className="p-4 text-center">
-                            <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
-                              wh.processed ? "bg-[#00FF87]/5 border-[#00FF87]/20 text-[#00FF87]" : "bg-[#FF0055]/5 border-[#FF0055]/20 text-[#FF0055]"
+                            <span className={`px-2.5 py-0.5 rounded-full border text-[9px] font-bold ${
+                              wh.processed ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-400" : "bg-rose-950/30 border-rose-500/40 text-rose-400"
                             }`}>
                               {wh.processed ? "PROCESSED" : "FAILED"}
                             </span>
                           </td>
-                          <td className="p-4 text-slate-500 text-[10px]">{new Date(wh.received_at).toLocaleString("en-GB")}</td>
-                          <td className="p-4 max-w-xs truncate text-[#FF0055] font-semibold">{wh.processing_error || "—"}</td>
+                          <td className="p-4 text-slate-400 text-xs">{new Date(wh.received_at).toLocaleString("en-GB")}</td>
+                          <td className="p-4 max-w-xs truncate text-rose-400 font-semibold">{wh.processing_error || "—"}</td>
                           <td className="p-4 text-right">
                             <button
                               onClick={() => handleReprocessWebhook(wh.id)}
-                              className="text-[#00F0FF] hover:underline uppercase font-bold text-[10px] cursor-pointer"
+                              className="text-cyan-400 hover:text-cyan-300 hover:underline uppercase font-bold text-xs cursor-pointer"
                             >
                               Reprocess
                             </button>
@@ -1560,20 +1614,20 @@ function AdminDashboard() {
 
             {/* Pagination */}
             {webhooksTotalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 font-mono text-xs">
-                <span className="text-slate-500">Page {webhooksPage} of {webhooksTotalPages}</span>
+              <div className="flex items-center justify-between pt-4 font-mono text-xs text-slate-400">
+                <span>Page {webhooksPage} of {webhooksTotalPages}</span>
                 <div className="flex gap-2">
                   <button
                     disabled={webhooksPage === 1}
                     onClick={() => setWebhooksPage(prev => Math.max(prev - 1, 1))}
-                    className="p-2 rounded-lg border border-[#1b1e25] bg-black disabled:opacity-30 hover:bg-slate-950 transition cursor-pointer"
+                    className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 disabled:opacity-30 hover:bg-zinc-800 transition cursor-pointer text-white"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     disabled={webhooksPage === webhooksTotalPages}
                     onClick={() => setWebhooksPage(prev => Math.min(prev + 1, webhooksTotalPages))}
-                    className="p-2 rounded-lg border border-[#1b1e25] bg-black disabled:opacity-30 hover:bg-slate-950 transition cursor-pointer"
+                    className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 disabled:opacity-30 hover:bg-zinc-800 transition cursor-pointer text-white"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1587,48 +1641,52 @@ function AdminDashboard() {
         {activeTab === "revops" && (
           <div className="space-y-6 animate-fade-in">
             {reportsLoading ? (
-              <div className="p-20 flex flex-col items-center justify-center gap-3">
-                <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
-                <span className="text-xs text-slate-500 font-mono tracking-wider font-bold">CALCULATING ACCRUED FINANCE TELEMETRY...</span>
+              <div className="p-20 flex flex-col items-center justify-center gap-3 bg-zinc-900/60 rounded-3xl border border-zinc-800">
+                <RefreshCw className="h-7 w-7 animate-spin text-[#E50914]" />
+                <span className="text-xs text-slate-400 font-mono tracking-wider font-bold uppercase">Calculating accrued finance telemetry...</span>
               </div>
             ) : !billingReports ? (
-              <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 font-mono text-xs">NO_REVOPS_REPORTS_AVAILABLE</div>
+              <div className="p-12 text-center text-slate-400 bg-zinc-900/40 font-mono text-xs border border-zinc-800 rounded-3xl">NO_REVOPS_REPORTS_AVAILABLE</div>
             ) : (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Revenue Recognition Line Chart */}
-                  <div className="bg-black/45 border border-[#1b1e25] p-6 rounded-3xl">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 font-mono mb-4">REVENUE RECOGNITION (Monthly Accrued)</h3>
+                  <div className="bg-zinc-900/80 border border-zinc-800 p-6 rounded-3xl shadow-xl">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-white font-mono mb-4 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-emerald-400" /> REVENUE RECOGNITION (Monthly Accrued)
+                    </h3>
                     <div className="h-72 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={billingReports.revRec}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#121317" />
-                          <XAxis dataKey="month" stroke="#475569" fontSize={9} fontClassName="font-mono" />
-                          <YAxis stroke="#475569" fontSize={9} fontClassName="font-mono" tickFormatter={(v) => `₹${v / 100}`} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                          <XAxis dataKey="month" stroke="#94a3b8" fontSize={10} fontClassName="font-mono" />
+                          <YAxis stroke="#94a3b8" fontSize={10} fontClassName="font-mono" tickFormatter={(v) => `₹${v / 100}`} />
                           <Tooltip 
-                            contentStyle={{ backgroundColor: "#08080C", borderColor: "#1b1e25", borderRadius: "12px", fontFamily: "monospace", fontSize: "11px" }}
+                            contentStyle={{ backgroundColor: "#09090b", borderColor: "#27272a", borderRadius: "12px", fontFamily: "monospace", fontSize: "12px", color: "#f8fafc" }}
                             formatter={(v) => [`₹${(v / 100).toFixed(0)}`, "Recognized"]}
                           />
-                          <Line type="monotone" dataKey="recognized" stroke="#00FF87" strokeWidth={2} dot={{ r: 3 }} />
+                          <Line type="monotone" dataKey="recognized" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
 
                   {/* Refund Trend Bar Chart */}
-                  <div className="bg-black/45 border border-[#1b1e25] p-6 rounded-3xl">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 font-mono mb-4">REFUND OUTFLOW TREND</h3>
+                  <div className="bg-zinc-900/80 border border-zinc-800 p-6 rounded-3xl shadow-xl">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-white font-mono mb-4 flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-[#E50914]" /> REFUND OUTFLOW TREND
+                    </h3>
                     <div className="h-72 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={billingReports.refunds}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#121317" />
-                          <XAxis dataKey="month" stroke="#475569" fontSize={9} fontClassName="font-mono" />
-                          <YAxis stroke="#475569" fontSize={9} fontClassName="font-mono" tickFormatter={(v) => `₹${v / 100}`} />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                          <XAxis dataKey="month" stroke="#94a3b8" fontSize={10} fontClassName="font-mono" />
+                          <YAxis stroke="#94a3b8" fontSize={10} fontClassName="font-mono" tickFormatter={(v) => `₹${v / 100}`} />
                           <Tooltip 
-                            contentStyle={{ backgroundColor: "#08080C", borderColor: "#1b1e25", borderRadius: "12px", fontFamily: "monospace", fontSize: "11px" }}
+                            contentStyle={{ backgroundColor: "#09090b", borderColor: "#27272a", borderRadius: "12px", fontFamily: "monospace", fontSize: "12px", color: "#f8fafc" }}
                             formatter={(v) => [`₹${(v / 100).toFixed(0)}`, "Refunded"]}
                           />
-                          <Bar dataKey="refunded" fill="#FF0055" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="refunded" fill="#E50914" radius={[6, 6, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -1636,12 +1694,12 @@ function AdminDashboard() {
                 </div>
 
                 {/* Cohort Churn Matrix */}
-                <div className="bg-black/45 border border-[#1b1e25] p-6 rounded-3xl">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 font-mono mb-4">CHURN COHORT RETENTION (%)</h3>
-                  <div className="overflow-x-auto rounded-xl border border-white/5">
+                <div className="bg-zinc-900/80 border border-zinc-800 p-6 rounded-3xl shadow-xl">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-white font-mono mb-4">CHURN COHORT RETENTION (%)</h3>
+                  <div className="overflow-x-auto rounded-2xl border border-zinc-800">
                     <table className="w-full text-left border-collapse font-mono text-xs">
                       <thead>
-                        <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                        <tr className="border-b border-zinc-800 bg-zinc-950/80 text-slate-400 uppercase tracking-wider text-[10px]">
                           <th className="p-4">Signup Cohort</th>
                           <th className="p-4 text-center">Cohort Size</th>
                           <th className="p-4 text-center">Month 0</th>
@@ -1650,23 +1708,23 @@ function AdminDashboard() {
                           <th className="p-4 text-center">Month 3</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#12141a]">
+                      <tbody className="divide-y divide-zinc-800/80">
                         {billingReports.cohorts.map((c, i) => (
-                          <tr key={i} className="hover:bg-slate-900/10 transition">
-                            <td className="p-4 font-bold text-slate-200 uppercase">{c.cohort}</td>
-                            <td className="p-4 text-center text-slate-400">{c.size} Users</td>
-                            <td className="p-4 text-center bg-emerald-500/10 text-emerald-400 font-bold">{c.m0}%</td>
+                          <tr key={i} className="hover:bg-zinc-800/40 transition">
+                            <td className="p-4 font-bold text-white uppercase">{c.cohort}</td>
+                            <td className="p-4 text-center text-slate-300">{c.size} Users</td>
+                            <td className="p-4 text-center bg-emerald-950/40 text-emerald-400 font-bold">{c.m0}%</td>
                             <td className={`p-4 text-center font-bold ${
-                              c.m1 > 70 ? "bg-emerald-500/5 text-emerald-400" :
-                              c.m1 > 40 ? "bg-amber-500/5 text-amber-400" : "bg-rose-500/5 text-rose-400"
+                              c.m1 > 70 ? "bg-emerald-950/30 text-emerald-400" :
+                              c.m1 > 40 ? "bg-amber-950/30 text-amber-400" : "bg-rose-950/30 text-rose-400"
                             }`}>{c.m1}%</td>
                             <td className={`p-4 text-center font-bold ${
-                              c.m2 > 70 ? "bg-emerald-500/5 text-emerald-400" :
-                              c.m2 > 40 ? "bg-amber-500/5 text-amber-400" : "bg-rose-500/5 text-rose-400"
+                              c.m2 > 70 ? "bg-emerald-950/30 text-emerald-400" :
+                              c.m2 > 40 ? "bg-amber-950/30 text-amber-400" : "bg-rose-950/30 text-rose-400"
                             }`}>{c.m2}%</td>
                             <td className={`p-4 text-center font-bold ${
-                              c.m3 > 70 ? "bg-emerald-500/5 text-emerald-400" :
-                              c.m3 > 40 ? "bg-amber-500/5 text-amber-400" : "bg-rose-500/5 text-rose-400"
+                              c.m3 > 70 ? "bg-emerald-950/30 text-emerald-400" :
+                              c.m3 > 40 ? "bg-amber-950/30 text-amber-400" : "bg-rose-950/30 text-rose-400"
                             }`}>{c.m3}%</td>
                           </tr>
                         ))}
@@ -1682,65 +1740,67 @@ function AdminDashboard() {
         {/* Finance Reconciliation Tab */}
         {activeTab === "reconcile" && (
           <div className="space-y-6 animate-fade-in">
-            <div className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex justify-between items-center text-xs">
+            <div className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl flex justify-between items-center text-xs shadow-lg">
               <div>
-                <h3 className="font-bold text-slate-300 uppercase font-mono tracking-wider">GATEWAY Webhook Reconciliation Exceptions</h3>
-                <p className="text-[10px] text-slate-500 mt-1 uppercase">Resolves anomalies between local payment records and capture log signatures.</p>
+                <h3 className="font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
+                  <Server className="w-4 h-4 text-indigo-400" /> GATEWAY RECONCILIATION DIAGNOSTICS
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">Resolves anomalies between local payment records and capture log signatures.</p>
               </div>
               <button
                 onClick={fetchReconciliation}
-                className="bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-300 py-1.5 px-3 rounded-lg font-mono tracking-wider flex items-center gap-1 uppercase cursor-pointer"
+                className="bg-zinc-800 hover:bg-zinc-750 text-slate-200 border border-zinc-700 py-2 px-4 rounded-xl font-mono tracking-wider flex items-center gap-1.5 uppercase cursor-pointer font-bold transition shadow-sm"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Scan Audit
               </button>
             </div>
 
-            <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-xl">
               {reconciliationLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
-                  <span className="text-xs text-slate-500 font-mono tracking-wider">RUNNING TRANSACTION SYNC SCAN...</span>
+                  <RefreshCw className="h-7 w-7 animate-spin text-[#E50914]" />
+                  <span className="text-xs text-slate-400 font-mono tracking-wider uppercase font-bold">Running transaction sync scan...</span>
                 </div>
               ) : reconciliationList.length === 0 ? (
-                <div className="p-16 text-center text-emerald-400 bg-emerald-500/5 border border-emerald-500/20 font-mono text-xs rounded-2xl flex flex-col items-center justify-center gap-2">
-                  <CheckCircle className="h-8 w-8 text-emerald-400" />
-                  <span>ALL SYSTEMS RECONCILED. NO EXCEPTIONS DETECTED.</span>
+                <div className="p-16 text-center text-emerald-400 bg-emerald-950/20 border border-emerald-500/30 font-mono text-xs rounded-2xl flex flex-col items-center justify-center gap-2">
+                  <CheckCircle className="h-9 w-9 text-emerald-400" />
+                  <span className="font-bold tracking-wider">ALL SYSTEMS RECONCILED. NO EXCEPTIONS DETECTED.</span>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse font-mono text-xs">
                     <thead>
-                      <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
-                        <th className="p-4 font-bold">Exceptions type</th>
-                        <th className="p-4 font-bold">Local reference</th>
+                      <tr className="border-b border-zinc-800 bg-zinc-950/80 text-slate-400 uppercase tracking-wider text-[10px]">
+                        <th className="p-4 font-bold">Exceptions Type</th>
+                        <th className="p-4 font-bold">Local Reference</th>
                         <th className="p-4 font-bold text-center">Local Status</th>
                         <th className="p-4 font-bold text-center">Gateway Status</th>
                         <th className="p-4 font-bold">Details</th>
                         <th className="p-4 font-bold text-right font-sans">Resolve</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#12141a]">
+                    <tbody className="divide-y divide-zinc-800/80">
                       {reconciliationList.map((rec, i) => (
-                        <tr key={i} className="hover:bg-slate-900/10 transition">
+                        <tr key={i} className="hover:bg-zinc-800/40 transition">
                           <td className="p-4">
-                            <span className="px-2 py-0.5 rounded border border-rose-500/20 bg-rose-500/5 text-[#FF0055] font-bold text-[9px] tracking-wider uppercase">
+                            <span className="px-2.5 py-0.5 rounded-full border border-rose-500/40 bg-rose-950/30 text-rose-400 font-bold text-[9px] tracking-wider uppercase">
                               {rec.type}
                             </span>
                           </td>
                           <td className="p-4 space-y-0.5">
-                            <div className="text-slate-300 font-bold">{rec.email}</div>
-                            <div className="text-[9px] text-slate-500 uppercase">ORD: {rec.gatewayOrderId}</div>
+                            <div className="text-white font-bold">{rec.email}</div>
+                            <div className="text-[10px] text-slate-400 uppercase">ORD: {rec.gatewayOrderId}</div>
                           </td>
                           <td className="p-4 text-center uppercase font-bold text-rose-400">{rec.localStatus}</td>
                           <td className="p-4 text-center uppercase font-bold text-emerald-400">{rec.gatewayStatus}</td>
-                          <td className="p-4 text-slate-500 text-[10px]">
+                          <td className="p-4 text-slate-400 text-xs">
                             {rec.webhookEventId ? `Capture Hook: ${rec.webhookEventId}` : `Stale created transaction (${rec.hoursOld} hrs old)`}
                           </td>
                           <td className="p-4 text-right">
                             {rec.type === "STATUS_MISMATCH" && (
                               <button
                                 onClick={() => handleReconcileSyncAction(rec.paymentId)}
-                                className="bg-[#00FF87]/10 hover:bg-[#00FF87]/25 text-[#00FF87] border border-[#00FF87]/20 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                className="bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition uppercase"
                               >
                                 Force Sync
                               </button>
@@ -1759,44 +1819,46 @@ function AdminDashboard() {
         {/* Approval Queue Tab */}
         {activeTab === "approvals" && (
           <div className="space-y-6 animate-fade-in">
-            <div className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex justify-between items-center text-xs">
+            <div className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl flex justify-between items-center text-xs shadow-lg">
               <div>
-                <h3 className="font-bold text-slate-300 uppercase font-mono tracking-wider">DUAL-AUTHORIZATION APPROVAL QUEUE</h3>
-                <p className="text-[10px] text-slate-500 mt-1 uppercase">Provides dual-control verification for sensitive administrative actions (Refunds, Upgrades).</p>
+                <h3 className="font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-[#E50914]" /> DUAL-AUTHORIZATION APPROVAL QUEUE
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">Provides dual-control verification for sensitive administrative actions (Refunds, Upgrades).</p>
               </div>
               <button
                 onClick={fetchApprovalsQueue}
-                className="bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-300 py-1.5 px-3 rounded-lg font-mono tracking-wider flex items-center gap-1 uppercase cursor-pointer"
+                className="bg-zinc-800 hover:bg-zinc-750 text-slate-200 border border-zinc-700 py-2 px-4 rounded-xl font-mono tracking-wider flex items-center gap-1.5 uppercase cursor-pointer font-bold transition shadow-sm"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Refresh List
               </button>
             </div>
 
             {/* Approval Decisions Reason Input */}
-            <div className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl text-xs space-y-2">
-              <label className="font-bold text-slate-400 uppercase tracking-wider block font-mono">FINANCE OFFICER DECISION COMMENT</label>
+            <div className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl text-xs space-y-2 shadow-lg">
+              <label className="font-bold text-slate-300 uppercase tracking-wider block font-mono">FINANCE OFFICER DECISION COMMENT</label>
               <input
                 type="text"
                 placeholder="INPUT REASON TO RESOLVE APPROVAL OR REJECTION..."
                 value={approvalDecisionReason}
                 onChange={(e) => setApprovalDecisionReason(e.target.value)}
-                className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#FF0055] w-full font-mono uppercase"
+                className="bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#E50914] w-full font-mono uppercase placeholder-slate-500"
               />
             </div>
 
-            <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-xl">
               {approvalsLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
-                  <span className="text-xs text-slate-500 font-mono tracking-wider">RETRIEVING APPROVAL REQUEST TRAILS...</span>
+                  <RefreshCw className="h-7 w-7 animate-spin text-[#E50914]" />
+                  <span className="text-xs text-slate-400 font-mono tracking-wider uppercase font-bold">Retrieving approval request trails...</span>
                 </div>
               ) : approvalsList.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 font-mono text-xs">NO_PENDING_APPROVALS_QUEUE</div>
+                <div className="p-12 text-center text-slate-400 bg-zinc-900/40 font-mono text-xs">NO_PENDING_APPROVALS_QUEUE</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse font-mono text-xs">
                     <thead>
-                      <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                      <tr className="border-b border-zinc-800 bg-zinc-950/80 text-slate-400 uppercase tracking-wider text-[10px]">
                         <th className="p-4 font-bold">Action</th>
                         <th className="p-4 font-bold">Requester</th>
                         <th className="p-4 font-bold">Target PK</th>
@@ -1805,18 +1867,18 @@ function AdminDashboard() {
                         <th className="p-4 font-bold text-right">Decide Approval</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#12141a]">
+                    <tbody className="divide-y divide-zinc-800/80">
                       {approvalsList.map((app) => (
-                        <tr key={app.id} className="hover:bg-slate-900/10 transition">
-                          <td className="p-4 font-bold text-slate-200 uppercase tracking-wider">{app.action}</td>
-                          <td className="p-4 text-slate-400 lowercase">{app.requester_email}</td>
-                          <td className="p-4 text-slate-300 font-bold truncate max-w-[120px]">{app.target_id}</td>
+                        <tr key={app.id} className="hover:bg-zinc-800/40 transition">
+                          <td className="p-4 font-bold text-white uppercase tracking-wider">{app.action}</td>
+                          <td className="p-4 text-slate-300 lowercase">{app.requester_email}</td>
+                          <td className="p-4 text-cyan-400 font-bold truncate max-w-[120px]">{app.target_id}</td>
                           <td className="p-4 text-slate-400 max-w-xs truncate uppercase">{app.reason || "—"}</td>
                           <td className="p-4 text-center">
-                            <span className={`px-2 py-0.5 rounded border text-[9px] font-bold ${
-                              app.status === "PENDING" ? "bg-amber-500/5 border-amber-500/20 text-amber-400" :
-                              app.status === "APPROVED" ? "bg-[#00FF87]/5 border-[#00FF87]/20 text-[#00FF87]" :
-                              "bg-[#FF0055]/5 border-[#FF0055]/20 text-[#FF0055]"
+                            <span className={`px-2.5 py-0.5 rounded-full border text-[9px] font-bold ${
+                              app.status === "PENDING" ? "bg-amber-950/30 border-amber-500/40 text-amber-400" :
+                              app.status === "APPROVED" ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-400" :
+                              "bg-rose-950/30 border-rose-500/40 text-rose-400"
                             }`}>
                               {app.status}
                             </span>
@@ -1826,13 +1888,13 @@ function AdminDashboard() {
                               <>
                                 <button
                                   onClick={() => handleApprovalDecisionSubmit(app.id, "APPROVED")}
-                                  className="text-[#00FF87] border border-[#00FF87]/20 bg-[#00FF87]/5 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                  className="text-emerald-400 border border-emerald-500/30 bg-emerald-950/20 hover:bg-emerald-900/30 px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition uppercase"
                                 >
                                   Approve
                                 </button>
                                 <button
                                   onClick={() => handleApprovalDecisionSubmit(app.id, "REJECTED")}
-                                  className="text-[#FF0055] border border-[#FF0055]/20 bg-[#FF0055]/5 px-2.5 py-1 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                                  className="text-rose-400 border border-rose-500/30 bg-rose-950/20 hover:bg-rose-900/30 px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition uppercase"
                                 >
                                   Reject
                                 </button>
@@ -1852,10 +1914,12 @@ function AdminDashboard() {
         {/* Audit Registry Tab */}
         {activeTab === "audit" && (
           <div className="space-y-6 animate-fade-in">
-            <div className="bg-black/45 border border-[#1b1e25] p-4 rounded-2xl flex flex-wrap gap-4 items-center text-xs">
-              <div className="flex-1 min-w-[200px]">
-                <h3 className="font-bold text-slate-300 uppercase font-mono tracking-wider">SYSTEM SYSTEMIC AUDIT REGISTRY</h3>
-                <p className="text-[10px] text-slate-500 mt-1 uppercase font-sans">Full administrative audit records mapping modifications, security status changes, and coupon setups.</p>
+            <div className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl flex flex-wrap gap-4 items-center text-xs shadow-lg">
+              <div className="flex-1 min-w-[220px]">
+                <h3 className="font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-cyan-400" /> SYSTEM AUDIT REGISTRY
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">Full administrative audit records mapping modifications, security status changes, and coupon setups.</p>
               </div>
 
               <div className="flex flex-wrap gap-3 items-center">
@@ -1864,7 +1928,7 @@ function AdminDashboard() {
                   placeholder="SEARCH KEYWORD..."
                   value={auditSearch}
                   onChange={(e) => { setAuditSearch(e.target.value); setAuditPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#FF0055] font-mono uppercase"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#E50914] font-mono uppercase placeholder-slate-500"
                 />
 
                 <input
@@ -1872,7 +1936,7 @@ function AdminDashboard() {
                   placeholder="FILTER ACTION..."
                   value={auditActionFilter}
                   onChange={(e) => { setAuditActionFilter(e.target.value); setAuditPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#FF0055] font-mono uppercase"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#E50914] font-mono uppercase placeholder-slate-500"
                 />
 
                 <input
@@ -1880,32 +1944,32 @@ function AdminDashboard() {
                   placeholder="FILTER TARGET..."
                   value={auditTargetFilter}
                   onChange={(e) => { setAuditTargetFilter(e.target.value); setAuditPage(1); }}
-                  className="bg-[#08080C] border border-[#1b1e25] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#FF0055] font-mono uppercase"
+                  className="bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-[#E50914] font-mono uppercase placeholder-slate-500"
                 />
 
                 <button
                   type="button"
                   onClick={() => { setAuditActionFilter(""); setAuditTargetFilter(""); setAuditSearch(""); setAuditPage(1); }}
-                  className="bg-slate-900 border border-white/5 hover:bg-slate-800 text-slate-300 font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer font-semibold uppercase"
+                  className="bg-zinc-800 border border-zinc-700 hover:bg-zinc-750 text-slate-200 font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer font-mono uppercase shadow-sm"
                 >
                   RESET
                 </button>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[#1b1e25] bg-black/20 overflow-hidden shadow-xl">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-xl">
               {auditLoading ? (
                 <div className="p-20 flex flex-col items-center justify-center gap-3">
-                  <RefreshCw className="h-6 w-6 animate-spin text-[#FF0055]" />
-                  <span className="text-xs text-slate-500 font-mono tracking-wider font-bold">INGESTING ADMINISTRATIVE ACTION AUDITS...</span>
+                  <RefreshCw className="h-7 w-7 animate-spin text-[#E50914]" />
+                  <span className="text-xs text-slate-400 font-mono tracking-wider font-bold uppercase">Ingesting administrative action audits...</span>
                 </div>
               ) : auditLogsList.length === 0 ? (
-                <div className="p-12 text-center text-slate-500 bg-[#0c0d12]/40 font-mono text-xs">NO_AUDIT_RECORDS</div>
+                <div className="p-12 text-center text-slate-400 bg-zinc-900/40 font-mono text-xs">NO_AUDIT_RECORDS</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse font-mono text-xs">
                     <thead>
-                      <tr className="border-b border-[#1b1e25] bg-slate-950/60 text-slate-500 uppercase tracking-wider">
+                      <tr className="border-b border-zinc-800 bg-zinc-950/80 text-slate-400 uppercase tracking-wider text-[10px]">
                         <th className="p-4 font-bold">Timestamp</th>
                         <th className="p-4 font-bold">Admin Operator</th>
                         <th className="p-4 font-bold">Logged Action</th>
@@ -1914,29 +1978,29 @@ function AdminDashboard() {
                         <th className="p-4 font-bold">IP Address</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#12141a]">
+                    <tbody className="divide-y divide-zinc-800/80">
                       {auditLogsList.map((log) => (
-                        <tr key={log.id} className="hover:bg-slate-900/10 transition">
-                          <td className="p-4 text-slate-500 text-[10px] whitespace-nowrap">{new Date(log.created_at).toLocaleString("en-GB")}</td>
+                        <tr key={log.id} className="hover:bg-zinc-800/40 transition">
+                          <td className="p-4 text-slate-400 text-xs whitespace-nowrap">{new Date(log.created_at).toLocaleString("en-GB")}</td>
                           <td className="p-4">
-                            <div className="font-bold text-slate-200">{log.admin.name}</div>
-                            <div className="text-[9px] text-slate-500 lowercase mt-0.5">{log.admin.email}</div>
+                            <div className="font-bold text-white">{log.admin?.name || "System"}</div>
+                            <div className="text-[10px] text-slate-400 lowercase mt-0.5">{log.admin?.email || "N/A"}</div>
                           </td>
                           <td className="p-4">
-                            <span className="px-2 py-0.5 rounded border border-[#FF0055]/20 bg-[#FF0055]/5 text-[#FF0055] font-bold text-[9px] tracking-wider uppercase">
+                            <span className="px-2.5 py-0.5 rounded-full border border-blue-500/40 bg-blue-950/30 text-blue-400 font-bold text-[9px] tracking-wider uppercase">
                               {log.action}
                             </span>
                           </td>
                           <td className="p-4">
-                            <div className="font-bold text-slate-300 uppercase">{log.target_type}</div>
-                            <div className="text-[9px] text-slate-500 uppercase mt-0.5">{log.target_id}</div>
+                            <div className="font-bold text-slate-200 uppercase">{log.target_type}</div>
+                            <div className="text-[10px] text-slate-400 uppercase mt-0.5">{log.target_id}</div>
                           </td>
                           <td className="p-4 max-w-sm">
-                            <pre className="text-[10px] text-slate-400 bg-black/60 p-2 rounded border border-white/5 max-h-24 overflow-y-auto">
+                            <pre className="text-[10px] text-slate-300 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800 max-h-24 overflow-y-auto font-mono">
                               {JSON.stringify(log.metadata, null, 2)}
                             </pre>
                           </td>
-                          <td className="p-4 text-slate-400 text-[10px]">{log.ip || "0.0.0.0"}</td>
+                          <td className="p-4 text-slate-400 text-xs font-mono">{log.ip || "0.0.0.0"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1947,20 +2011,20 @@ function AdminDashboard() {
 
             {/* Pagination */}
             {auditTotalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 font-mono text-xs">
-                <span className="text-slate-500">Page {auditPage} of {auditTotalPages}</span>
+              <div className="flex items-center justify-between pt-4 font-mono text-xs text-slate-400">
+                <span>Page {auditPage} of {auditTotalPages}</span>
                 <div className="flex gap-2">
                   <button
                     disabled={auditPage === 1}
                     onClick={() => setAuditPage(prev => Math.max(prev - 1, 1))}
-                    className="p-2 rounded-lg border border-[#1b1e25] bg-black disabled:opacity-30 hover:bg-slate-950 transition cursor-pointer"
+                    className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 disabled:opacity-30 hover:bg-zinc-800 transition cursor-pointer text-white"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     disabled={auditPage === auditTotalPages}
                     onClick={() => setAuditPage(prev => Math.min(prev + 1, auditTotalPages))}
-                    className="p-2 rounded-lg border border-[#1b1e25] bg-black disabled:opacity-30 hover:bg-slate-950 transition cursor-pointer"
+                    className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 disabled:opacity-30 hover:bg-zinc-800 transition cursor-pointer text-white"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1973,89 +2037,92 @@ function AdminDashboard() {
 
       {/* -------------------- USER DETAILS MODAL -------------------- */}
       {selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-[2.5rem] border border-[#222] bg-[#0d0d12] p-6 md:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto font-mono text-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-3xl rounded-3xl border border-zinc-800 bg-zinc-900 p-6 md:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto font-mono text-xs text-slate-200">
             <button
               onClick={() => { setSelectedUser(null); setUserDetail(null); }}
-              className="absolute top-4 right-4 p-2 text-slate-500 hover:text-white rounded-xl cursor-pointer font-bold text-sm"
+              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-white rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition cursor-pointer font-bold text-sm"
             >
               ✕
             </button>
 
-            <h2 className="text-xl font-bold flex items-center gap-2 mb-6 border-b border-[#222] pb-4 text-white uppercase tracking-tight font-sans">
-              <UserIcon className="w-5 h-5 text-[#FF0055]" /> USER TELEMETRY PROFILE
+            <h2 className="text-lg font-bold flex items-center gap-2 mb-6 border-b border-zinc-800 pb-4 text-white uppercase tracking-tight font-mono">
+              <UserIcon className="w-5 h-5 text-[#E50914]" /> USER TELEMETRY PROFILE
             </h2>
 
             {userDetailLoading ? (
-              <div className="p-12 text-center text-slate-500 animate-pulse">PULLING PROFILE LOGS...</div>
+              <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
+                <RefreshCw className="w-6 h-6 animate-spin text-[#E50914]" />
+                <span className="uppercase tracking-wider">Pulling user profile logs...</span>
+              </div>
             ) : !userDetail ? (
-              <div className="p-12 text-center text-slate-500 uppercase">FAIL_PULL: PROFILE_DATA</div>
+              <div className="p-12 text-center text-rose-400 uppercase font-bold">FAIL_PULL: PROFILE_DATA</div>
             ) : (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-black/60 p-4 rounded-2xl border border-white/5">
-                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest block border-b border-white/5 pb-1">ACCOUNT DATA</span>
+                  <div className="bg-zinc-950/80 p-5 rounded-2xl border border-zinc-800 shadow-inner">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest block border-b border-zinc-800 pb-2">ACCOUNT DATA</span>
                     <div className="mt-3 space-y-2 text-xs">
-                      <div className="flex justify-between"><span className="text-slate-500">ID:</span> <span className="text-slate-300 truncate max-w-[150px]">{userDetail.profile.id}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Name:</span> <span className="text-slate-200">{userDetail.profile.name}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Email:</span> <span className="text-slate-200 lowercase">{userDetail.profile.email}</span></div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Role:</span> 
+                      <div className="flex justify-between"><span className="text-slate-400">ID:</span> <span className="text-slate-300 truncate max-w-[150px] font-bold">{userDetail.profile.id}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Name:</span> <span className="text-white font-bold">{userDetail.profile.name}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Email:</span> <span className="text-slate-200 lowercase">{userDetail.profile.email}</span></div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Role:</span> 
                         <select
                           value={userDetail.profile.role}
                           onChange={(e) => handleRoleChange(userDetail.profile.id, e.target.value)}
-                          className="bg-black border border-white/5 rounded px-2 py-0.5 text-xs text-slate-300 focus:outline-none focus:border-[#FF0055]"
+                          className="bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-[#E50914] font-bold"
                         >
                           <option value="USER">USER</option>
                           <option value="ADMIN">ADMIN</option>
                         </select>
                       </div>
-                      <div className="flex justify-between"><span className="text-slate-500">Status:</span> <span className="font-bold text-[#00FF87]">{userDetail.profile.status}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Status:</span> <span className="font-bold text-emerald-400">{userDetail.profile.status}</span></div>
                     </div>
                   </div>
 
-                  <div className="bg-black/60 p-4 rounded-2xl border border-white/5">
-                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest block border-b border-white/5 pb-1">SYSTEM STATISTICS</span>
+                  <div className="bg-zinc-950/80 p-5 rounded-2xl border border-zinc-800 shadow-inner">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest block border-b border-zinc-800 pb-2">SYSTEM STATISTICS</span>
                     <div className="mt-3 space-y-2 text-xs">
-                      <div className="flex justify-between"><span className="text-slate-500">Created At:</span> <span className="text-slate-300">{new Date(userDetail.profile.createdAt).toLocaleDateString("en-GB")}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Active Plan:</span> <span className="uppercase font-bold text-indigo-400">{userDetail.currentSubscription?.plan?.name || "Free Plan"}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">URLs count:</span> <span className="font-bold text-slate-200">{userDetail.urlCount}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">Email Verified:</span> <span className="text-slate-300">{userDetail.profile.emailVerified ? "Yes ✅" : "No ❌"}</span></div>
-                      <div className="flex justify-between"><span className="text-slate-500">2FA Sec:</span> <span className="text-slate-300">{userDetail.profile.twoFactorEnabled ? "ACTIVE" : "INACTIVE"}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Created At:</span> <span className="text-slate-300">{new Date(userDetail.profile.createdAt).toLocaleDateString("en-GB")}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Active Plan:</span> <span className="uppercase font-bold text-cyan-400">{userDetail.currentSubscription?.plan?.name || "Free Plan"}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">URLs Count:</span> <span className="font-bold text-white">{userDetail.urlCount}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">Email Verified:</span> <span className="text-white font-bold">{userDetail.profile.emailVerified ? "Yes ✅" : "No ❌"}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">2FA Security:</span> <span className={`font-bold ${userDetail.profile.twoFactorEnabled ? "text-emerald-400" : "text-slate-400"}`}>{userDetail.profile.twoFactorEnabled ? "ACTIVE" : "INACTIVE"}</span></div>
                     </div>
                   </div>
                 </div>
 
                 {/* Subscription Lifecycle Manager Console */}
                 {userDetail.currentSubscription && (
-                  <div className="bg-black/60 p-4 rounded-2xl border border-white/5">
-                    <span className="text-[10px] text-[#00F0FF] uppercase font-bold tracking-widest block border-b border-white/5 pb-1">SUBSCRIPTION LIFECYCLE MANAGEMENT</span>
+                  <div className="bg-zinc-950/80 p-5 rounded-2xl border border-zinc-800 shadow-inner space-y-3">
+                    <span className="text-[10px] text-cyan-400 uppercase font-bold tracking-widest block border-b border-zinc-800 pb-2">SUBSCRIPTION LIFECYCLE MANAGEMENT</span>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 text-xs leading-loose">
-                      <div className="space-y-1">
-                        <div><span className="text-slate-500">Subscription ID:</span> <span className="text-slate-300 font-bold">{userDetail.currentSubscription.id}</span></div>
-                        <div><span className="text-slate-500">Expiration:</span> <span className="text-slate-300 font-bold">{userDetail.currentSubscription.current_period_end ? new Date(userDetail.currentSubscription.current_period_end).toLocaleString("en-GB") : "LIFETIME"}</span></div>
-                        <div><span className="text-slate-500">Cycle:</span> <span className="text-slate-300 font-bold uppercase">{userDetail.currentSubscription.billing_cycle}</span></div>
-                        <div><span className="text-slate-500">StatusBadge:</span> <span className="text-emerald-400 font-bold uppercase border border-emerald-500/25 bg-emerald-500/5 px-2 py-0.5 rounded">{userDetail.currentSubscription.status}</span></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs leading-loose">
+                      <div className="space-y-1.5">
+                        <div><span className="text-slate-400">Subscription ID:</span> <span className="text-slate-200 font-bold ml-1">{userDetail.currentSubscription.id}</span></div>
+                        <div><span className="text-slate-400">Expiration:</span> <span className="text-slate-200 font-bold ml-1">{userDetail.currentSubscription.current_period_end ? new Date(userDetail.currentSubscription.current_period_end).toLocaleString("en-GB") : "LIFETIME"}</span></div>
+                        <div><span className="text-slate-400">Cycle:</span> <span className="text-slate-200 font-bold uppercase ml-1">{userDetail.currentSubscription.billing_cycle}</span></div>
+                        <div><span className="text-slate-400">Status:</span> <span className="text-emerald-400 font-bold uppercase border border-emerald-500/30 bg-emerald-950/30 px-2 py-0.5 rounded-full ml-1 text-[10px]">{userDetail.currentSubscription.status}</span></div>
                       </div>
 
                       <div className="space-y-3 font-sans">
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <button
                             onClick={() => handleLifecycleAction("cancel", userDetail.currentSubscription.id)}
-                            className="bg-red-950/20 hover:bg-red-950/50 text-[#FF0055] border border-[#FF0055]/30 py-1 px-2.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                            className="bg-rose-950/30 hover:bg-rose-900/40 text-rose-400 border border-rose-500/40 py-1.5 px-3 rounded-lg text-xs font-bold cursor-pointer transition uppercase font-mono"
                           >
                             Cancel Sub
                           </button>
                           <button
                             onClick={() => handleLifecycleAction("resume", userDetail.currentSubscription.id)}
-                            className="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/5 py-1 px-2.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                            className="bg-zinc-800 hover:bg-zinc-700 text-slate-200 border border-zinc-700 py-1.5 px-3 rounded-lg text-xs font-bold cursor-pointer transition uppercase font-mono"
                           >
                             Resume Renew
                           </button>
                           <button
                             onClick={() => handleLifecycleAction("renew", userDetail.currentSubscription.id)}
-                            className="bg-emerald-950/20 hover:bg-emerald-950/50 text-[#00FF87] border border-[#00FF87]/30 py-1 px-2.5 rounded text-[10px] font-bold cursor-pointer transition uppercase"
+                            className="bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-500/40 py-1.5 px-3 rounded-lg text-xs font-bold cursor-pointer transition uppercase font-mono"
                           >
                             Manual Renew
                           </button>
@@ -2065,30 +2132,30 @@ function AdminDashboard() {
                         <div className="flex gap-2 items-center font-mono">
                           <input
                             type="number"
-                            placeholder="DAYS (e.g. +10, -5)"
+                            placeholder="DAYS (+10, -5)"
                             value={prorateDays}
                             onChange={(e) => setProrateDays(e.target.value)}
-                            className="bg-black border border-white/5 rounded px-2 py-1 text-slate-300 focus:outline-none w-28 text-center text-xs uppercase"
+                            className="bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-[#E50914] w-32 text-center text-xs uppercase font-mono"
                           />
                           <button
                             onClick={() => {
                               handleLifecycleAction("prorate", userDetail.currentSubscription.id, { days: prorateDays });
                               setProrateDays("");
                             }}
-                            className="bg-slate-950 hover:bg-slate-900 border border-white/5 py-1 px-2.5 rounded text-[10px] font-sans font-bold text-slate-300 cursor-pointer uppercase"
+                            className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 py-1.5 px-3 rounded-lg text-xs font-mono font-bold text-slate-200 cursor-pointer uppercase transition"
                           >
-                            Prorate shift
+                            Prorate Shift
                           </button>
                         </div>
 
                         {/* Plan change direct/approval queue */}
-                        <div className="border-t border-white/5 pt-3 space-y-2 font-mono">
-                          <span className="text-[9px] text-slate-500 uppercase block tracking-wider font-bold">MANUAL TIER UPGRADE/DOWNGRADE</span>
+                        <div className="border-t border-zinc-800 pt-3 space-y-2 font-mono">
+                          <span className="text-[10px] text-slate-400 uppercase block tracking-wider font-bold">MANUAL TIER UPGRADE/DOWNGRADE</span>
                           <div className="flex flex-wrap gap-2 items-center">
                             <select
                               value={changePlanKey}
                               onChange={(e) => setChangePlanKey(e.target.value)}
-                              className="bg-black border border-white/5 rounded px-2 py-1 text-slate-300 text-xs focus:outline-none"
+                              className="bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-[#E50914] uppercase font-bold"
                             >
                               <option value="starter">starter</option>
                               <option value="pro">pro</option>
@@ -2098,7 +2165,7 @@ function AdminDashboard() {
                             <select
                               value={changePlanCycle}
                               onChange={(e) => setChangePlanCycle(e.target.value)}
-                              className="bg-black border border-white/5 rounded px-2 py-1 text-slate-300 text-xs focus:outline-none"
+                              className="bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-[#E50914] uppercase font-bold"
                             >
                               <option value="MONTHLY">monthly</option>
                               <option value="QUARTERLY">quarterly</option>
@@ -2106,20 +2173,20 @@ function AdminDashboard() {
                             </select>
                           </div>
 
-                          <div className="flex items-center gap-2 font-sans text-[10px]">
-                            <label className="flex items-center gap-1 cursor-pointer">
+                          <div className="flex items-center gap-3 font-mono text-xs">
+                            <label className="flex items-center gap-1.5 cursor-pointer text-slate-300">
                               <input
                                 type="checkbox"
                                 checked={lifecycleRequestApproval}
                                 onChange={(e) => setLifecycleRequestApproval(e.target.checked)}
-                                className="accent-[#FF0055]"
+                                className="accent-[#E50914]"
                               />
                               Queue dual-approval
                             </label>
 
                             <button
                               onClick={() => handlePlanChangeSubmit(userDetail.currentSubscription.id)}
-                              className="bg-[#FF0055] hover:bg-[#FF0055]/90 text-white font-bold py-1 px-2.5 rounded text-[10px] cursor-pointer transition uppercase"
+                              className="bg-[#E50914] hover:bg-[#F40B16] text-white font-bold py-1.5 px-3 rounded-lg text-xs cursor-pointer transition uppercase font-mono shadow-md"
                             >
                               Modify Tier
                             </button>
@@ -2132,20 +2199,20 @@ function AdminDashboard() {
 
                 {/* Active Sessions */}
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5 font-sans">
-                    <Lock className="w-4 h-4 text-slate-500" /> Active Session Authorization Tokens ({userDetail.activeSessions.length})
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-1.5 font-mono">
+                    <Lock className="w-4 h-4 text-cyan-400" /> Active Session Authorization Tokens ({userDetail.activeSessions.length})
                   </h3>
                   {userDetail.activeSessions.length === 0 ? (
                     <p className="text-xs text-slate-500 italic uppercase">No active authorizations detected.</p>
                   ) : (
-                    <div className="max-h-36 overflow-y-auto space-y-2 border border-white/5 p-3 bg-black/60 rounded-2xl">
+                    <div className="max-h-36 overflow-y-auto space-y-2 border border-zinc-800 p-3 bg-zinc-950/80 rounded-2xl">
                       {userDetail.activeSessions.map((session) => (
-                        <div key={session.id} className="text-xs flex justify-between items-center border-b border-white/5 pb-1.5 last:border-b-0">
+                        <div key={session.id} className="text-xs flex justify-between items-center border-b border-zinc-800 pb-1.5 last:border-b-0">
                           <div>
-                            <span className="font-semibold text-slate-300">{session.device || "Unknown Hardware"}</span>
-                            <span className="text-[10px] text-slate-500 ml-2 font-mono">({session.ip})</span>
+                            <span className="font-semibold text-slate-200">{session.device || "Unknown Hardware"}</span>
+                            <span className="text-[10px] text-slate-400 ml-2 font-mono">({session.ip})</span>
                           </div>
-                          <span className="text-[9px] text-slate-500">Expires: {new Date(session.expiresAt).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-slate-400">Expires: {new Date(session.expiresAt).toLocaleDateString()}</span>
                         </div>
                       ))}
                     </div>
@@ -2154,23 +2221,23 @@ function AdminDashboard() {
 
                 {/* Recent Logins */}
                 <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5 font-sans">
-                    <Calendar className="w-4 h-4 text-slate-500" /> Access events history (Last 10)
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-1.5 font-mono">
+                    <Calendar className="w-4 h-4 text-indigo-400" /> Access Events History (Last 10)
                   </h3>
                   {userDetail.recentLoginHistory.length === 0 ? (
                     <p className="text-xs text-slate-500 italic uppercase">No access events logged.</p>
                   ) : (
-                    <div className="max-h-40 overflow-y-auto space-y-2 border border-white/5 p-3 bg-black/60 rounded-2xl">
+                    <div className="max-h-40 overflow-y-auto space-y-2 border border-zinc-800 p-3 bg-zinc-950/80 rounded-2xl">
                       {userDetail.recentLoginHistory.map((evt) => (
-                        <div key={evt.id} className="text-xs flex justify-between items-center border-b border-white/5 pb-1.5 last:border-b-0">
+                        <div key={evt.id} className="text-xs flex justify-between items-center border-b border-zinc-800 pb-1.5 last:border-b-0">
                           <div>
-                            <span className={`font-bold ${evt.success ? "text-[#00FF87]" : "text-[#FF0055]"}`}>
+                            <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${evt.success ? "bg-emerald-950/40 text-emerald-400 border border-emerald-500/30" : "bg-rose-950/40 text-rose-400 border border-rose-500/30"}`}>
                               {evt.success ? "SUCCESS" : "FAILURE"}
                             </span>
-                            <span className="text-slate-400 ml-2">on {evt.device || "Unknown browser"}</span>
-                            <span className="text-[10px] text-slate-500 ml-2">({evt.ip})</span>
+                            <span className="text-slate-300 ml-2">on {evt.device || "Unknown browser"}</span>
+                            <span className="text-[10px] text-slate-400 ml-2 font-mono">({evt.ip})</span>
                           </div>
-                          <span className="text-[10px] text-slate-500">{new Date(evt.createdAt).toLocaleString()}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">{new Date(evt.createdAt).toLocaleString()}</span>
                         </div>
                       ))}
                     </div>
@@ -2184,45 +2251,45 @@ function AdminDashboard() {
 
       {/* -------------------- INVOICE / BILLING ADJUSTMENTS MODAL -------------------- */}
       {invoiceEditDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <form onSubmit={handleInvoiceEditSubmit} className="w-full max-w-md rounded-[2.5rem] border border-[#222] bg-[#0d0d12] p-6 shadow-2xl space-y-4 font-mono text-xs text-slate-300">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2 font-sans uppercase">
-              <CreditCard className="w-5 h-5 text-[#FF0055]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <form onSubmit={handleInvoiceEditSubmit} className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-4 font-mono text-xs text-slate-200">
+            <h3 className="text-base font-bold text-white flex items-center gap-2 font-mono uppercase">
+              <CreditCard className="w-5 h-5 text-[#E50914]" />
               EDIT BILLING STATEMENT
             </h3>
 
             <p className="text-xs text-slate-400">
-              Adjusting statement parameters for Order Reference: <span className="font-bold text-slate-200">{invoiceEditDialog.gateway_order_id}</span>
+              Adjusting statement parameters for Order: <span className="font-bold text-white">{invoiceEditDialog.gateway_order_id}</span>
             </p>
 
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Company Billing Name</label>
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Company Billing Name</label>
               <input
                 type="text"
                 placeholder="e.g. Acme Corp"
                 value={invoiceCompanyName}
                 onChange={(e) => setInvoiceCompanyName(e.target.value)}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055] uppercase"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#E50914] uppercase placeholder-slate-500"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Corporate Tax ID / GSTIN</label>
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Corporate Tax ID / GSTIN</label>
               <input
                 type="text"
                 placeholder="e.g. 22AAAAA0000A1Z5"
                 value={invoiceTaxId}
                 onChange={(e) => setInvoiceTaxId(e.target.value)}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055] uppercase"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#E50914] uppercase placeholder-slate-500"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Invoice Status override</label>
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Invoice Status Override</label>
               <select
                 value={invoiceStatusOverride}
                 onChange={(e) => setInvoiceStatusOverride(e.target.value)}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-slate-300 focus:outline-none focus:border-[#FF0055]"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-[#E50914] font-bold"
               >
                 <option value="CREATED">CREATED</option>
                 <option value="AUTHORIZED">AUTHORIZED</option>
@@ -2232,13 +2299,13 @@ function AdminDashboard() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Admin Audit Notes</label>
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Admin Audit Notes</label>
               <textarea
                 rows={2}
                 placeholder="Billing audit note logs..."
                 value={invoiceNotes}
                 onChange={(e) => setInvoiceNotes(e.target.value)}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055] uppercase"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#E50914] uppercase placeholder-slate-500"
               />
             </div>
 
@@ -2246,13 +2313,13 @@ function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setInvoiceEditDialog(null)}
-                className="px-4 py-2.5 rounded-xl bg-slate-900 border border-white/5 text-slate-400 hover:text-white transition cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-slate-300 hover:text-white transition cursor-pointer font-bold uppercase font-mono text-xs"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2.5 rounded-xl bg-[#FF0055] text-white font-bold transition cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-[#E50914] hover:bg-[#F40B16] text-white font-bold transition cursor-pointer uppercase font-mono text-xs shadow-md shadow-[#E50914]/25"
               >
                 SAVE INVOICE
               </button>
@@ -2263,51 +2330,51 @@ function AdminDashboard() {
 
       {/* -------------------- USER STATUS CHANGE MODAL -------------------- */}
       {statusDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <form onSubmit={handleStatusSubmit} className="w-full max-w-md rounded-[2.5rem] border border-[#222] bg-[#0d0d12] p-6 shadow-2xl space-y-4 font-mono text-xs text-slate-300">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2 font-sans uppercase">
-              <Ban className="w-5 h-5 text-[#FF0055]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <form onSubmit={handleStatusSubmit} className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-4 font-mono text-xs text-slate-200">
+            <h3 className="text-base font-bold text-white flex items-center gap-2 font-mono uppercase">
+              <Ban className="w-5 h-5 text-[#E50914]" />
               UPDATE ACCOUNT STATUS
             </h3>
             
-            <p className="text-xs text-slate-400 leading-normal">
-              Change status of <span className="font-bold text-slate-200">{statusDialog.userEmail}</span> to{" "}
-              <span className="font-bold text-[#FF0055]">{statusDialog.targetStatus}</span>.
+            <p className="text-xs text-slate-300 leading-normal">
+              Change status of <span className="font-bold text-white">{statusDialog.userEmail}</span> to{" "}
+              <span className="font-bold text-[#E50914]">{statusDialog.targetStatus}</span>.
             </p>
 
             {statusDialog.targetStatus === "BANNED" && (
-              <div className="p-3 bg-[#FF0055]/5 border border-[#FF0055]/20 text-[#FF0055] rounded-xl flex gap-2 leading-relaxed">
-                <AlertTriangle className="w-5 h-5 shrink-0" />
+              <div className="p-3.5 bg-rose-950/30 border border-rose-500/40 text-rose-300 rounded-xl flex gap-2.5 leading-relaxed text-xs">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-rose-400" />
                 <div>
-                  <strong>WARNING:</strong> Banning restricts login credentials and invalidates active session tokens.
+                  <strong className="text-rose-200">WARNING:</strong> Banning restricts login credentials and invalidates active session tokens immediately.
                 </div>
               </div>
             )}
 
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Reason for action</label>
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Reason For Action</label>
               <textarea
                 required
                 rows={3}
                 placeholder="Enter logs reason for modification..."
                 value={statusReason}
                 onChange={(e) => setStatusReason(e.target.value)}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055] uppercase"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#E50914] uppercase placeholder-slate-500"
               />
             </div>
 
             {statusDialog.targetStatus === "BANNED" && (
               <div className="space-y-1.5">
-                <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5" /> Confirm Administrator Password
+                <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5 text-rose-400" /> Confirm Administrator Password
                 </label>
                 <input
                   required
                   type="password"
-                  placeholder="ENTER ADMIN CREDENTIAL..."
+                  placeholder="ENTER ADMIN PASSWORD..."
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
-                  className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055]"
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#E50914] placeholder-slate-500"
                 />
               </div>
             )}
@@ -2320,14 +2387,14 @@ function AdminDashboard() {
                   setStatusReason("");
                   setAdminPassword("");
                 }}
-                className="px-4 py-2.5 rounded-xl bg-slate-900 border border-white/5 text-slate-400 hover:text-white transition cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-slate-300 hover:text-white transition cursor-pointer font-bold uppercase font-mono text-xs"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={mutating}
-                className="px-4 py-2.5 rounded-xl bg-[#FF0055] text-white font-bold transition cursor-pointer disabled:opacity-50"
+                className="px-5 py-2.5 rounded-xl bg-[#E50914] hover:bg-[#F40B16] text-white font-bold transition cursor-pointer disabled:opacity-50 uppercase font-mono text-xs shadow-md shadow-[#E50914]/25"
               >
                 {mutating ? "Processing..." : "CONFIRM UPDATE"}
               </button>
@@ -2338,33 +2405,33 @@ function AdminDashboard() {
 
       {/* -------------------- URL DELETION MODAL -------------------- */}
       {deleteUrlDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <form onSubmit={handleDeleteUrlSubmit} className="w-full max-w-md rounded-[2.5rem] border border-[#222] bg-[#0d0d12] p-6 shadow-2xl space-y-4 font-mono text-xs text-slate-300">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2 font-sans uppercase">
-              <Trash2 className="w-5 h-5 text-[#FF0055]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <form onSubmit={handleDeleteUrlSubmit} className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-4 font-mono text-xs text-slate-200">
+            <h3 className="text-base font-bold text-white flex items-center gap-2 font-mono uppercase">
+              <Trash2 className="w-5 h-5 text-[#E50914]" />
               URL MODERATION REMOVAL
             </h3>
             
-            <p className="text-xs text-slate-400 leading-normal">
-              Permanently purge short code <span className="text-[#00F0FF] font-bold">/{deleteUrlDialog.shortCode}</span>.
+            <p className="text-xs text-slate-300 leading-normal">
+              Permanently purge short code <span className="text-cyan-400 font-bold">/{deleteUrlDialog.shortCode}</span>.
             </p>
 
-            <div className="p-3 bg-[#FF0055]/5 border border-[#FF0055]/20 text-[#FF0055] rounded-xl flex gap-2 leading-relaxed">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
+            <div className="p-3.5 bg-rose-950/30 border border-rose-500/40 text-rose-300 rounded-xl flex gap-2.5 leading-relaxed text-xs">
+              <AlertTriangle className="w-5 h-5 shrink-0 text-rose-400" />
               <div>
-                <strong>DESTRUCTIVE ACTION:</strong> Short redirect keys and QR codes will be permanently destroyed.
+                <strong className="text-rose-200">DESTRUCTIVE ACTION:</strong> Short redirect keys and QR codes will be permanently destroyed.
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Moderation Purge Reason</label>
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Moderation Purge Reason</label>
               <textarea
                 required
                 rows={3}
                 placeholder="Enter audit logs reason..."
                 value={deleteReason}
                 onChange={(e) => setDeleteReason(e.target.value)}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055] uppercase"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#E50914] uppercase placeholder-slate-500"
               />
             </div>
 
@@ -2375,14 +2442,14 @@ function AdminDashboard() {
                   setDeleteUrlDialog(null);
                   setDeleteReason("");
                 }}
-                className="px-4 py-2.5 rounded-xl bg-slate-900 border border-white/5 text-slate-400 hover:text-white transition cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-slate-300 hover:text-white transition cursor-pointer font-bold uppercase font-mono text-xs"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={mutating}
-                className="px-4 py-2.5 rounded-xl bg-[#FF0055] text-white font-bold transition cursor-pointer disabled:opacity-50"
+                className="px-5 py-2.5 rounded-xl bg-[#E50914] hover:bg-[#F40B16] text-white font-bold transition cursor-pointer disabled:opacity-50 uppercase font-mono text-xs shadow-md shadow-[#E50914]/25"
               >
                 {mutating ? "Purging..." : "PURGE LINK"}
               </button>
@@ -2393,68 +2460,68 @@ function AdminDashboard() {
 
       {/* -------------------- ADMIN REFUND MODAL -------------------- */}
       {refundDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <form onSubmit={handleRefundSubmit} className="w-full max-w-md rounded-[2.5rem] border border-[#222] bg-[#0d0d12] p-6 shadow-2xl space-y-4 font-mono text-xs text-slate-300">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2 font-sans uppercase">
-              <CreditCard className="w-5 h-5 text-[#FF0055]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <form onSubmit={handleRefundSubmit} className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl space-y-4 font-mono text-xs text-slate-200">
+            <h3 className="text-base font-bold text-white flex items-center gap-2 font-mono uppercase">
+              <CreditCard className="w-5 h-5 text-[#E50914]" />
               FINANCIAL REFUND DISBURSE
             </h3>
 
-            <p className="text-xs text-slate-400">
-              Issuing refund for transaction order: <span className="font-bold text-slate-200">{refundDialog.paymentId.slice(0, 18)}...</span>.
+            <p className="text-xs text-slate-300">
+              Issuing refund for transaction order: <span className="font-bold text-white">{refundDialog.paymentId.slice(0, 18)}...</span>
             </p>
 
-            <div className="p-3 bg-[#FF0055]/5 border border-[#FF0055]/20 text-[#FF0055] rounded-xl flex gap-2 leading-relaxed">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
+            <div className="p-3.5 bg-rose-950/30 border border-rose-500/40 text-rose-300 rounded-xl flex gap-2.5 leading-relaxed text-xs">
+              <AlertTriangle className="w-5 h-5 shrink-0 text-rose-400" />
               <div>
-                <strong>FINANCIAL IMPACT:</strong> Funds will be debited from merchant accounts.
+                <strong className="text-rose-200">FINANCIAL IMPACT:</strong> Funds will be debited from merchant accounts back to the customer.
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Refund Amount (INR, Blank for FULL)</label>
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Refund Amount (INR, Blank for FULL)</label>
               <input
                 type="number"
                 placeholder={`Max available: ₹${(refundDialog.amount / 100).toFixed(2)}`}
                 value={refundAmount}
                 onChange={(e) => setRefundAmount(e.target.value)}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055]"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#E50914] placeholder-slate-500"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Refund Reason</label>
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">Refund Reason</label>
               <textarea
                 required
                 rows={2}
                 placeholder="Dispute resolution, billing query..."
                 value={refundReason}
                 onChange={(e) => setRefundReason(e.target.value)}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055]"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#E50914] placeholder-slate-500 uppercase"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1">
-                <Lock className="w-3.5 h-3.5" /> Confirm Administrator Password
+              <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 text-rose-400" /> Confirm Administrator Password
               </label>
               <input
                 required
                 type="password"
-                placeholder="ENTER ADMIN CREDENTIAL..."
+                placeholder="ENTER ADMIN PASSWORD..."
                 value={refundPassword}
                 onChange={(e) => setRefundPassword(e.target.value)}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055]"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#E50914] placeholder-slate-500"
               />
             </div>
 
-            <div className="flex items-center gap-2 font-sans text-xs">
-              <label className="flex items-center gap-1 cursor-pointer">
+            <div className="flex items-center gap-2 font-mono text-xs">
+              <label className="flex items-center gap-1.5 cursor-pointer text-slate-300">
                 <input
                   type="checkbox"
                   checked={refundRequestApproval}
                   onChange={(e) => setRefundRequestApproval(e.target.checked)}
-                  className="accent-[#FF0055]"
+                  className="accent-[#E50914]"
                 />
                 Queue dual-approval (Requires Finance Operator signoff)
               </label>
@@ -2470,14 +2537,14 @@ function AdminDashboard() {
                   setRefundPassword("");
                   setRefundRequestApproval(false);
                 }}
-                className="px-4 py-2.5 rounded-xl bg-slate-900 border border-white/5 text-slate-400 hover:text-white transition cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-slate-300 hover:text-white transition cursor-pointer font-bold uppercase font-mono text-xs"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={mutating}
-                className="px-4 py-2.5 rounded-xl bg-[#FF0055] text-white font-bold transition cursor-pointer disabled:opacity-50"
+                className="px-5 py-2.5 rounded-xl bg-[#E50914] hover:bg-[#F40B16] text-white font-bold transition cursor-pointer disabled:opacity-50 uppercase font-mono text-xs shadow-md shadow-[#E50914]/25"
               >
                 {mutating ? "Disbursing..." : "DISBURSE FUNDS"}
               </button>
@@ -2488,110 +2555,247 @@ function AdminDashboard() {
 
       {/* -------------------- COUPON CREATE MODAL -------------------- */}
       {couponFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <form onSubmit={handleCreateCoupon} className="w-full max-w-md rounded-[2.5rem] border border-[#222] bg-[#0d0d12] p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto font-mono text-xs text-slate-300">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2 font-sans uppercase">
-              <Ticket className="w-5 h-5 text-[#FF0055]" />
-              REGISTER PROMO VOUCHER
-            </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <form onSubmit={handleCreateCoupon} className="w-full max-w-lg rounded-3xl border border-slate-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto text-xs text-slate-800 dark:text-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-zinc-800 pb-3">
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2 font-mono uppercase">
+                <Ticket className="w-5 h-5 text-[#E50914]" />
+                REGISTER PROMO VOUCHER
+              </h3>
+              <button
+                type="button"
+                onClick={() => setCouponFormOpen(false)}
+                className="text-slate-500 hover:text-slate-900 dark:hover:text-white p-1 rounded-lg transition"
+              >
+                ✕
+              </button>
+            </div>
 
+            {/* Quick 1-Click Presets */}
+            <div className="space-y-1.5 bg-slate-100 dark:bg-zinc-950 p-3 rounded-2xl border border-slate-200 dark:border-zinc-800">
+              <label className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-bold block">⚡ 1-Click Discount Presets</label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "50% OFF", type: "PERCENT", val: "50", code: "PBURLS50", desc: "50% off all plans" },
+                  { label: "25% OFF", type: "PERCENT", val: "25", code: "SAVE25", desc: "25% discount promotion" },
+                  { label: "10% OFF", type: "PERCENT", val: "10", code: "WELCOME10", desc: "10% off new user discount" },
+                  { label: "👑 100% Free VIP", type: "PERCENT", val: "100", code: "VIPFREE100", desc: "100% Free VIP Subscription Pass" },
+                  { label: "₹500 Flat", type: "FLAT", val: "500", code: "FLAT500", desc: "Flat ₹500 off order" },
+                  { label: "₹100 Flat", type: "FLAT", val: "100", code: "FLAT100", desc: "Flat ₹100 off order" },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setNewCoupon({
+                        code: preset.code,
+                        description: preset.desc,
+                        discount_type: preset.type,
+                        discount_value: preset.val,
+                        applicable_plans: [],
+                        max_redemptions: preset.val === "100" ? "1" : "100",
+                        valid_until: "",
+                      });
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-800 dark:text-slate-200 hover:border-[#E50914] hover:text-[#E50914] font-bold text-[11px] transition shadow-xs cursor-pointer"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Code Input & Randomizer */}
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Coupon Code</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-bold block">Coupon Code</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rnd = "PB_" + Math.random().toString(36).substring(2, 7).toUpperCase();
+                    setNewCoupon(p => ({ ...p, code: rnd }));
+                  }}
+                  className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-bold"
+                >
+                  ⚡ Auto-Generate Code
+                </button>
+              </div>
               <input
                 required
                 type="text"
-                placeholder="e.g. FLAT50"
+                placeholder="e.g. PBURLS50 or SUMMER2026"
                 value={newCoupon.code}
-                onChange={(e) => setNewCoupon(prev => ({ ...prev, code: e.target.value }))}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055] uppercase"
+                onChange={(e) => {
+                  const cleaned = e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+                  setNewCoupon(prev => ({ ...prev, code: cleaned }));
+                }}
+                className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-xl p-3 text-xs text-slate-900 dark:text-white font-mono font-bold focus:outline-none focus:border-[#E50914] uppercase placeholder-slate-400"
               />
+              <p className="text-[10px] text-slate-500">Only letters, numbers, and hyphens (auto-sanitized, no `%` symbol required).</p>
             </div>
 
+            {/* Description */}
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Voucher Description</label>
+              <label className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-bold block">Voucher Description</label>
               <input
                 type="text"
-                placeholder="e.g. 50% discount for starters"
+                placeholder="e.g. Special 50% discount for all subscribers"
                 value={newCoupon.description}
                 onChange={(e) => setNewCoupon(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055]"
+                className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-xl p-3 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-[#E50914] placeholder-slate-400"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* Discount Type & Value */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Discount Type</label>
-                <select
-                  value={newCoupon.discount_type}
-                  onChange={(e) => setNewCoupon(prev => ({ ...prev, discount_type: e.target.value }))}
-                  className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-slate-300 focus:outline-none focus:border-[#FF0055]"
-                >
-                  <option value="PERCENT">Percent (%)</option>
-                  <option value="FLAT">Flat (INR)</option>
-                </select>
+                <label className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-bold block">Discount Calculation</label>
+                <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 dark:bg-zinc-950 rounded-xl border border-slate-300 dark:border-zinc-700">
+                  <button
+                    type="button"
+                    onClick={() => setNewCoupon(prev => ({ ...prev, discount_type: "PERCENT" }))}
+                    className={`py-2 rounded-lg font-bold text-[11px] transition text-center ${newCoupon.discount_type === "PERCENT" ? "bg-[#E50914] text-white shadow-xs" : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"}`}
+                  >
+                    Percent (%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewCoupon(prev => ({ ...prev, discount_type: "FLAT" }))}
+                    className={`py-2 rounded-lg font-bold text-[11px] transition text-center ${newCoupon.discount_type === "FLAT" ? "bg-[#E50914] text-white shadow-xs" : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"}`}
+                  >
+                    Flat (₹ INR)
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">
-                  Value ({newCoupon.discount_type === "PERCENT" ? "%" : "INR"})
+                <label className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-bold block">
+                  Discount Value ({newCoupon.discount_type === "PERCENT" ? "%" : "₹ INR"})
                 </label>
                 <input
                   required
                   type="number"
-                  placeholder={newCoupon.discount_type === "PERCENT" ? "50" : "100"}
+                  min="1"
+                  max={newCoupon.discount_type === "PERCENT" ? "100" : "100000"}
+                  placeholder={newCoupon.discount_type === "PERCENT" ? "50" : "500"}
                   value={newCoupon.discount_value}
                   onChange={(e) => setNewCoupon(prev => ({ ...prev, discount_value: e.target.value }))}
-                  className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055]"
+                  className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-xl p-3 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-[#E50914] placeholder-slate-400 font-bold"
                 />
               </div>
             </div>
 
+            {/* Applicable Plans Chips */}
             <div className="space-y-1.5">
-              <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Applicable Plans (Comma separated keys)</label>
-              <input
-                type="text"
-                placeholder="pro, business"
-                value={newCoupon.applicable_plans}
-                onChange={(e) => setNewCoupon(prev => ({ ...prev, applicable_plans: e.target.value }))}
-                className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055] lowercase"
-              />
+              <label className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-bold block">Eligible Subscription Plans</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: "all", label: "🌐 All Plans" },
+                  { key: "starter", label: "⚡ Starter" },
+                  { key: "pro", label: "🚀 Pro" },
+                  { key: "business", label: "💼 Business" },
+                ].map((plan) => {
+                  const currentPlans = Array.isArray(newCoupon.applicable_plans) ? newCoupon.applicable_plans : [];
+                  const isAll = currentPlans.length === 0;
+                  const isSelected = plan.key === "all" ? isAll : currentPlans.includes(plan.key);
+
+                  return (
+                    <button
+                      key={plan.key}
+                      type="button"
+                      onClick={() => {
+                        if (plan.key === "all") {
+                          setNewCoupon(prev => ({ ...prev, applicable_plans: [] }));
+                        } else {
+                          let nextPlans;
+                          if (isAll) {
+                            nextPlans = [plan.key];
+                          } else if (currentPlans.includes(plan.key)) {
+                            nextPlans = currentPlans.filter(k => k !== plan.key);
+                          } else {
+                            nextPlans = [...currentPlans, plan.key];
+                          }
+                          setNewCoupon(prev => ({ ...prev, applicable_plans: nextPlans }));
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-bold text-xs transition border cursor-pointer ${
+                        isSelected
+                          ? "bg-red-50 dark:bg-red-950/40 border-[#E50914] text-[#E50914]"
+                          : "bg-slate-50 dark:bg-zinc-950 border-slate-300 dark:border-zinc-800 text-slate-700 dark:text-slate-400 hover:border-slate-400"
+                      }`}
+                    >
+                      {plan.label} {isSelected && "✓"}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* Max Redemptions & Expiration */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Max Redemptions</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-bold block">Max Redemptions</label>
+                  <button
+                    type="button"
+                    onClick={() => setNewCoupon(p => ({ ...p, max_redemptions: "" }))}
+                    className="text-[10px] text-slate-500 hover:text-slate-800 dark:hover:text-white"
+                  >
+                    Unlimited (∞)
+                  </button>
+                </div>
                 <input
                   type="number"
-                  placeholder="100"
+                  min="1"
+                  placeholder="Leave empty for unlimited"
                   value={newCoupon.max_redemptions}
                   onChange={(e) => setNewCoupon(prev => ({ ...prev, max_redemptions: e.target.value }))}
-                  className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#FF0055]"
+                  className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-xl p-3 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-[#E50914] placeholder-slate-400 font-bold"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Valid Until</label>
+                <label className="text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-400 font-bold block">Valid Until</label>
                 <input
                   type="date"
                   value={newCoupon.valid_until}
                   onChange={(e) => setNewCoupon(prev => ({ ...prev, valid_until: e.target.value }))}
-                  className="w-full bg-black border border-white/5 rounded-xl p-3 text-xs text-slate-300 focus:outline-none focus:border-[#FF0055]"
+                  className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-700 rounded-xl p-3 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-[#E50914] font-bold"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            {/* Live Discount Summary Box */}
+            {newCoupon.code && newCoupon.discount_value && (
+              <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 space-y-1">
+                <p className="font-extrabold flex items-center gap-1.5">
+                  <span>✓</span> Promo Summary:
+                </p>
+                <p className="text-[11px] leading-relaxed">
+                  Code <strong className="font-mono bg-emerald-100 dark:bg-emerald-900/50 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-200">{newCoupon.code}</strong> grants a{" "}
+                  <strong>{newCoupon.discount_type === "PERCENT" ? `${newCoupon.discount_value}%` : `₹${newCoupon.discount_value}`} discount</strong> on{" "}
+                  <strong>
+                    {(!newCoupon.applicable_plans || newCoupon.applicable_plans.length === 0)
+                      ? "All Subscription Plans"
+                      : newCoupon.applicable_plans.join(", ").toUpperCase()}
+                  </strong>.
+                </p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-200 dark:border-zinc-800">
               <button
                 type="button"
                 onClick={() => setCouponFormOpen(false)}
-                className="px-4 py-2.5 rounded-xl bg-slate-900 border border-white/5 text-slate-400 hover:text-white transition cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition cursor-pointer font-bold uppercase font-mono text-xs"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={mutating}
-                className="px-4 py-2.5 rounded-xl bg-[#FF0055] text-white font-bold transition cursor-pointer disabled:opacity-50"
+                className="px-5 py-2.5 rounded-xl bg-[#E50914] hover:bg-[#F40B16] text-white font-bold transition cursor-pointer disabled:opacity-50 uppercase font-mono text-xs shadow-md shadow-[#E50914]/25"
               >
                 {mutating ? "Saving..." : "REGISTER VOUCHER"}
               </button>

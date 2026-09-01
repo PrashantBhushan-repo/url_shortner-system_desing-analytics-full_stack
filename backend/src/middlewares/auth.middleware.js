@@ -114,6 +114,27 @@ export const authMiddleware = async (req, res, next) => {
 };
 
 /**
+ * Optional Authentication Middleware (populates req.user if token is valid, doesn't block guests)
+ */
+export const optionalAuthMiddleware = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    if (!token) {
+      return next();
+    }
+    const decoded = jwt.verify(token, getJwtSecret());
+    const user = await findUserById(decoded.userId);
+    if (user && user.status === "ACTIVE") {
+      req.user = { id: user.id, email: user.email, role: user.role };
+    }
+    next();
+  } catch {
+    next();
+  }
+};
+
+/**
  * Platform Role Authorization Middleware
  */
 export const authorize = (...roles) => {
@@ -274,12 +295,18 @@ export const adminIpAllowlistMiddleware = (req, res, next) => {
     return next();
   }
 
-  const allowedIps = allowlistRaw.split(",").map(ip => ip.trim());
-  const clientIp = req.ip || req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() || "unknown";
+  const clientIp = req.ip || req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
 
+  // Always allow loopback / localhost connections in local environments
+  const isLoopback = clientIp === "::1" || clientIp === "127.0.0.1" || clientIp === "::ffff:127.0.0.1" || clientIp === "localhost";
+  if (isLoopback) {
+    return next();
+  }
+
+  const allowedIps = allowlistRaw.split(",").map(ip => ip.trim());
   const matches = allowedIps.some(allowed => {
-    if (allowed === clientIp) return true;
-    if (allowed === "127.0.0.1" && (clientIp === "::1" || clientIp === "::ffff:127.0.0.1" || clientIp === "localhost")) return true;
+    if (allowed === "*" || allowed === clientIp) return true;
+    if ((allowed === "127.0.0.1" || allowed === "localhost") && isLoopback) return true;
     return false;
   });
 

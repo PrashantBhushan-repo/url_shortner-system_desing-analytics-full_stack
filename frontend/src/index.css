@@ -1,8 +1,26 @@
 @import "tailwindcss";
 
-/* global transitions */
+/* Typography visibility refinements for modern high-end UI */
 body {
+  background-color: #000000 !important;
+  color: #f8fafc !important;
   transition: background-color 0.2s ease, color 0.2s ease;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Enhance border contrast in Dark Mode */
+html.dark {
+  .border-white\/5 {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+  .border-white\/10 {
+    border-color: rgba(255, 255, 255, 0.16) !important;
+  }
+  .border-white\/20 {
+    border-color: rgba(255, 255, 255, 0.24) !important;
+  }
 }
 
 /* Light mode overrides for clean industrial theme */
@@ -12,56 +30,269 @@ html:not(.dark) {
     color: #0f172a !important;
   }
 
-  /* Target main layout frames */
-  .min-h-screen, .bg-slate-950 {
+  /* Target main layout frames and default page containers */
+  .min-h-screen, 
+  .bg-black, 
+  .bg-zinc-950,
+  .bg-slate-955,
+  .bg-slate-950,
+  .bg-\[\#06080D\] {
     background-color: #f8fafc !important;
     color: #0f172a !important;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 
-  /* Target panels & cards */
+  /* Soften background decorative grid lines in Light Mode to keep text clear and legible */
+  [class*="linear-gradient(to_right,#0f172a"],
+  [class*="linear-gradient(to_right,#27272a"] {
+    background-image: linear-gradient(to right, #cbd5e1 1px, transparent 1px), linear-gradient(to bottom, #cbd5e1 1px, transparent 1px) !important;
+    opacity: 0.3 !important;
+  }
+
+  /* Target panels, cards, and interactive wrappers (White backgrounds) */
   .bg-slate-900, 
   .bg-slate-900\/60, 
   .bg-slate-900\/80, 
   .bg-slate-900\/40,
+  .bg-zinc-900,
+  .bg-zinc-900\/90,
+  .bg-zinc-900\/80,
+  .bg-zinc-900\/60,
+  .bg-zinc-900\/40,
+  [class*="bg-zinc-900"],
+  [class*="bg-slate-900\/"],
+  [class*="bg-zinc-900\/"],
+  .bg-\[\#0A0D14\],
+  .bg-\[\#0A0D14\]\/90,
+  .bg-\[\#070709\],
+  .bg-\[\#07070a\],
+  .bg-\[\#07070a\]\/60,
+  .bg-\[\#07070a\]\/80,
+  .bg-\[\#07070a\]\/40,
+  .bg-\[\#07070a\]\/90,
+  .bg-\[\#0d0d12\] {
+    background-color: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05) !important;
+  }
+
+  /* Target inner gray containers, secondary buttons, and details blocks (Light-gray backgrounds) */
+  .bg-slate-800,
+  .bg-zinc-800,
+  .bg-zinc-850,
+  .bg-zinc-950,
+  .bg-slate-955\/20,
   .bg-slate-950\/20,
   .bg-slate-950\/30,
   .bg-slate-950\/40,
-  .bg-slate-950\/60 {
-    background-color: #ffffff !important;
-    border-color: #e2e8f0 !important;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -2px rgba(0, 0, 0, 0.03) !important;
-  }
-
-  /* Target inner dark containers */
+  .bg-slate-950\/60,
   .bg-slate-950\/70,
   .bg-slate-950\/80,
-  .bg-slate-950 {
+  [class*="bg-slate-800\/"],
+  [class*="bg-zinc-800\/"],
+  [class*="bg-zinc-850\/"],
+  [class*="bg-slate-950\/"],
+  [class*="bg-zinc-950\/"],
+  .bg-slate-900\/70,
+  .bg-black\/40,
+  .bg-black\/60 {
     background-color: #f1f5f9 !important;
-    border-color: #e2e8f0 !important;
+    border-color: #cbd5e1 !important;
   }
 
-  /* Border color overrides */
+  /* Border overrides */
   .border-white\/5, 
   .border-white\/10, 
   .border-white\/20, 
   .border-white\/30, 
-  .border-white\/25 {
-    border-color: #e2e8f0 !important;
+  .border-white\/25,
+  .border-\[\#1b1e25\],
+  .border-zinc-800,
+  .border-zinc-900,
+  .border-zinc-700,
+  .border-\[\#222\],
+  .border-\[\#444\],
+  .divide-white\/5,
+  .divide-white\/10,
+  .divide-zinc-800,
+  [class*="divide-zinc-800"] {
+    border-color: #cbd5e1 !important; /* slate-300 for clearer contrast */
   }
 
-  /* Text primary color overrides */
-  .text-white, 
-  .text-slate-100, 
-  .text-slate-200, 
-  .text-slate-300 {
+  /* Override white-to-slate header gradient in Light Mode to high contrast dark slate-900 to slate-600 */
+  .from-white {
+    --tw-gradient-from: #0f172a !important;
+    --tw-gradient-to: rgba(15, 23, 42, 0) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), #475569, var(--tw-gradient-to) !important;
+  }
+
+  /* Override Pro Card dark gradient background in Light Mode to a soft, clean light pinkish-red gradient */
+  .from-\[\#0e070a\]\/90 {
+    --tw-gradient-from: #ffffff !important;
+    --tw-gradient-to: #ffffff !important;
+    --tw-gradient-stops: var(--tw-gradient-from), #fff5f5, var(--tw-gradient-to) !important;
+  }
+
+  /* Restore correct text colors inside Pro card in Light Mode, excluding badge and button */
+  .from-\[\#0e070a\]\/90 .text-white:not(button):not(.bg-\[\#E50914\]),
+  .from-\[\#0e070a\]\/90 .text-slate-100,
+  .from-\[\#0e070a\]\/90 .text-slate-200,
+  .from-\[\#0e070a\]\/90 .text-slate-300,
+  .from-\[\#0e070a\]\/90 .text-zinc-100,
+  .from-\[\#0e070a\]\/90 .text-zinc-200,
+  .from-\[\#0e070a\]\/90 .text-zinc-300 {
     color: #0f172a !important;
   }
 
-  /* Text secondary color overrides */
+  .from-\[\#0e070a\]\/90 .text-slate-400,
+  .from-\[\#0e070a\]\/90 .text-slate-500,
+  .from-\[\#0e070a\]\/90 .text-zinc-400,
+  .from-\[\#0e070a\]\/90 .text-zinc-500 {
+    color: #334155 !important;
+  }
+
+  /* Restore red colored highlights inside Pro card in Light Mode */
+  .from-\[\#0e070a\]\/90 .text-\[\#E50914\],
+  .from-\[\#0e070a\]\/90 .text-red-600,
+  .from-\[\#0e070a\]\/90 .text-rose-600 {
+    color: #e50914 !important;
+  }
+
+  /* Transform dark-colored alerts / badges to soft light-colored tints with dark high-contrast text in Light Mode */
+  [class*="bg-rose-950"], [class*="bg-red-950"] {
+    background-color: #ffe4e6 !important; /* rose-100 */
+    border-color: #fca5a5 !important; /* red-300 */
+  }
+  [class*="bg-rose-950"] *, [class*="bg-red-950"] * {
+    color: #9f1239 !important; /* rose-800 */
+  }
+  [class*="bg-emerald-950"], [class*="bg-green-950"] {
+    background-color: #d1fae5 !important; /* emerald-100 */
+    border-color: #6ee7b7 !important; /* emerald-300 */
+  }
+  [class*="bg-emerald-950"] *, [class*="bg-green-950"] * {
+    color: #065f46 !important; /* emerald-800 */
+  }
+  [class*="bg-cyan-950"], [class*="bg-sky-950"] {
+    background-color: #cffafe !important; /* cyan-100 */
+    border-color: #67e8f9 !important; /* cyan-300 */
+  }
+  [class*="bg-cyan-950"] *, [class*="bg-sky-950"] * {
+    color: #155e75 !important; /* cyan-800 */
+  }
+  [class*="bg-amber-950"], [class*="bg-yellow-950"] {
+    background-color: #fef3c7 !important; /* amber-100 */
+    border-color: #fcd34d !important; /* amber-300 */
+  }
+  [class*="bg-amber-950"] *, [class*="bg-yellow-950"] * {
+    color: #92400e !important; /* amber-800 */
+  }
+  [class*="bg-blue-950"], [class*="bg-indigo-950"] {
+    background-color: #dbeafe !important; /* blue-100 */
+    border-color: #93c5fd !important; /* blue-300 */
+  }
+  [class*="bg-blue-950"] *, [class*="bg-indigo-950"] * {
+    color: #1e40af !important; /* blue-800 */
+  }
+
+  /* Override the bright cyan text gradient to a high-contrast dark-blue-indigo gradient in light mode */
+  .from-\[\#00F0FF\] {
+    --tw-gradient-from: #1d4ed8 !important; /* blue-700 */
+    --tw-gradient-to: rgba(29, 78, 216, 0) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), #4338ca, var(--tw-gradient-to) !important; /* via indigo-700 */
+  }
+
+  /* General text overrides: set light-colored text elements to dark slate by default */
+  .text-white, 
+  .text-slate-100, 
+  .text-slate-200, 
+  .text-slate-300,
+  .text-zinc-100,
+  .text-zinc-200,
+  .text-zinc-300 {
+    color: #0f172a !important; /* slate-900 */
+  }
+
+  /* Text secondary colors (Descriptions, details) - Boosted to slate-700 (#334155) for AAA contrast */
   .text-slate-400, 
-  .text-slate-500 {
-    color: #475569 !important;
+  .text-slate-500,
+  .text-zinc-400,
+  .text-zinc-500 {
+    color: #334155 !important; /* slate-700 */
+  }
+
+  /* Boost contrast for all colored highlights in Light Mode */
+  .text-rose-200, .text-rose-300, .text-rose-400,
+  .text-red-200, .text-red-300, .text-red-400,
+  .text-\[\#FF0055\] {
+    color: #b91c1c !important; /* red-700 */
+  }
+  .text-emerald-200, .text-emerald-300, .text-emerald-400,
+  .text-green-200, .text-green-300, .text-green-400,
+  .text-\[\#00FF87\] {
+    color: #047857 !important; /* emerald-700 */
+  }
+  .text-cyan-200, .text-cyan-300, .text-cyan-400,
+  .text-\[\#00F0FF\] {
+    color: #0369a1 !important; /* sky-700 */
+  }
+  .text-amber-200, .text-amber-300, .text-amber-400,
+  .text-yellow-200, .text-yellow-300, .text-yellow-400,
+  .text-\[\#FFB800\] {
+    color: #b45309 !important; /* amber-700 */
+  }
+  .text-blue-200, .text-blue-300, .text-blue-400 {
+    color: #1d4ed8 !important; /* blue-700 */
+  }
+  .text-indigo-200, .text-indigo-300, .text-indigo-400 {
+    color: #4338ca !important; /* indigo-700 */
+  }
+
+  /* Restorative overrides: force text back to white inside solid colored backgrounds and gradients */
+  [class^="bg-blue"]:not([class*="\/"]) *, [class*=" bg-blue"]:not([class*="\/"]) *,
+  [class^="bg-blue"]:not([class*="\/"]), [class*=" bg-blue"]:not([class*="\/"]),
+  [class^="bg-indigo"]:not([class*="\/"]) *, [class*=" bg-indigo"]:not([class*="\/"]) *,
+  [class^="bg-indigo"]:not([class*="\/"]), [class*=" bg-indigo"]:not([class*="\/"]),
+  [class^="bg-rose"]:not([class*="\/"]) *, [class*=" bg-rose"]:not([class*="\/"]) *,
+  [class^="bg-rose"]:not([class*="\/"]), [class*=" bg-rose"]:not([class*="\/"]),
+  [class^="bg-emerald"]:not([class*="\/"]) *, [class*=" bg-emerald"]:not([class*="\/"]) *,
+  [class^="bg-emerald"]:not([class*="\/"]), [class*=" bg-emerald"]:not([class*="\/"]),
+  [class^="bg-red"]:not([class*="\/"]) *, [class*=" bg-red"]:not([class*="\/"]) *,
+  [class^="bg-red"]:not([class*="\/"]), [class*=" bg-red"]:not([class*="\/"]),
+  [class^="bg-violet"]:not([class*="\/"]) *, [class*=" bg-violet"]:not([class*="\/"]) *,
+  [class^="bg-violet"]:not([class*="\/"]), [class*=" bg-violet"]:not([class*="\/"]),
+  [class^="bg-green"]:not([class*="\/"]) *, [class*=" bg-green"]:not([class*="\/"]) *,
+  [class^="bg-green"]:not([class*="\/"]), [class*=" bg-green"]:not([class*="\/"]),
+  [class^="bg-cyan"]:not([class*="\/"]) *, [class*=" bg-cyan"]:not([class*="\/"]) *,
+  [class^="bg-cyan"]:not([class*="\/"]), [class*=" bg-cyan"]:not([class*="\/"]),
+  [class^="bg-gradient-"] *, [class*=" bg-gradient-"] *,
+  [class^="bg-gradient-"], [class*=" bg-gradient-"],
+  [class^="from-blue"] *, [class*=" from-blue"] *,
+  [class^="from-blue"], [class*=" from-blue"],
+  [class^="from-indigo"] *, [class*=" from-indigo"] *,
+  [class^="from-indigo"], [class*=" from-indigo"],
+  [class^="from-rose"] *, [class*=" from-rose"] *,
+  [class^="from-rose"], [class*=" from-rose"],
+  [class^="from-emerald"] *, [class*=" from-emerald"] *,
+  [class^="from-emerald"], [class*=" from-emerald"],
+  [class^="from-red"] *, [class*=" from-red"] *,
+  [class^="from-red"], [class*=" from-red"],
+  /* Solid Brand overrides */
+  .bg-\[\#E50914\] *,
+  .bg-\[\#E50914\],
+  .bg-\[\#FF0055\] *,
+  .bg-\[\#FF0055\],
+  .bg-blue-600 *,
+  .bg-blue-600,
+  button.bg-blue-600,
+  button.bg-blue-600 * {
+    color: #ffffff !important;
+  }
+
+  /* Prevent transparent/clipped text gradients from being overwritten with solid white color in Light Mode */
+  .text-transparent,
+  .bg-clip-text {
+    color: transparent !important;
   }
 
   /* Input and dropdown overrides */
@@ -89,14 +320,36 @@ html:not(.dark) {
   .hover\:bg-slate-700:hover {
     background-color: #e2e8f0 !important;
   }
-  .text-slate-300 {
-    color: #334155 !important;
+  .hover\:bg-slate-800:hover {
+    background-color: #e2e8f0 !important;
+  }
+  .hover\:bg-slate-900\/70:hover {
+    background-color: #f1f5f9 !important;
+  }
+  .hover\:bg-slate-900:hover {
+    background-color: #f1f5f9 !important;
+  }
+  [class*="hover\:bg-zinc-"]:hover,
+  [class*="hover\:bg-slate-"]:hover {
+    background-color: #e2e8f0 !important;
+  }
+
+  /* Tab buttons in light mode */
+  button.border-transparent {
+    color: #475569 !important;
+  }
+  button.border-transparent:hover {
+    color: #0f172a !important;
+    background-color: #e2e8f0 !important;
   }
 
   /* Recharts tooltip background */
-  .recharts-tooltip-wrapper .bg-slate-950 {
+  .recharts-tooltip-wrapper .bg-slate-950,
+  .recharts-tooltip-wrapper [style*="background-color: rgb(9, 9, 11)"],
+  .recharts-tooltip-wrapper [style*="background-color: #09090b"] {
     background-color: #ffffff !important;
-    border-color: #e2e8f0 !important;
+    border-color: #cbd5e1 !important;
     color: #0f172a !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
   }
 }

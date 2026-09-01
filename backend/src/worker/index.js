@@ -139,7 +139,7 @@ const dispatchWebhooks = async (userId, eventName, payload) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-SnapURL-Signature": signature,
+          "X-PBUrls-Signature": signature,
         },
         body,
       }).catch((err) => {
