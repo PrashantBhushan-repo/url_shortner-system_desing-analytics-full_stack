@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Key, Plus, AlertCircle, CheckCircle2, Loader2, Copy, Check, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Key, Plus, AlertCircle, CheckCircle2, Loader2, Copy, Check, Eye, EyeOff, Trash2, Bot, Sparkles, ArrowRight } from "lucide-react";
 import API from "../../services/urlApi";
 
 function ApiKeySettings() {
@@ -102,6 +102,34 @@ function ApiKeySettings() {
         <p className="mt-1 text-xs text-slate-400">
           Generate API keys to integrate PBUrls shortening capabilities into your custom software and applications.
         </p>
+      </div>
+
+      {/* AI & Claude MCP Quick Connect Banner */}
+      <div className="mt-6 rounded-2xl border border-blue-500/20 bg-gradient-to-r from-blue-950/40 via-slate-900 to-slate-900 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+            <Bot className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-white">Looking to connect with Claude or Cursor?</span>
+              <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5" /> MCP Native
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Use our 1-Click MCP Setup to manage links and pull live analytics via AI chat.
+            </p>
+          </div>
+        </div>
+
+        <a
+          href="/settings?tab=mcp"
+          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0 shadow cursor-pointer"
+        >
+          <span>Open 1-Click Setup</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </a>
       </div>
 
       <div className="mt-6 space-y-4">

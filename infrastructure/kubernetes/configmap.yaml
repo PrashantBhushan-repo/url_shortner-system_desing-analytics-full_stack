@@ -26,3 +26,6 @@ data:
   JWT_REFRESH_EXPIRES_DAYS: "30"
   ADMIN_IP_ALLOWLIST: "172.29.32.1"
   DISABLE_CHILD_WORKER: "true"
+  OTEL_SERVICE_NAME: "pburls-backend"
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "http://otel-collector:4318/v1/traces"
+  OTEL_SDK_DISABLED: "false"

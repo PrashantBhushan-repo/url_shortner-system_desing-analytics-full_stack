@@ -34,6 +34,7 @@ services:
     restart: always
     ports:
       - "5000:5000"
+      - "9464:9464"
     env_file:
       - ./backend/.env
     environment:
@@ -44,14 +45,54 @@ services:
       DB_USER: postgres
       DB_PASSWORD: prashant1336
       REDIS_URL: redis://redis:6379
+      OTEL_SERVICE_NAME: pburls-backend
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_SDK_DISABLED: "false"
+      METRICS_PORT: 9464
+      DISABLE_CHILD_WORKER: "true"
       NODE_ENV: production
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
+      otel-collector:
+        condition: service_started
     command: >
       sh -c "npx prisma migrate deploy && node prisma/seed.js && node prisma/seedAdmin.js && npm start"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pburls_worker
+    restart: always
+    ports:
+      - "9465:9465"
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql://postgres:prashant1336@db:5432/url_shortener
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: url_shortener
+      DB_USER: postgres
+      DB_PASSWORD: prashant1336
+      REDIS_URL: redis://redis:6379
+      OTEL_SERVICE_NAME: pburls-worker
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_SDK_DISABLED: "false"
+      METRICS_PORT: 9465
+      IS_CHILD_WORKER: "true"
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      otel-collector:
+        condition: service_started
+    command: npm run worker
 
   frontend:
     build:
@@ -65,6 +106,24 @@ services:
       - "3000:80"
     depends_on:
       - backend
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./backend/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
 
 volumes:
   postgres_data:

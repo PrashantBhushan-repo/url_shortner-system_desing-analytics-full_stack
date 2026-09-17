@@ -17,7 +17,7 @@ import {
   changeEmailConfirm,
   deleteAccount,
 } from "../services/authApi";
-import { User, Key, Shield, ShieldCheck, ArrowLeft, LogOut, Palette, CreditCard, Globe, Activity, Users } from "lucide-react";
+import { User, Key, Shield, ShieldCheck, ArrowLeft, LogOut, Palette, CreditCard, Globe, Activity, Users, Bot } from "lucide-react";
 import ProfileSettings from "../components/settings/ProfileSettings.jsx";
 import PasswordSettings from "../components/settings/PasswordSettings.jsx";
 import SecuritySettings from "../components/settings/SecuritySettings.jsx";
@@ -26,6 +26,7 @@ import ThemeSettings from "../components/settings/ThemeSettings.jsx";
 import SubscriptionSettings from "../components/settings/SubscriptionSettings.jsx";
 import DomainSettings from "../components/settings/DomainSettings.jsx";
 import ApiKeySettings from "../components/settings/ApiKeySettings.jsx";
+import McpSettings from "../components/settings/McpSettings.jsx";
 import WebhookSettings from "../components/settings/WebhookSettings.jsx";
 import TeamSettings from "../components/settings/TeamSettings.jsx";
 
@@ -319,6 +320,7 @@ function SettingsPage({ defaultTab }) {
     { id: "subscription", label: "Billing, Plans & Refunds" },
     { id: "domains", label: "Custom Domains" },
     { id: "apiKeys", label: "API Developer Keys" },
+    { id: "mcp", label: "AI & MCP Integration" },
     { id: "webhooks", label: "Outgoing Webhooks" },
     { id: "teams", label: "Team Space" },
     { id: "theme", label: "Appearance" },
@@ -486,6 +488,7 @@ function SettingsPage({ defaultTab }) {
               if (tab.id === "subscription") Icon = CreditCard;
               if (tab.id === "domains") Icon = Globe;
               if (tab.id === "apiKeys") Icon = Key;
+              if (tab.id === "mcp") Icon = Bot;
               if (tab.id === "webhooks") Icon = Activity;
               if (tab.id === "teams") Icon = Users;
               if (tab.id === "theme") Icon = Palette;
@@ -605,6 +608,10 @@ function SettingsPage({ defaultTab }) {
 
             {activeTab === "apiKeys" && (
               <ApiKeySettings />
+            )}
+
+            {activeTab === "mcp" && (
+              <McpSettings />
             )}
 
             {activeTab === "webhooks" && (

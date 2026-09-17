@@ -7,142 +7,237 @@ import { AppError } from "../utils/AppError.js";
 import { invalidateSubscriptionCache } from "../services/planLimitService.js";
 import crypto from "crypto";
 import { hashToken, createAccessToken, getRequestMeta } from "../utils/auth.utils.js";
+import { traceAuth } from "../telemetry/businessSpans.js";
 
-export const register = async (req, res) => {
-  const result = await registerUser(req.validated);
-  res.status(201).json({ success: true, message: result.message, data: result });
+export const register = async (req, res, next) => {
+  try {
+    const result = await traceAuth(
+      { operation: "register", email: req.validated?.email, authMethod: "credentials" },
+      async () => registerUser(req.validated)
+    );
+    res.status(201).json({ success: true, message: result.message, data: result });
+  } catch (err) {
+    next(err);
+  }
 };
 
-
-export const verifyEmail = async (req, res) => {
-  await verifyEmailOtp(req.validated);
-  res.status(200).json({ success: true, message: "Email verified" });
+export const verifyEmail = async (req, res, next) => {
+  try {
+    await traceAuth(
+      { operation: "verify_email", email: req.validated?.email, authMethod: "otp" },
+      async () => verifyEmailOtp(req.validated)
+    );
+    res.status(200).json({ success: true, message: "Email verified" });
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const resendOtpController = async (req, res) => {
-  const result = await resendOtp(req.validated);
-  res.status(200).json({ success: true, message: result.message, data: result });
+export const resendOtpController = async (req, res, next) => {
+  try {
+    const result = await traceAuth(
+      { operation: "resend_otp", email: req.validated?.email, authMethod: "otp" },
+      async () => resendOtp(req.validated)
+    );
+    res.status(200).json({ success: true, message: result.message, data: result });
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const login = async (req, res) => {
-  const result = await loginUser(req.validated, req);
-  res.status(200).json({ success: true, message: "Login verification code sent", data: result });
+export const login = async (req, res, next) => {
+  try {
+    const result = await traceAuth(
+      { operation: "login_init", email: req.validated?.email, authMethod: "credentials" },
+      async () => loginUser(req.validated, req)
+    );
+    res.status(200).json({ success: true, message: "Login verification code sent", data: result });
+  } catch (err) {
+    next(err);
+  }
 };
 
-export const verifyLoginOtp = async (req, res) => {
-  const result = await verifyLoginOtpService(req.validated, req);
+export const verifyLoginOtp = async (req, res, next) => {
+  try {
+    const result = await traceAuth(
+      { operation: "login_verify", email: req.validated?.email, authMethod: "otp" },
+      async (span) => {
+        const resObj = await verifyLoginOtpService(req.validated, req);
+        if (resObj?.user?.id) span.setAttribute("user.id", String(resObj.user.id));
+        return resObj;
+      }
+    );
 
-  if (result.mustChangePassword) {
-    return res.status(200).json({
+
+    if (result.mustChangePassword) {
+      return res.status(200).json({
+        success: true,
+        message: "Forced password rotation required on first login.",
+        data: {
+          mustChangePassword: true,
+          changePasswordToken: result.changePasswordToken,
+        },
+      });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.validated.userId }, select: { role: true } });
+    const cookieMaxAge = user?.role === "ADMIN"
+      ? 8 * 60 * 60 * 1000 // 8 hours for admins
+      : config.jwt.refreshExpiresDays * 24 * 60 * 60 * 1000;
+
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: config.nodeEnv === "production",
+      sameSite: "lax",
+      maxAge: cookieMaxAge,
+    });
+
+    res.status(200).json({
       success: true,
-      message: "Forced password rotation required on first login.",
+      message: "Login successful",
       data: {
-        mustChangePassword: true,
-        changePasswordToken: result.changePasswordToken,
+        accessToken: result.accessToken,
+        tokenType: result.tokenType,
       },
     });
+  } catch (err) {
+    next(err);
   }
-
-  const user = await prisma.user.findUnique({ where: { id: req.validated.userId }, select: { role: true } });
-  const cookieMaxAge = user?.role === "ADMIN"
-    ? 8 * 60 * 60 * 1000 // 8 hours for admins
-    : config.jwt.refreshExpiresDays * 24 * 60 * 60 * 1000;
-
-  res.cookie("refreshToken", result.refreshToken, {
-    httpOnly: true,
-    secure: config.nodeEnv === "production",
-    sameSite: "lax",
-    maxAge: cookieMaxAge,
-  });
-
-  res.status(200).json({
-    success: true,
-    message: "Login successful",
-    data: {
-      accessToken: result.accessToken,
-      tokenType: result.tokenType,
-    },
-  });
 };
 
-export const forgotPassword = async (req, res) => {
-  const result = await forgotPasswordUser(req.validated);
-  res.status(200).json({ success: true, message: "If an account exists, a reset code has been sent", data: result });
-};
-
-export const resetPassword = async (req, res) => {
-  await resetPasswordUser(req.validated);
-  res.status(200).json({ success: true, message: "Password reset successful" });
-};
-
-export const changePassword = async (req, res) => {
-  await changePasswordUser(req.validated, req.user);
-  res.status(200).json({ success: true, message: "Password changed successfully" });
-};
-
-export const getProfile = async (req, res) => {
-  const result = await getProfileUser(req.user);
-  res.status(200).json({ success: true, message: "Profile fetched", data: result });
-};
-
-export const updateProfile = async (req, res) => {
-  const result = await updateProfileUser(req.validated, req.user);
-  res.status(200).json({ success: true, message: "Profile updated", data: result });
-};
-
-export const requestEmailChangeController = async (req, res) => {
-  const result = await requestEmailChange(req.validated, req.user);
-  res.status(200).json({ success: true, message: "Confirmation code sent", data: result });
-};
-
-export const confirmEmailChangeController = async (req, res) => {
-  await confirmEmailChange(req.validated, req.user);
-  res.status(200).json({ success: true, message: "Email updated successfully" });
-};
-
-export const getSecuritySessionsController = async (req, res) => {
-  const { refreshTokens } = await getSecuritySessions(req.user);
-  res.status(200).json({ success: true, message: "Security sessions fetched", data: refreshTokens });
-};
-
-export const refresh = async (req, res) => {
-  const refreshToken = req.cookies?.refreshToken || req.validated?.refreshToken;
-  if (!refreshToken) {
-    throw new AppError("Refresh token required", 401);
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const result = await traceAuth(
+      { operation: "forgot_password", email: req.validated?.email, authMethod: "credentials" },
+      async () => forgotPasswordUser(req.validated)
+    );
+    res.status(200).json({ success: true, message: "If an account exists, a reset code has been sent", data: result });
+  } catch (err) {
+    next(err);
   }
-  
-  const result = await refreshAccessToken({ refreshToken }, req);
-  
-  res.cookie("refreshToken", result.refreshToken, {
-    httpOnly: true,
-    secure: config.nodeEnv === "production",
-    sameSite: "lax",
-    maxAge: config.jwt.refreshExpiresDays * 24 * 60 * 60 * 1000,
-  });
-
-  res.status(200).json({
-    success: true,
-    message: "Token refreshed",
-    data: {
-      accessToken: result.accessToken,
-      tokenType: result.tokenType,
-    },
-  });
 };
 
-export const logout = async (req, res) => {
-  const refreshToken = req.cookies?.refreshToken || req.validated?.refreshToken;
-  if (refreshToken) {
-    await logoutUser({ refreshToken });
+export const resetPassword = async (req, res, next) => {
+  try {
+    await traceAuth(
+      { operation: "reset_password", email: req.validated?.email, authMethod: "otp" },
+      async () => resetPasswordUser(req.validated)
+    );
+    res.status(200).json({ success: true, message: "Password reset successful" });
+  } catch (err) {
+    next(err);
   }
-  
-  res.clearCookie("refreshToken", {
-    httpOnly: true,
-    secure: config.nodeEnv === "production",
-    sameSite: "lax",
-  });
-  
-  res.status(200).json({ success: true, message: "Logged out" });
+};
+
+export const changePassword = async (req, res, next) => {
+  try {
+    await traceAuth(
+      { operation: "change_password", userId: req.user?.id, authMethod: "credentials" },
+      async () => changePasswordUser(req.validated, req.user)
+    );
+    res.status(200).json({ success: true, message: "Password changed successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getProfile = async (req, res, next) => {
+  try {
+    const result = await getProfileUser(req.user);
+    res.status(200).json({ success: true, message: "Profile fetched", data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateProfile = async (req, res, next) => {
+  try {
+    const result = await updateProfileUser(req.validated, req.user);
+    res.status(200).json({ success: true, message: "Profile updated", data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const requestEmailChangeController = async (req, res, next) => {
+  try {
+    const result = await requestEmailChange(req.validated, req.user);
+    res.status(200).json({ success: true, message: "Confirmation code sent", data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const confirmEmailChangeController = async (req, res, next) => {
+  try {
+    await confirmEmailChange(req.validated, req.user);
+    res.status(200).json({ success: true, message: "Email updated successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getSecuritySessionsController = async (req, res, next) => {
+  try {
+    const { refreshTokens } = await getSecuritySessions(req.user);
+    res.status(200).json({ success: true, message: "Security sessions fetched", data: refreshTokens });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const refresh = async (req, res, next) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken || req.validated?.refreshToken;
+    if (!refreshToken) {
+      throw new AppError("Refresh token required", 401);
+    }
+    
+    const result = await traceAuth(
+      { operation: "refresh_token", userId: req.user?.id, authMethod: "refresh_token" },
+      async () => refreshAccessToken({ refreshToken }, req)
+    );
+    
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: config.nodeEnv === "production",
+      sameSite: "lax",
+      maxAge: config.jwt.refreshExpiresDays * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Token refreshed",
+      data: {
+        accessToken: result.accessToken,
+        tokenType: result.tokenType,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const logout = async (req, res, next) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken || req.validated?.refreshToken;
+    if (refreshToken) {
+      await traceAuth(
+        { operation: "logout", userId: req.user?.id, authMethod: "refresh_token" },
+        async () => logoutUser({ refreshToken })
+      );
+    }
+    
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: config.nodeEnv === "production",
+      sameSite: "lax",
+    });
+    
+    res.status(200).json({ success: true, message: "Logged out" });
+  } catch (err) {
+    next(err);
+  }
 };
 
 export const setupTwoFactorController = async (req, res) => {

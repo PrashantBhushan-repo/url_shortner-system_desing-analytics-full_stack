@@ -198,7 +198,10 @@ function DashboardPage() {
               <Settings className="w-4 h-4 text-slate-400" /> Settings
             </button>
             <button 
-              onClick={logout} 
+              onClick={async () => {
+                await logout();
+                navigate("/");
+              }} 
               className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm font-medium bg-slate-900 hover:bg-slate-800 hover:text-rose-400 transition duration-200 cursor-pointer"
             >
               <LogOut className="w-4 h-4 text-slate-400" /> Logout

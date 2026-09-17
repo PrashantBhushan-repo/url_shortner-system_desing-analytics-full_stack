@@ -5,6 +5,7 @@ import { config } from "../config/config.js";
 import { invalidateSubscriptionCache } from "../services/planLimitService.js";
 import crypto from "crypto";
 import Razorpay from "razorpay";
+import { tracePayment } from "../telemetry/businessSpans.js";
 
 // Initialize Razorpay client safely
 const getRazorpayInstance = () => {
@@ -80,183 +81,202 @@ export const createOrder = async (req, res, next) => {
     const { planKey, billingCycle, couponCode } = req.body;
     const userId = req.user.id;
 
-    if (!planKey || !billingCycle) {
-      throw new AppError("planKey and billingCycle are required.", 400);
-    }
+    const result = await tracePayment(
+      { operation: "create_order", provider: "razorpay" },
+      async (span) => {
+        span.setAttribute("user.id", String(userId));
+        span.setAttribute("subscription.plan_key", String(planKey || ""));
+        span.setAttribute("subscription.billing_cycle", String(billingCycle || ""));
 
-    const plan = await prisma.plan.findUnique({
-      where: { key: planKey },
-    });
+        if (!planKey || !billingCycle) {
+          throw new AppError("planKey and billingCycle are required.", 400);
+        }
 
-    if (!plan) {
-      throw new AppError("Plan not found.", 404);
-    }
-
-    let amount = 0;
-    if (billingCycle === "MONTHLY") {
-      amount = plan.price_monthly;
-    } else if (billingCycle === "QUARTERLY") {
-      amount = plan.price_quarterly || (plan.price_monthly * 3);
-    } else if (billingCycle === "YEARLY") {
-      amount = plan.price_yearly || (plan.price_monthly * 12);
-    } else {
-      throw new AppError("Invalid billing cycle.", 400);
-    }
-
-    let coupon = null;
-    if (couponCode) {
-      coupon = await validateCouponHelper(couponCode, planKey, userId);
-      amount = calculateDiscount(coupon, amount);
-    }
-
-    // Zero-charge bypass (e.g. 100% discount coupons)
-    if (amount <= 0) {
-      const orderId = `free_order_${crypto.randomBytes(12).toString("hex")}`;
-      
-      const payment = await prisma.payment.create({
-        data: {
-          user_id: userId,
-          plan_id: plan.id,
-          billing_cycle: billingCycle,
-          amount: 0,
-          status: "CAPTURED",
-          gateway: "coupon_bypass",
-          gateway_order_id: orderId,
-        },
-      });
-
-      await prisma.$transaction(async (tx) => {
-        // Cancel active subscriptions
-        await tx.subscription.updateMany({
-          where: { user_id: userId, status: "ACTIVE" },
-          data: { status: "CANCELED", canceled_at: new Date() },
+        const plan = await prisma.plan.findUnique({
+          where: { key: planKey },
         });
 
-        const periodEnd = new Date();
-        if (billingCycle === "MONTHLY") periodEnd.setMonth(periodEnd.getMonth() + 1);
-        if (billingCycle === "QUARTERLY") periodEnd.setMonth(periodEnd.getMonth() + 3);
-        if (billingCycle === "YEARLY") periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+        if (!plan) {
+          throw new AppError("Plan not found.", 404);
+        }
 
-        const sub = await tx.subscription.create({
+        let amount = 0;
+        if (billingCycle === "MONTHLY") {
+          amount = plan.price_monthly;
+        } else if (billingCycle === "QUARTERLY") {
+          amount = plan.price_quarterly || (plan.price_monthly * 3);
+        } else if (billingCycle === "YEARLY") {
+          amount = plan.price_yearly || (plan.price_monthly * 12);
+        } else {
+          throw new AppError("Invalid billing cycle.", 400);
+        }
+
+        let coupon = null;
+        if (couponCode) {
+          coupon = await validateCouponHelper(couponCode, planKey, userId);
+          amount = calculateDiscount(coupon, amount);
+        }
+
+        // Zero-charge bypass (e.g. 100% discount coupons)
+        if (amount <= 0) {
+          const orderId = `free_order_${crypto.randomBytes(12).toString("hex")}`;
+          
+          const payment = await prisma.payment.create({
+            data: {
+              user_id: userId,
+              plan_id: plan.id,
+              billing_cycle: billingCycle,
+              amount: 0,
+              status: "CAPTURED",
+              gateway: "coupon_bypass",
+              gateway_order_id: orderId,
+            },
+          });
+
+          await prisma.$transaction(async (tx) => {
+            // Cancel active subscriptions
+            await tx.subscription.updateMany({
+              where: { user_id: userId, status: "ACTIVE" },
+              data: { status: "CANCELED", canceled_at: new Date() },
+            });
+
+            const periodEnd = new Date();
+            if (billingCycle === "MONTHLY") periodEnd.setMonth(periodEnd.getMonth() + 1);
+            if (billingCycle === "QUARTERLY") periodEnd.setMonth(periodEnd.getMonth() + 3);
+            if (billingCycle === "YEARLY") periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+
+            const sub = await tx.subscription.create({
+              data: {
+                user_id: userId,
+                plan_id: plan.id,
+                billing_cycle: billingCycle,
+                status: "ACTIVE",
+                started_at: new Date(),
+                current_period_end: periodEnd,
+                external_subscription_id: orderId,
+              },
+            });
+
+            await tx.payment.update({
+              where: { id: payment.id },
+              data: { subscription_id: sub.id },
+            });
+
+            if (coupon) {
+              await tx.couponRedemption.create({
+                data: {
+                  coupon_id: coupon.id,
+                  user_id: userId,
+                  payment_id: payment.id,
+                },
+              });
+
+              await tx.coupon.update({
+                where: { id: coupon.id },
+                data: { times_redeemed: { increment: 1 } },
+              });
+            }
+          });
+
+          await invalidateSubscriptionCache(userId);
+
+          return {
+            zeroCharge: true,
+            message: "Subscription activated successfully via 100% discount coupon.",
+          };
+        }
+
+        // Check if Razorpay keys are configured
+        const { keyId, keySecret } = config.razorpay;
+        const isMockMode = !keyId || !keySecret;
+
+        if (isMockMode) {
+          const mockOrderId = `mock_order_${crypto.randomBytes(12).toString("hex")}`;
+          
+          const payment = await prisma.payment.create({
+            data: {
+              user_id: userId,
+              plan_id: plan.id,
+              billing_cycle: billingCycle,
+              amount,
+              currency: plan.currency || "INR",
+              status: "CREATED",
+              gateway: "mock_payment",
+              gateway_order_id: mockOrderId,
+              metadata: {
+                couponCode: couponCode || null,
+                receipt: `receipt_mock_${userId.slice(0, 8)}_${Date.now()}`,
+              },
+            },
+          });
+
+          return {
+            data: {
+              orderId: mockOrderId,
+              amount,
+              currency: plan.currency || "INR",
+              keyId: "rzp_mock_key_id",
+              paymentId: payment.id,
+              isMock: true,
+            },
+          };
+        }
+
+        const razorpay = getRazorpayInstance();
+        const orderReceipt = `receipt_${userId.slice(0, 8)}_${Date.now()}`;
+        
+        const razorpayOrder = await razorpay.orders.create({
+          amount,
+          currency: plan.currency || "INR",
+          receipt: orderReceipt,
+          notes: {
+            userId,
+            planId: plan.id,
+            planKey,
+            billingCycle,
+            couponId: coupon?.id || "",
+          },
+        });
+
+        const payment = await prisma.payment.create({
           data: {
             user_id: userId,
             plan_id: plan.id,
             billing_cycle: billingCycle,
-            status: "ACTIVE",
-            started_at: new Date(),
-            current_period_end: periodEnd,
-            external_subscription_id: orderId,
+            amount,
+            currency: plan.currency || "INR",
+            status: "CREATED",
+            gateway_order_id: razorpayOrder.id,
+            metadata: {
+              couponCode: couponCode || null,
+              receipt: orderReceipt,
+            },
           },
         });
 
-        await tx.payment.update({
-          where: { id: payment.id },
-          data: { subscription_id: sub.id },
-        });
+        return {
+          data: {
+            orderId: razorpayOrder.id,
+            amount: razorpayOrder.amount,
+            currency: razorpayOrder.currency,
+            keyId: config.razorpay.keyId,
+            paymentId: payment.id,
+          },
+        };
+      }
+    );
 
-        if (coupon) {
-          await tx.couponRedemption.create({
-            data: {
-              coupon_id: coupon.id,
-              user_id: userId,
-              payment_id: payment.id,
-            },
-          });
-
-          await tx.coupon.update({
-            where: { id: coupon.id },
-            data: { times_redeemed: { increment: 1 } },
-          });
-        }
-      });
-
-      await invalidateSubscriptionCache(userId);
-
+    if (result.zeroCharge) {
       return res.status(201).json({
         success: true,
         zeroCharge: true,
-        message: "Subscription activated successfully via 100% discount coupon.",
+        message: result.message,
       });
     }
 
-    // Check if Razorpay keys are configured
-    const { keyId, keySecret } = config.razorpay;
-    const isMockMode = !keyId || !keySecret;
-
-    if (isMockMode) {
-      const mockOrderId = `mock_order_${crypto.randomBytes(12).toString("hex")}`;
-      
-      const payment = await prisma.payment.create({
-        data: {
-          user_id: userId,
-          plan_id: plan.id,
-          billing_cycle: billingCycle,
-          amount,
-          currency: plan.currency || "INR",
-          status: "CREATED",
-          gateway: "mock_payment",
-          gateway_order_id: mockOrderId,
-          metadata: {
-            couponCode: couponCode || null,
-            receipt: `receipt_mock_${userId.slice(0, 8)}_${Date.now()}`,
-          },
-        },
-      });
-
-      return res.status(201).json({
-        success: true,
-        data: {
-          orderId: mockOrderId,
-          amount,
-          currency: plan.currency || "INR",
-          keyId: "rzp_mock_key_id",
-          paymentId: payment.id,
-          isMock: true,
-        },
-      });
-    }
-
-    const razorpay = getRazorpayInstance();
-    const orderReceipt = `receipt_${userId.slice(0, 8)}_${Date.now()}`;
-    
-    const razorpayOrder = await razorpay.orders.create({
-      amount,
-      currency: plan.currency || "INR",
-      receipt: orderReceipt,
-      notes: {
-        userId,
-        planId: plan.id,
-        planKey,
-        billingCycle,
-        couponId: coupon?.id || "",
-      },
-    });
-
-    const payment = await prisma.payment.create({
-      data: {
-        user_id: userId,
-        plan_id: plan.id,
-        billing_cycle: billingCycle,
-        amount,
-        currency: plan.currency || "INR",
-        status: "CREATED",
-        gateway_order_id: razorpayOrder.id,
-        metadata: {
-          couponCode: couponCode || null,
-          receipt: orderReceipt,
-        },
-      },
-    });
-
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      data: {
-        orderId: razorpayOrder.id,
-        amount: razorpayOrder.amount,
-        currency: razorpayOrder.currency,
-        keyId: config.razorpay.keyId,
-        paymentId: payment.id,
-      },
+      data: result.data,
     });
   } catch (err) {
     next(err);
@@ -603,7 +623,7 @@ export const validateCoupon = async (req, res, next) => {
 /**
  * Webhook Processor Business Logic (Shared with Reprocess Event)
  */
-export const processWebhookPayload = async (eventId, eventType, payload) => {
+const processWebhookPayloadInternal = async (eventId, eventType, payload) => {
   let webhookEvent = await prisma.webhookEvent.findUnique({
     where: { event_id: eventId },
   });
@@ -797,6 +817,17 @@ export const processWebhookPayload = async (eventId, eventType, payload) => {
     });
     throw err;
   }
+};
+
+export const processWebhookPayload = async (eventId, eventType, payload) => {
+  return tracePayment(
+    { operation: "process_webhook", provider: "razorpay", status: eventType },
+    async (span) => {
+      span.setAttribute("payment.webhook_event_id", String(eventId));
+      span.setAttribute("payment.webhook_event_type", String(eventType));
+      return processWebhookPayloadInternal(eventId, eventType, payload);
+    }
+  );
 };
 
 /**

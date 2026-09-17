@@ -1,5 +1,15 @@
+import { trace, SpanStatusCode } from "@opentelemetry/api";
+
 export const errorHandler = (err, req, res, next) => {
   const statusCode = err.statusCode || 500;
+
+  const activeSpan = trace.getActiveSpan();
+  if (activeSpan) {
+    activeSpan.recordException(err);
+    if (statusCode >= 500) {
+      activeSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+    }
+  }
 
   console.error(`[Error ${statusCode}]`, err.message);
   if (statusCode >= 500) {

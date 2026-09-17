@@ -12,7 +12,7 @@ datasource db {
 
 model Url {
   id                     BigInt            @id @default(autoincrement())
-  short_code             String            @unique @db.VarChar(10)
+  short_code             String            @unique @db.VarChar(64)
   long_url               String
   user_id                String?
   custom_alias           Boolean?          @default(false)

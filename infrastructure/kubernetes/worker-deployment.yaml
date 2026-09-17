@@ -25,6 +25,9 @@ spec:
                 name: pburls-config
             - secretRef:
                 name: pburls-secrets
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "pburls-worker"
           resources:
             limits:
               cpu: "200m"

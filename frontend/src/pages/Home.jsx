@@ -57,7 +57,13 @@ function Home() {
     try {
       const res = await API.get("/urls/public-stats");
       if (res.data?.success && res.data?.data) {
-        setStats(res.data.data);
+        setStats((prev) => ({
+          ...prev,
+          ...res.data.data,
+          devices: Array.isArray(res.data.data.devices) ? res.data.data.devices : prev.devices || [],
+          topCountries: Array.isArray(res.data.data.topCountries) ? res.data.data.topCountries : prev.topCountries || [],
+          topReferrers: Array.isArray(res.data.data.topReferrers) ? res.data.data.topReferrers : prev.topReferrers || [],
+        }));
       }
     } catch (err) {
       console.error("Failed to fetch public stats:", err);
@@ -597,8 +603,8 @@ function Home() {
                           </div>
                           
                           <div className="space-y-3">
-                            {stats.devices.length > 0 ? (
-                              stats.devices.slice(0, 3).map((dev) => {
+                            {(stats.devices || []).length > 0 ? (
+                              (stats.devices || []).slice(0, 3).map((dev) => {
                                 const pct = stats.totalClicks > 0 ? Math.round((dev.count / stats.totalClicks) * 100) : 0;
                                 return (
                                   <div key={dev.name} className="space-y-1">
@@ -646,8 +652,8 @@ function Home() {
                               Top Locations
                             </div>
                             <div className="space-y-2 text-xs font-mono">
-                              {stats.topCountries.length > 0 ? (
-                                stats.topCountries.slice(0, 3).map((country) => (
+                              {(stats.topCountries || []).length > 0 ? (
+                                (stats.topCountries || []).slice(0, 3).map((country) => (
                                   <div key={country.name} className="flex justify-between items-center text-slate-300">
                                     <span className="truncate">{country.name}</span>
                                     <span className="font-bold text-emerald-400">{country.count}</span>
@@ -665,8 +671,8 @@ function Home() {
                               Top Referrers
                             </div>
                             <div className="space-y-2 text-xs font-mono">
-                              {stats.topReferrers.length > 0 ? (
-                                stats.topReferrers.slice(0, 3).map((ref) => (
+                              {(stats.topReferrers || []).length > 0 ? (
+                                (stats.topReferrers || []).slice(0, 3).map((ref) => (
                                   <div key={ref.name} className="flex justify-between items-center text-slate-300">
                                     <span className="truncate">{ref.name}</span>
                                     <span className="font-bold text-indigo-400">{ref.count}</span>

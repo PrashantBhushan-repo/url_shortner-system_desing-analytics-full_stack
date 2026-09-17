@@ -4,10 +4,11 @@ import prisma from "../config/prismaClient.js";
 import { getRedisClient } from "../config/redisClient.js";
 import { UAParser } from "ua-parser-js";
 import { randomUUID } from "crypto";
-import { resolveGeoLocation } from "../src/utils/location.js";
+import { resolveGeoLocation } from "../utils/location.js";
 import { parseReferrer } from "../utils/referrerParser.js";
 import { hasFeature } from "../services/planLimitService.js";
 import crypto from "crypto";
+import { wrapWorkerJob } from "../telemetry/bullmqTelemetry.js";
 
 const connection = {
   host: new URL(config.redisUrl).hostname,
@@ -181,7 +182,7 @@ const processHealthChecks = async () => {
   }
 };
 
-const worker = new Worker("analytics", async (job) => {
+const worker = new Worker("analytics", wrapWorkerJob("analytics", async (job) => {
   if (job.name === "health-check") {
     await processHealthChecks();
     return;
@@ -274,7 +275,7 @@ const worker = new Worker("analytics", async (job) => {
       });
     }
   }).catch(err => console.error("Webhook dispatch fetch failure:", err.message));
-}, {
+}), {
   connection,
   autorun: true,
 });

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import ForgotPasswordModal from "../components/auth/ForgotPasswordModal";
+import PburlsFeatures from "../components/auth/PburlsFeatures";
 import { loginUser, registerUser, resendOtp, verifyEmail, verifyLoginOtp, forceChangePassword, evaluatorBypass } from "../services/authApi";
 import { useAuth } from "../context/AuthContext";
 import { Lock, Shield, ArrowLeft } from "lucide-react";
@@ -17,15 +18,19 @@ function AuthPage() {
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState(() => {
     const m = searchParams.get("mode");
+    if (m === "features") return "features";
     return m === "register" || m === "signup" ? "register" : "login";
   });
 
   // Sync mode if query params change
   useEffect(() => {
     const m = searchParams.get("mode");
-    if (m === "register" || m === "signup") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (m === "features") {
+      setMode("features");
+      setPuzzleActive(false);
+    } else if (m === "register" || m === "signup") {
       setMode("register");
+      setPuzzleActive(false);
     } else if (m === "login") {
       setMode("login");
     }
@@ -49,6 +54,18 @@ function AuthPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [shake, setShake] = useState(false);
   const [targetCategory, setTargetCategory] = useState({ key: "BHAGAT_SINGH", label: "Bhagat Singh" });
+
+  useEffect(() => {
+    if (puzzleActive) {
+      document.title = "Fast Pass Verification | pburls.online";
+    } else if (mode === "features") {
+      document.title = "pbUrls Features & Architecture | pburls.online";
+    } else if (mode === "register") {
+      document.title = "Sign Up | pburls.online";
+    } else {
+      document.title = "Sign In | pburls.online";
+    }
+  }, [mode, puzzleActive]);
 
   const CATEGORIES = [
     { key: "BHAGAT_SINGH", label: "Bhagat Singh" },
@@ -414,6 +431,8 @@ function AuthPage() {
         className={`w-full transition-all duration-300 rounded-2xl border bg-zinc-900/90 p-8 shadow-lg backdrop-blur-md ${
           puzzleActive
             ? "max-w-2xl border-yellow-500/30 shadow-[0_0_50px_-12px_rgba(234,179,8,0.15)]"
+            : mode === "features"
+            ? "max-w-6xl border-blue-500/30 shadow-[0_0_50px_-12px_rgba(59,130,246,0.25)] p-6 md:p-8"
             : isForceChangeMode 
             ? "max-w-md border-red-500/20 shadow-red-500/10" 
             : "max-w-md border-zinc-800 shadow-[0_0_50px_-12px_rgba(59,130,246,0.25)]"
@@ -440,7 +459,7 @@ function AuthPage() {
 
         {/* Mode Switcher */}
         {!isForceChangeMode && (
-          <div className="flex border-b border-zinc-800 mb-6 font-mono text-xs tracking-wider uppercase">
+          <div className="flex border-b border-zinc-800 mb-6 font-mono text-xs tracking-wider uppercase pt-4 relative">
             <button
               type="button"
               onClick={() => { setPuzzleActive(false); switchMode("login"); }}
@@ -473,8 +492,22 @@ function AuthPage() {
               }`}
             >
               <span>Puzzle Bypass</span>
-              <span className="absolute -top-2 right-1 bg-[#E50914] text-white text-[8px] px-2 py-0.5 rounded font-black tracking-wider animate-bounce select-none">
+              <span className="absolute -top-3.5 right-1 bg-[#E50914] text-white text-[9px] px-1.5 py-0.5 rounded font-black tracking-wider animate-bounce select-none shadow">
                 FAST PASS
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPuzzleActive(false); switchMode("features"); }}
+              className={`flex-1 pb-3 text-center transition-all border-b-2 font-bold cursor-pointer relative uppercase tracking-wider ${
+                !puzzleActive && mode === "features" 
+                  ? "border-blue-500 text-blue-400 font-black text-[11px]" 
+                  : "border-transparent text-blue-400/80 hover:text-white hover:border-blue-500/30 text-[10px]"
+              }`}
+            >
+              <span>pbUrls Features</span>
+              <span className="absolute -top-3.5 right-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[9px] px-1.5 py-0.5 rounded font-black tracking-wider select-none shadow">
+                QUICK REVIEW
               </span>
             </button>
           </div>
@@ -559,6 +592,18 @@ function AuthPage() {
               </div>
             </form>
           </>
+        ) : mode === "features" ? (
+          <PburlsFeatures 
+            onSelectMode={(target) => {
+              if (target === "puzzle") {
+                setPuzzleActive(true);
+                switchMode("login");
+              } else {
+                setPuzzleActive(false);
+                switchMode(target);
+              }
+            }}
+          />
         ) : (
           <>
             <h1 className="text-2xl font-semibold text-white flex items-center gap-2">

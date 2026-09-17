@@ -1,15 +1,18 @@
+import "./otel.js";
 import { config } from "./src/config/config.js";
 import { initRedis, closeRedisConnection } from "./src/config/redisClient.js";
 import { initSocket } from "./src/config/socket.js";
 import { fork } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
+import { startMetricsServer } from "./src/telemetry/metrics.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const workerPath = path.join(__dirname, "worker", "index.js");
 
 const startServer = async () => {
+  const metricsServer = startMetricsServer(Number(process.env.METRICS_PORT || 9464));
   await initRedis();
 
   // Fork worker process so it runs in a separate process automatically
@@ -44,6 +47,7 @@ const startServer = async () => {
       console.error("Server error:", err);
     }
     if (workerProcess) workerProcess.kill("SIGTERM");
+    metricsServer.close();
     process.exit(1);
   });
 

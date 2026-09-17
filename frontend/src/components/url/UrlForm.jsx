@@ -62,7 +62,11 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
 
   useEffect(() => {
     const loadGatingLimits = async () => {
-      if (!token) return;
+      if (!token) {
+        setLimits(null);
+        setUserDomains([]);
+        return;
+      }
       try {
         const subRes = await API.get("/subscription");
         const userLimits = subRes.data?.data?.limits || null;

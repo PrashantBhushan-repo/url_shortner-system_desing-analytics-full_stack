@@ -6,10 +6,19 @@ import jwt from "jsonwebtoken";
 
 let io = null;
 
+const redisOptions = {
+  maxRetriesPerRequest: null,
+  lazyConnect: true,
+  enableOfflineQueue: true,
+  retryStrategy: (times) => Math.min(times * 50, 2000),
+};
+
 export const initSocket = (httpServer) => {
   // Create redis clients for socket.io adapter
-  const pubClient = new Redis(config.redisUrl);
+  const pubClient = new Redis(config.redisUrl, redisOptions);
+  pubClient.on("error", () => {});
   const subClient = pubClient.duplicate();
+  subClient.on("error", () => {});
 
   io = new Server(httpServer, {
     cors: {
@@ -19,7 +28,11 @@ export const initSocket = (httpServer) => {
     },
   });
 
-  io.adapter(createAdapter(pubClient, subClient));
+  try {
+    io.adapter(createAdapter(pubClient, subClient));
+  } catch (adapterErr) {
+    console.warn("Socket.io Redis adapter fallback to in-memory:", adapterErr.message);
+  }
 
   // Middleware to authenticate socket connections using JWT
   io.use((socket, next) => {
@@ -57,10 +70,11 @@ export const initSocket = (httpServer) => {
   });
 
   // Subscribe directly to redis worker pub/sub channel
-  const redisSub = new Redis(config.redisUrl);
+  const redisSub = new Redis(config.redisUrl, redisOptions);
+  redisSub.on("error", () => {});
   redisSub.psubscribe("ws:url:*", (err) => {
     if (err) {
-      console.error("Failed to subscribe to Redis worker channel:", err.message);
+      console.warn("Redis worker pubsub channel offline:", err.message);
     }
   });
 

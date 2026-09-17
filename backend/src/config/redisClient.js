@@ -1,5 +1,6 @@
 import Redis from "ioredis";
 import { config } from "./config.js";
+import { redisErrorsTotal } from "../telemetry/metrics.js";
 
 let redisClient = null;
 
@@ -7,7 +8,7 @@ export const getRedisClient = () => {
   if (!redisClient) {
     try {
       redisClient = new Redis(config.redisUrl, {
-        maxRetriesPerRequest: 3,
+        maxRetriesPerRequest: null,
         enableReadyCheck: true,
         enableOfflineQueue: true,
         lazyConnect: true,
@@ -15,7 +16,8 @@ export const getRedisClient = () => {
       });
 
       redisClient.on("error", (err) => {
-        console.error("Redis connection error:", err.message);
+        redisErrorsTotal.inc({ service: "redis" });
+        // Log quietly once or suppress repeating unhandled events when offline
       });
 
       redisClient.on("connect", () => {
@@ -31,7 +33,7 @@ export const getRedisClient = () => {
 };
 
 const waitForRedisReady = (client) =>
-  new Promise((resolve, reject) => {
+  new Promise((resolve) => {
     if (client.status === "ready") {
       resolve(true);
       return;
@@ -41,9 +43,9 @@ const waitForRedisReady = (client) =>
       cleanup();
       resolve(true);
     };
-    const onError = (err) => {
+    const onError = () => {
       cleanup();
-      reject(err);
+      resolve(false);
     };
     const cleanup = () => {
       client.off("ready", onReady);

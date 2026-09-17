@@ -11,6 +11,7 @@ import {
   getPlatformGlobalStats,
 } from "../services/analytics.service.js";
 import { getAnalyticsRetentionCutoff } from "../services/planLimitService.js";
+import { traceAnalytics } from "../telemetry/businessSpans.js";
 
 // Helper to verify that the URL belongs to the authenticated user (or user is ADMIN)
 const checkOwnership = async (urlId, user) => {
@@ -37,10 +38,11 @@ export const fetchOverview = async (req, res, next) => {
   try {
     const { urlId } = req.params;
     const { range } = req.query; // '24h', '7d', '30d'
-    await checkOwnership(urlId, req.user);
-
-    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
-    const data = await getUrlOverview(urlId, range, cutoff);
+    const data = await traceAnalytics({ operation: "overview", urlId }, async () => {
+      await checkOwnership(urlId, req.user);
+      const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+      return getUrlOverview(urlId, range, cutoff);
+    });
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -51,10 +53,11 @@ export const fetchTimeseries = async (req, res, next) => {
   try {
     const { urlId } = req.params;
     const { range } = req.query;
-    await checkOwnership(urlId, req.user);
-
-    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
-    const data = await getUrlTimeseries(urlId, range, cutoff);
+    const data = await traceAnalytics({ operation: "timeseries", urlId }, async () => {
+      await checkOwnership(urlId, req.user);
+      const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+      return getUrlTimeseries(urlId, range, cutoff);
+    });
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -65,10 +68,11 @@ export const fetchGeo = async (req, res, next) => {
   try {
     const { urlId } = req.params;
     const { range } = req.query;
-    await checkOwnership(urlId, req.user);
-
-    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
-    const data = await getUrlGeo(urlId, range, cutoff);
+    const data = await traceAnalytics({ operation: "geo", urlId }, async () => {
+      await checkOwnership(urlId, req.user);
+      const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+      return getUrlGeo(urlId, range, cutoff);
+    });
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -79,10 +83,11 @@ export const fetchDevices = async (req, res, next) => {
   try {
     const { urlId } = req.params;
     const { range } = req.query;
-    await checkOwnership(urlId, req.user);
-
-    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
-    const data = await getUrlDevices(urlId, range, cutoff);
+    const data = await traceAnalytics({ operation: "devices", urlId }, async () => {
+      await checkOwnership(urlId, req.user);
+      const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+      return getUrlDevices(urlId, range, cutoff);
+    });
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -93,10 +98,11 @@ export const fetchReferrers = async (req, res, next) => {
   try {
     const { urlId } = req.params;
     const { range } = req.query;
-    await checkOwnership(urlId, req.user);
-
-    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
-    const data = await getUrlReferrers(urlId, range, cutoff);
+    const data = await traceAnalytics({ operation: "referrers", urlId }, async () => {
+      await checkOwnership(urlId, req.user);
+      const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+      return getUrlReferrers(urlId, range, cutoff);
+    });
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -106,7 +112,7 @@ export const fetchReferrers = async (req, res, next) => {
 export const fetchAccountTopLinks = async (req, res, next) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : 5;
-    const data = await getUserTopLinks(req.user.id, limit);
+    const data = await traceAnalytics({ operation: "top_links" }, async () => getUserTopLinks(req.user.id, limit));
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);
@@ -117,10 +123,11 @@ export const exportClicks = async (req, res, next) => {
   try {
     const { urlId } = req.params;
     const { range } = req.query;
-    await checkOwnership(urlId, req.user);
-
-    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
-    const csvData = await exportClicksToCsv(urlId, range, cutoff);
+    const csvData = await traceAnalytics({ operation: "export", urlId }, async () => {
+      await checkOwnership(urlId, req.user);
+      const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+      return exportClicksToCsv(urlId, range, cutoff);
+    });
     
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename=clicks-export-${urlId}.csv`);
@@ -137,7 +144,7 @@ export const fetchPlatformStats = async (req, res, next) => {
       throw new AppError("Admin resource. Access denied.", 403);
     }
 
-    const data = await getPlatformGlobalStats();
+    const data = await traceAnalytics({ operation: "platform_stats" }, async () => getPlatformGlobalStats());
     res.status(200).json({ success: true, data });
   } catch (error) {
     next(error);

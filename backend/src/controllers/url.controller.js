@@ -18,6 +18,7 @@ import prisma from "../config/prismaClient.js";
 import { getRedisClient } from "../config/redisClient.js";
 import { getActiveSubscription } from "../services/planLimitService.js";
 import { PlanLimitError } from "../utils/AppError.js";
+import { traceRedirect } from "../telemetry/businessSpans.js";
 
 export const createShortUrl = async (req, res, next) => {
   try {
@@ -36,7 +37,22 @@ export const createShortUrl = async (req, res, next) => {
 export const redirectUrl = async (req, res, next) => {
   try {
     const { shortCode } = req.params;
-    const { id: urlId, longUrl, passwordHash } = await getOriginalUrl(shortCode);
+    const urlData = await traceRedirect(
+      {
+        shortCode,
+        customDomain: Boolean(req.headers.host && !req.headers.host.includes("localhost")),
+      },
+      async (span) => {
+        const data = await getOriginalUrl(shortCode);
+        if (data?.longUrl) span.setAttribute("url.target_url", data.longUrl);
+        if (data?.id) span.setAttribute("url.id", String(data.id));
+        if (typeof data?.isCacheHit === "boolean") span.setAttribute("redirect.cache_hit", data.isCacheHit);
+        return data;
+      }
+    );
+
+    const { id: urlId, longUrl, passwordHash } = urlData;
+
 
     if (passwordHash) {
       const providedPassword = req.query.password;

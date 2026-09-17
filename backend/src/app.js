@@ -14,6 +14,8 @@ import domainRoutes from "./routes/domain.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import subscriptionRoutes from "./routes/subscription.routes.js";
 import paymentsRoutes from "./routes/payments.routes.js";
+import mcpRoutes from "./routes/mcp.routes.js";
+import assistantRoutes from "./routes/assistant.routes.js";
 import { handleWebhook as handleRazorpayWebhook } from "./controllers/payments.controller.js";
 import { listPlansPublic } from "./controllers/subscription.controller.js";
 
@@ -26,10 +28,14 @@ import {
   redirectLimiter,
 } from "./middlewares/rateLimit.middleware.js";
 import { config } from "./config/config.js";
+import { requestTracing } from "./middlewares/requestTracing.middleware.js";
+import { metricsMiddleware } from "./middlewares/metrics.middleware.js";
 
 const app = express();
 
 app.set("trust proxy", 1);
+app.use(requestTracing);
+app.use(metricsMiddleware);
 
 app.use(
   helmet({
@@ -62,6 +68,12 @@ app.get("/health", (req, res) => {
   });
 });
 
+app.get("/metrics", async (req, res) => {
+  const { metricsRegistry } = await import("./telemetry/metrics.js");
+  res.set("Content-Type", metricsRegistry.contentType);
+  res.send(await metricsRegistry.metrics());
+});
+
 app.get("/api/plans", listPlansPublic);
 app.use("/api/urls", urlRoutes);
 app.use("/api/auth", authRoutes);
@@ -74,6 +86,9 @@ app.use("/api/domains", domainRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/payments", paymentsRoutes);
+app.use("/api/v1/mcp", mcpRoutes);
+app.use("/api/mcp", mcpRoutes);
+app.use("/api/assistant", assistantRoutes);
 app.get("/r/:shortCode", redirectLimiter, validateShortCodeParam, redirectUrl);
 
 app.use(notFoundHandler);

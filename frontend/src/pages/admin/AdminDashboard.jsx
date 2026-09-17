@@ -41,7 +41,8 @@ import {
   RefreshCw,
   Plus,
   Cpu,
-  Server
+  Server,
+  ExternalLink
 } from "lucide-react";
 
 const COLORS = ["#475569", "#6366f1", "#FF0055", "#10b981"]; // Free, Starter, Pro, Business
@@ -52,6 +53,7 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [traceService, setTraceService] = useState("all");
 
   // Overview Tab States
   const [overviewData, setOverviewData] = useState(null);
@@ -856,7 +858,8 @@ function AdminDashboard() {
             { id: "revops", label: "RevOps Reports", icon: Cpu },
             { id: "reconcile", label: "Reconciliation", icon: Server },
             { id: "approvals", label: "Approvals Queue", icon: Shield },
-            { id: "audit", label: "Audit Registry", icon: Clock }
+            { id: "audit", label: "Audit Registry", icon: Clock },
+            { id: "traces", label: "Trace Explorer", icon: Activity }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -878,6 +881,72 @@ function AdminDashboard() {
         </div>
 
         {/* Tab Viewports */}
+
+        {/* Distributed Trace Explorer */}
+        {activeTab === "traces" && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 md:p-8 shadow-xl text-slate-200">
+              <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+                <div>
+                  <div className="flex items-center gap-2 text-[#E50914] font-mono text-xs font-black uppercase tracking-widest">
+                    <Activity className="w-4 h-4" /> Distributed tracing
+                  </div>
+                  <h2 className="mt-2 text-2xl font-black text-white">Follow one request across every service</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
+                    A single trace can contain the API request, Redis, PostgreSQL, BullMQ, and worker spans. Use All Services when investigating the complete request path.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+                  <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                    Service filter
+                    <select
+                      value={traceService}
+                      onChange={(event) => setTraceService(event.target.value)}
+                      className="mt-1.5 block min-w-52 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-xs font-bold text-white outline-none focus:border-[#E50914]"
+                    >
+                      <option value="all">All Services</option>
+                      <option value="pburls-backend">Backend API</option>
+                      <option value="pburls-worker">Background Worker</option>
+                    </select>
+                  </label>
+                  <a
+                    href={`${import.meta.env.VITE_JAEGER_URL || "http://localhost:16686"}/search${traceService === "all" ? "" : `?service=${encodeURIComponent(traceService)}`}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#E50914] px-4 py-2.5 text-xs font-black uppercase tracking-wider text-white transition hover:bg-[#F40B16]"
+                  >
+                    Open Jaeger <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+
+              <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-5">
+                {[
+                  ["01", "HTTP request", "pburls-backend"],
+                  ["02", "Redis / PostgreSQL", "database spans"],
+                  ["03", "BullMQ publish", "pburls-backend"],
+                  ["04", "BullMQ process", "pburls-worker"],
+                  ["05", "Analytics write", "pburls-worker"],
+                ].map(([step, title, owner], index) => (
+                  <div key={step} className="relative rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+                    <span className="font-mono text-[10px] font-black text-[#E50914]">{step}</span>
+                    <div className="mt-3 text-sm font-bold text-white">{title}</div>
+                    <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-slate-500">{owner}</div>
+                    {index < 4 && <span className="absolute -right-2 top-1/2 hidden h-px w-4 bg-zinc-700 md:block" />}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4 text-xs text-cyan-100 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="font-bold">Investigation rule</div>
+                  <div className="mt-1 text-cyan-200/70">Start with All Services, then follow the same trace ID across backend and worker spans.</div>
+                </div>
+                <code className="rounded-lg bg-black/30 px-3 py-2 font-mono text-[11px] text-cyan-300">trace_id = one request</code>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Overview Tab */}
         {activeTab === "overview" && (

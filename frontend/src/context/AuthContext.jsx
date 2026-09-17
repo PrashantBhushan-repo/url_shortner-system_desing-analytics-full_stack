@@ -14,57 +14,63 @@ export const AuthProvider = ({ children }) => {
     if (typeof window === "undefined") return null;
     return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
   });
+
   const [user, setUser] = useState(() => {
     if (typeof window === "undefined") return null;
-
     try {
       return JSON.parse(window.localStorage.getItem(AUTH_USER_STORAGE_KEY) || "null");
     } catch {
       return null;
     }
   });
+
   const [loading, setLoading] = useState(true);
 
+  // Sync state changes to localStorage
   useEffect(() => {
-    const persistAuthState = () => {
-      if (typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
 
-      if (token) {
-        window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
-      } else {
-        window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-      }
+    if (token) {
+      window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    } else {
+      window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    }
 
-      if (user) {
-        window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
-      } else {
-        window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
-      }
-    };
-
-    persistAuthState();
+    if (user) {
+      window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+    } else {
+      window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+    }
   }, [token, user]);
 
-  // Restore the session from storage or silently refresh it
+  // Restore the session on initial app mount
   useEffect(() => {
+    let isMounted = true;
+
     const bootstrap = async () => {
       const storedToken = getAccessToken();
 
       if (storedToken) {
         setAccessToken(storedToken);
-        setToken(storedToken);
+        if (isMounted) setToken(storedToken);
 
         try {
           const response = await getProfile(storedToken);
-          const profile = response.data?.data || null;
-          setUser(profile);
-          setLoading(false);
+          if (isMounted) {
+            setUser(response.data?.data || null);
+            setLoading(false);
+          }
           return;
         } catch {
-          setUser(null);
+          if (isMounted) {
+            setUser(null);
+            setToken(null);
+            setAccessToken(null);
+          }
         }
       }
 
+      // Try silent refresh using HTTP-only cookie if no access token
       try {
         const response = await axios.post(
           (import.meta.env.VITE_API_URL || "http://localhost:5000/api") + "/auth/refresh",
@@ -72,26 +78,34 @@ export const AuthProvider = ({ children }) => {
           { withCredentials: true }
         );
         const newAccessToken = response.data?.data?.accessToken;
-        if (newAccessToken) {
+        if (newAccessToken && isMounted) {
           setAccessToken(newAccessToken);
           setToken(newAccessToken);
           try {
             const profileResponse = await getProfile(newAccessToken);
-            setUser(profileResponse.data?.data || null);
+            if (isMounted) setUser(profileResponse.data?.data || null);
           } catch {
-            setUser(null);
+            if (isMounted) setUser(null);
           }
         }
       } catch {
-        setAccessToken(null);
-        setToken(null);
-        setUser(null);
+        if (isMounted) {
+          setAccessToken(null);
+          setToken(null);
+          setUser(null);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     bootstrap();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Synchronize token updates from Axios interceptors
@@ -101,6 +115,7 @@ export const AuthProvider = ({ children }) => {
       setToken(refreshedToken);
       setAccessToken(refreshedToken);
     };
+
     const handleFailed = () => {
       setAccessToken(null);
       setToken(null);
@@ -116,45 +131,38 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // Fetch profile when token changes
-  useEffect(() => {
-    const fetchUser = async () => {
-      if (!token) {
-        setUser(null);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await getProfile(token);
-        setUser(response.data?.data || null);
-      } catch {
-        setAccessToken(null);
-        setToken(null);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
-  }, [token]);
-
   const login = (newToken) => {
     setAccessToken(newToken);
     setToken(newToken);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await axios.post(
+        (import.meta.env.VITE_API_URL || "http://localhost:5000/api") + "/auth/logout",
+        {},
+        { withCredentials: true }
+      );
+    } catch (_) {
+      // Ignore network errors on logout
+    }
+
     setAccessToken(null);
     setToken(null);
     setUser(null);
+
     if (typeof window !== "undefined") {
+      window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+      window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
       window.localStorage.removeItem("pburls_evaluator_session");
+      window.localStorage.removeItem("pburls_recent_links");
     }
   };
 
-  const value = useMemo(() => ({ token, user, loading, login, logout, setUser }), [token, user, loading]);
+  const value = useMemo(
+    () => ({ token, user, loading, login, logout, setUser }),
+    [token, user, loading]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

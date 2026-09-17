@@ -5,6 +5,7 @@ export const verifyEmail = (payload) => API.post("/auth/verify-email", payload);
 export const resendOtp = (payload) => API.post("/auth/resend-otp", payload);
 export const loginUser = (payload) => API.post("/auth/login", payload);
 export const verifyLoginOtp = (payload) => API.post("/auth/verify-login-otp", payload);
+export const logoutUserApi = () => API.post("/auth/logout", {});
 export const forgotPassword = (payload) => API.post("/auth/forgot-password", payload);
 export const resetPassword = (payload) => API.post("/auth/reset-password", payload);
 export const changePassword = (payload, token) => API.post("/auth/change-password", payload, { headers: { Authorization: `Bearer ${token}` } });

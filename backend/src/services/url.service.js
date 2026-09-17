@@ -76,7 +76,7 @@ export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null, 
 export const getOriginalUrl = async (shortCode) => {
   const cachedUrl = await getCachedUrl(shortCode);
   if (cachedUrl && cachedUrl.longUrl) {
-    return cachedUrl;
+    return { ...cachedUrl, isCacheHit: true };
   }
 
   const url = await findByShortCode(shortCode);
@@ -97,6 +97,7 @@ export const getOriginalUrl = async (shortCode) => {
     id: url.id.toString(),
     longUrl: url.long_url,
     passwordHash: url.password_hash,
+    isCacheHit: false,
   };
 
   await setCachedUrl(shortCode, urlData);

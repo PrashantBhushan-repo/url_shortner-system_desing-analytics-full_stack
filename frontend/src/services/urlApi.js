@@ -65,11 +65,16 @@ API.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (
-        originalRequest.url.includes("/auth/refresh") ||
-        originalRequest.url.includes("/auth/login") ||
-        originalRequest.url.includes("/auth/register")
+        originalRequest.url?.includes("/auth/refresh") ||
+        originalRequest.url?.includes("/auth/login") ||
+        originalRequest.url?.includes("/auth/register") ||
+        originalRequest.url?.includes("/auth/logout")
       ) {
         return Promise.reject(error);
       }
@@ -95,10 +100,10 @@ API.interceptors.response.use(
           { withCredentials: true }
         );
         const newAccessToken = response.data?.data?.accessToken;
-        
+
         setAccessToken(newAccessToken);
         window.dispatchEvent(new CustomEvent("auth-refreshed", { detail: newAccessToken }));
-        
+
         processQueue(null, newAccessToken);
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return API(originalRequest);
@@ -106,12 +111,6 @@ API.interceptors.response.use(
         setAccessToken(null);
         window.dispatchEvent(new CustomEvent("auth-failed"));
         processQueue(refreshError, null);
-        
-        // Redirect to login if user is in app context and refresh fails
-        if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
-          window.location.href = "/auth"; // Or navigation equivalent
-        }
-        
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

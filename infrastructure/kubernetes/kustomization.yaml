@@ -5,6 +5,11 @@ resources:
   - namespace.yaml
   - storageclass.yaml
   - configmap.yaml
+  - otel-collector-configmap.yaml
+  - otel-collector-deployment.yaml
+  - otel-collector-service.yaml
+  - jaeger-deployment.yaml
+  - jaeger-service.yaml
   - postgres-pvc.yaml
   - postgres-deployment.yaml
   - postgres-service.yaml

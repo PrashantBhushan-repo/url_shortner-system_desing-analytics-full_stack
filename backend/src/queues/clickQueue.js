@@ -1,5 +1,7 @@
 import { Queue } from "bullmq";
 import { config } from "../config/config.js";
+import { injectTraceContext } from "../telemetry/bullmqTelemetry.js";
+import { traceAnalytics } from "../telemetry/businessSpans.js";
 
 let redisHost = "127.0.0.1";
 let redisPort = 6379;
@@ -22,9 +24,20 @@ export const clickQueue = new Queue("click-queue", {
   connection: queueConnectionOptions,
 });
 
+clickQueue.on("error", (err) => {
+  // Gracefully handle offline redis queue error
+});
+
 export const addClickJob = async (data) => {
-  await clickQueue.add("click-event", data, {
-    removeOnComplete: { maxCount: 1000 },
-    removeOnFail: { maxCount: 1000 },
-  });
+  return traceAnalytics(
+    { operation: "enqueue_click", eventType: "click", urlId: data?.urlId },
+    async () => {
+      const tracedData = injectTraceContext("click-queue", "click-event", data);
+      await clickQueue.add("click-event", tracedData, {
+        removeOnComplete: { maxCount: 1000 },
+        removeOnFail: { maxCount: 1000 },
+      });
+    }
+  );
 };
+

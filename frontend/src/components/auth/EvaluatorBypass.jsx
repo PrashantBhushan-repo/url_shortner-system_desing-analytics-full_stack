@@ -143,9 +143,9 @@ function EvaluatorBypass() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem("pburls_evaluator_session");
-    logout();
+    await logout();
     navigate("/");
   };
 

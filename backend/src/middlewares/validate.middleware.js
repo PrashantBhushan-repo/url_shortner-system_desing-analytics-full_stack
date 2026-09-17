@@ -25,8 +25,8 @@ const createUrlSchema = z
       .string()
       .trim()
       .min(3, "Custom alias must be at least 3 characters")
-      .max(10, "Custom alias must be at most 10 characters")
-      .regex(/^[a-zA-Z0-9]+$/, "Custom alias must be alphanumeric (letters and numbers only)")
+      .max(64, "Custom alias must be at most 64 characters")
+      .regex(/^[a-zA-Z0-9_-]+$/, "Custom alias must contain only letters, numbers, hyphens (-), or underscores (_)")
       .optional(),
 
     expiresAt: z
@@ -71,8 +71,8 @@ const updateUrlSchema = z
       .string()
       .trim()
       .min(3, "Custom alias must be at least 3 characters")
-      .max(10, "Custom alias must be at most 10 characters")
-      .regex(/^[a-zA-Z0-9]+$/, "Custom alias must be alphanumeric (letters and numbers only)")
+      .max(64, "Custom alias must be at most 64 characters")
+      .regex(/^[a-zA-Z0-9_-]+$/, "Custom alias must contain only letters, numbers, hyphens (-), or underscores (_)")
       .optional(),
 
     expiresAt: z

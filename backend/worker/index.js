@@ -1,3 +1,4 @@
+import "../otel.js";
 import { Worker, Queue } from "bullmq";
 import { resolveGeoLocation } from "../src/utils/location.js";
 import { UAParser } from "ua-parser-js";
@@ -7,8 +8,11 @@ import { initRedis, getRedisClient } from "../src/config/redisClient.js";
 import { queueConnectionOptions } from "../src/queues/clickQueue.js";
 import { sendEmail } from "../src/utils/mailer.js";
 import { invalidateSubscriptionCache } from "../src/services/planLimitService.js";
+import { wrapWorkerJob } from "../src/telemetry/bullmqTelemetry.js";
+import { startMetricsServer } from "../src/telemetry/metrics.js";
 
 const prisma = new PrismaClient();
+const metricsServer = startMetricsServer(Number(process.env.METRICS_PORT || 9465));
 
 // Helper to build a stable visitor fingerprint based on session, IP, and User Agent
 const getVisitorKey = (visitorId, sessionId, ip, ua) => {
@@ -539,7 +543,7 @@ const startWorker = async () => {
   }
 
   // 1. Click Ingestion Worker
-  const clickWorker = new Worker("click-queue", processClickEvent, {
+  const clickWorker = new Worker("click-queue", wrapWorkerJob("click-queue", processClickEvent), {
     connection: queueConnectionOptions,
     concurrency: 5,
   });
@@ -553,7 +557,7 @@ const startWorker = async () => {
   });
 
   // 2. Health Check Worker (configured with 2 mins lock duration to prevent stalls)
-  const healthWorker = new Worker("health-queue", processHealthCheck, {
+  const healthWorker = new Worker("health-queue", wrapWorkerJob("health-queue", processHealthCheck), {
     connection: queueConnectionOptions,
     lockDuration: 120000,
   });
@@ -567,7 +571,7 @@ const startWorker = async () => {
   });
 
   // 3. Billing & Dunning Worker
-  const billingWorker = new Worker("billing-queue", processBillingAndDunning, {
+  const billingWorker = new Worker("billing-queue", wrapWorkerJob("billing-queue", processBillingAndDunning), {
     connection: queueConnectionOptions,
   });
 
