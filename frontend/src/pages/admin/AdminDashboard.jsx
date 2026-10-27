@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { Link, useParams } from "react-router-dom";
+import SiteHeader from '../../layout/SiteHeader';
+import SiteFooter from '../../layout/SiteFooter';
 import API from "../../services/urlApi";
+import BillingRecoveryPanel from '../../components/admin/BillingRecoveryPanel';
 import {
   LineChart,
   Line,
@@ -32,7 +34,6 @@ import {
   Lock,
   Calendar,
   Layers,
-  LogOut,
   CreditCard,
   Ticket,
   Activity,
@@ -48,9 +49,7 @@ import {
 const COLORS = ["#475569", "#6366f1", "#FF0055", "#10b981"]; // Free, Starter, Pro, Business
 
 function AdminDashboard() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("overview");
+  const { section: activeTab } = useParams();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [traceService, setTraceService] = useState("all");
@@ -778,43 +777,14 @@ function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-zinc-950 text-slate-900 dark:text-slate-200 font-sans p-4 md:p-8 relative overflow-hidden transition-colors duration-200">
+    <div className="site-page admin-console"><a className="site-skip" href="#main-content">Skip to administration</a><SiteHeader workspace /><main id="main-content" className="min-h-screen bg-slate-100 dark:bg-zinc-950 text-slate-900 dark:text-slate-200 font-sans p-4 md:p-8 relative overflow-hidden transition-colors duration-200">
       
       {/* Background grids */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#cbd5e1_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e1_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#27272a_1px,transparent_1px),linear-gradient(to_bottom,#27272a_1px,transparent_1px)] bg-[size:3rem_3rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_80%,transparent_100%)] opacity-30 dark:opacity-20 pointer-events-none" />
 
       <div className="max-w-7xl mx-auto space-y-6 relative z-10">
 
-        {/* Telemetry status bar */}
-        <div className="bg-white dark:bg-zinc-900/90 border border-slate-300 dark:border-zinc-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-xs text-slate-700 dark:text-slate-300 shadow-lg">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600 dark:bg-emerald-500"></span>
-              </span>
-              <span className="font-black text-emerald-700 dark:text-emerald-400 tracking-wider">SYS_TELEMETRY: ACTIVE</span>
-            </div>
-            <div className="h-4 w-px bg-slate-300 dark:bg-zinc-700 hidden md:block" />
-            <div>SECURE_CONN: <span className="text-cyan-700 dark:text-cyan-400 font-bold">ESTABLISHED</span></div>
-            <div className="h-4 w-px bg-slate-300 dark:bg-zinc-700 hidden md:block" />
-            <div>OPERATOR: <span className="text-slate-900 dark:text-white font-bold">{user?.name} (ADMIN)</span></div>
-          </div>
-          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-            <button
-              onClick={() => navigate("/dashboard")}
-              className="bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-zinc-700 text-slate-800 dark:text-slate-200 py-1.5 px-3.5 rounded-xl hover:text-slate-950 dark:hover:text-white transition flex items-center gap-1.5 cursor-pointer font-bold shadow-sm"
-            >
-              <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> APP PANEL
-            </button>
-            <button
-              onClick={logout}
-              className="bg-slate-100 hover:bg-rose-100 dark:bg-zinc-800 dark:hover:bg-rose-950/30 border border-slate-300 dark:border-zinc-700 hover:border-rose-400 text-slate-800 hover:text-rose-700 dark:text-slate-300 dark:hover:text-rose-400 py-1.5 px-3.5 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-            >
-              <LogOut className="w-3.5 h-3.5" /> SHUTDOWN
-            </button>
-          </div>
-        </div>
+        <header className="admin-page-heading"><nav aria-label="Breadcrumb"><Link to="/dashboard">Workspace</Link><span aria-hidden="true">/</span><Link to="/admin/overview">Administration</Link><span aria-hidden="true">/</span><span aria-current="page">{activeTab === 'revops' ? 'Revenue operations' : activeTab === 'reconcile' ? 'Reconciliation' : activeTab}</span></nav><div><span className="site-eyebrow">Administration</span><h1>Platform management.</h1><p>Accounts, billing, and operations. Review changes before applying them.</p></div></header>
 
         {/* Global Notifications */}
         {error && (
@@ -846,39 +816,11 @@ function AdminDashboard() {
           </div>
         )}
 
-        {/* Industrial Tab Controls */}
-        <div className="flex border-b border-slate-300 dark:border-zinc-800 gap-1.5 overflow-x-auto pb-px scrollbar-none">
-          {[
-            { id: "overview", label: "Overview", icon: TrendingUp },
-            { id: "users", label: "Users Registry", icon: Users },
-            { id: "urls", label: "URLs Control", icon: LinkIcon },
-            { id: "payments", label: "Payments Logs", icon: CreditCard },
-            { id: "coupons", label: "Coupons Manager", icon: Ticket },
-            { id: "webhooks", label: "Webhook Diagnostics", icon: Activity },
-            { id: "revops", label: "RevOps Reports", icon: Cpu },
-            { id: "reconcile", label: "Reconciliation", icon: Server },
-            { id: "approvals", label: "Approvals Queue", icon: Shield },
-            { id: "audit", label: "Audit Registry", icon: Clock },
-            { id: "traces", label: "Trace Explorer", icon: Activity }
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold transition cursor-pointer whitespace-nowrap border-b-2 uppercase tracking-wider rounded-t-xl ${
-                  isActive
-                    ? "border-[#E50914] text-slate-900 dark:text-white bg-white dark:bg-zinc-900/90 shadow-md font-black"
-                    : "border-transparent text-slate-700 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-zinc-900/40"
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${isActive ? "text-[#E50914]" : "text-slate-600 dark:text-slate-400"}`} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        <nav className="admin-sections" aria-label="Administration sections">{[
+          {label:'Platform',items:[['overview','Overview',TrendingUp],['users','Accounts',Users],['urls','Links',LinkIcon]]},
+          {label:'Finance',items:[['payments','Payments',CreditCard],['coupons','Coupons',Ticket],['revops','Revenue',Cpu],['reconcile','Reconciliation',Server]]},
+          {label:'Operations',items:[['webhooks','Webhook delivery',Activity],['approvals','Approvals',Shield],['audit','Audit log',Clock],['traces','Traces',Activity]]},
+        ].map(group=><div className="admin-nav-group" key={group.label}><span>{group.label}</span><div>{group.items.map(([id,label,Icon])=><Link key={id} to={'/admin/'+id} aria-current={activeTab===id?'page':undefined}><Icon size={16}/>{label}</Link>)}</div></div>)}</nav>
 
         {/* Tab Viewports */}
 
@@ -1276,7 +1218,7 @@ function AdminDashboard() {
                         <tr key={url.id} className="hover:bg-zinc-800/40 transition">
                           <td className="p-4">
                             <a
-                              href={`/r/${url.short_code}`}
+                              href={url.shortUrl || `${API.defaults.baseURL.replace(/\/api\/?$/, "")}/r/${url.short_code}`}
                               target="_blank"
                               rel="noreferrer"
                               className="text-cyan-400 hover:text-cyan-300 hover:underline font-bold"
@@ -1809,6 +1751,7 @@ function AdminDashboard() {
         {/* Finance Reconciliation Tab */}
         {activeTab === "reconcile" && (
           <div className="space-y-6 animate-fade-in">
+            <BillingRecoveryPanel />
             <div className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-2xl flex justify-between items-center text-xs shadow-lg">
               <div>
                 <h3 className="font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
@@ -2872,7 +2815,7 @@ function AdminDashboard() {
           </form>
         </div>
       )}
-    </div>
+    </main><SiteFooter /></div>
   );
 }
 
