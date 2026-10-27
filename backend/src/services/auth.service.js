@@ -18,7 +18,7 @@ import {
   updateUserProfile,
 } from "../repositories/user.repository.js";
 import { getRedisClient } from "../config/redisClient.js";
-import { sendEmail, isSmtpConfigured } from "../utils/mailer.js";
+import { sendEmail } from "../utils/mailer.js";
 import { config } from "../config/config.js";
 import { AppError } from "../utils/AppError.js";
 import jwt from "jsonwebtoken";
@@ -185,10 +185,10 @@ const recordLoginAttempt = async (userId, req, success, reason = null, riskLevel
 };
 
 const sendOtpEmail = async ({ userId, email, purpose, otp }) => {
-  const subject = purpose === "login_otp"
+  const subject = purpose === 'password_reset' ? 'Reset your password' : purpose === "login_otp"
     ? "Your login verification code"
     : "Verify your email";
-  const text = purpose === "login_otp"
+  const text = purpose === 'password_reset' ? `Your password reset code is ${otp}. It expires in 10 minutes.` : purpose === "login_otp"
     ? `Your login verification code is ${otp}. It expires in 10 minutes.`
     : `Your verification code is ${otp}. It expires in 10 minutes.`;
 
@@ -202,25 +202,15 @@ const sendOtpEmail = async ({ userId, email, purpose, otp }) => {
 const issueOtp = async ({ purpose, userId, email }) => {
   const otp = generateOtp();
   
-  // Log OTP to terminal console so developer can read it instantly without checking email inbox
-  console.log(`🔑 [OTP Code] Purpose: ${purpose}, Email: ${email}, Code: ${otp}`);
-
   await withAuthErrorHandling(
     async () => {
-      await storeOtp(purpose, userId, otp, OTP_TTL_SECONDS);
       await markOtpResent(purpose, userId);
+      await storeOtp(purpose, userId, otp, OTP_TTL_SECONDS);
       try {
         await sendOtpEmail({ userId, email, purpose, otp });
       } catch (err) {
-        console.error(`❌ Email dispatch failed for ${email}:`, err.message);
-        const shouldBypass = config.nodeEnv !== "production" || 
-                             process.env.BYPASS_EMAIL_ERROR === "true" || 
-                             !isSmtpConfigured;
-        if (shouldBypass) {
-          console.log("⚠️ Bypassing email dispatch failure. You can verify with the code logged above:", otp);
-        } else {
-          throw err;
-        }
+        await getRedis().del(otpKey(purpose, userId), otpResendKey(purpose, userId));
+        throw err;
       }
     },
     purpose === "login_otp"
@@ -298,7 +288,7 @@ export const loginUser = async ({ email, password }, req = {}) => {
     throw toAuthError("Invalid credentials", 401);
   }
 
-  const passwordValid = await bcrypt.compare(password, user.passwordHash);
+  const passwordValid = user.passwordHash ? await bcrypt.compare(password, user.passwordHash) : false;
   if (!passwordValid) {
     await recordLoginAttempt(user.id, req, false, "Invalid password entered", "medium");
     throw toAuthError("Invalid credentials", 401);
@@ -359,18 +349,7 @@ export const forgotPasswordUser = async ({ email }) => {
   const user = await findUserByEmail(normalizedEmail);
 
   if (user) {
-    const otp = generateOtp();
-    await storeOtp("password_reset", user.id, otp, 60 * 10);
-
-    try {
-      await sendEmail({
-        to: user.email,
-        subject: "Reset your password",
-        text: `Your password reset code is ${otp}. It expires in 10 minutes.`,
-      });
-    } catch (err) {
-      console.warn("Failed to send password reset email:", err.message);
-    }
+    await issueOtp({ purpose: 'password_reset', userId: user.id, email: user.email });
 
     return { userId: user.id, message: "If an account exists, a reset code has been sent" };
   }

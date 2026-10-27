@@ -100,9 +100,9 @@ const updateUrlSchema = z
 const normalizePayload = (reqBody) => ({
   longUrl: reqBody?.longUrl ?? reqBody?.long_url,
   customAlias: reqBody?.customAlias ?? reqBody?.custom_alias,
-  expiresAt: reqBody?.expiresAt ?? reqBody?.expires_at,
+  expiresAt: Object.hasOwn(reqBody || {}, "expiresAt") ? reqBody.expiresAt : reqBody?.expires_at,
   password: reqBody?.password,
-  customDomainId: reqBody?.customDomainId ?? reqBody?.custom_domain_id,
+  customDomainId: Object.hasOwn(reqBody || {}, "customDomainId") ? reqBody.customDomainId : reqBody?.custom_domain_id,
 });
 
 const sanitizeValidatedBody = (body) =>
@@ -113,7 +113,7 @@ export const validateCreateUrl = (req, res, next) => {
   const validationResult = createUrlSchema.safeParse(payload);
 
   if (!validationResult.success) {
-    const errors = validationResult.error.errors.map((err) => ({
+    const errors = validationResult.error.issues.map((err) => ({
       field: err.path.join("."),
       message: err.message,
     }));
@@ -130,7 +130,7 @@ export const validateUpdateUrl = (req, res, next) => {
   const validationResult = updateUrlSchema.safeParse(payload);
 
   if (!validationResult.success) {
-    const errors = validationResult.error.errors.map((err) => ({
+    const errors = validationResult.error.issues.map((err) => ({
       field: err.path.join("."),
       message: err.message,
     }));

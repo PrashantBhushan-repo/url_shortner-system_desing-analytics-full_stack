@@ -1,10 +1,12 @@
 import nodemailer from "nodemailer";
 import { config } from "../config/config.js";
+import { AppError } from './AppError.js';
 
 export const isSmtpConfigured = !!(
   ((process.env.SMTP_USER && process.env.SMTP_USER !== "") || (config.smtp.user && config.smtp.user !== "")) &&
   (process.env.SMTP_HOST || config.smtp.host) &&
   (process.env.SMTP_HOST !== "smtp.example.com" && config.smtp.host !== "smtp.example.com")
+  && (process.env.SMTP_PASS || config.smtp.password)
 );
 
 const transporter = isSmtpConfigured
@@ -12,6 +14,9 @@ const transporter = isSmtpConfigured
       host: process.env.SMTP_HOST || config.smtp.host,
       port: Number(process.env.SMTP_PORT || config.smtp.port || 587),
       secure: (process.env.SMTP_SECURE || "false") === "true",
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 12000,
       auth: process.env.SMTP_USER
         ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
         : { user: config.smtp.user, pass: config.smtp.password },
@@ -20,12 +25,9 @@ const transporter = isSmtpConfigured
 
 export const sendEmail = async ({ to, subject, text, html }) => {
   const from = process.env.FROM_EMAIL || config.smtp.emailFrom || "noreply@pburls.com";
-  console.log("📧 Attempting to send email:", { from, to, subject });
 
   if (!isSmtpConfigured) {
-    console.log("⚠️ SMTP is not configured. Falling back to Mock Mailer.");
-    console.log("📄 Mock Email Contents:", { to, subject, text, html });
-    return { messageId: "mock-message-id", response: "250 OK (Mock)" };
+    throw new AppError('Email delivery is not configured. Please contact support.', 503);
   }
 
   try {

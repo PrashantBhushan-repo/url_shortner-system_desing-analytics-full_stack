@@ -8,6 +8,7 @@ import { issueTokenPair } from "../services/auth.service.js";
 
 export const redirectToProvider = async (req, res) => {
   const { provider } = req.params;
+  try {
   
   if (!["google", "github", "microsoft", "amazon"].includes(provider)) {
     return res.status(400).json({ success: false, message: `Unsupported provider: ${provider}` });
@@ -26,6 +27,10 @@ export const redirectToProvider = async (req, res) => {
 
   const authUrl = generateAuthUrl(provider, state);
   res.redirect(authUrl);
+  } catch {
+    res.clearCookie('oauth_state');
+    res.redirect(`${config.clientUrl}/auth?error=${encodeURIComponent('This sign-in provider is unavailable. Please use your email and password.')}`);
+  }
 };
 
 export const handleProviderCallback = async (req, res, next) => {

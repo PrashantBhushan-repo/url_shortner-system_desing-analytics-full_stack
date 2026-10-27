@@ -1,15 +1,10 @@
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+import '../src/config/config.js';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createMcpServer } from "../src/mcp/createMcpServer.js";
 import { authenticateApiKey } from "../src/mcp/auth/mcpAuth.js";
 import { knowledgeSearchEngine } from "../src/mcp/knowledge/searchEngine.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const TEST_API_KEY = "snap_08334cdba7031a948ed59cfdab4dd54e628ce363f81ae771";
 

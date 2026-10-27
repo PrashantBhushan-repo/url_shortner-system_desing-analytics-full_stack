@@ -36,7 +36,7 @@ export const loginSchema = z.object({
 
 export const verifyLoginOtpSchema = z.object({
   userId: z.string().uuid(),
-  otp: z.string().trim().length(6),
+  otp: z.string().trim().regex(/^(?:[0-9]{6}|[a-fA-F0-9]{6}-?[a-fA-F0-9]{6})$/, 'Enter a six-digit code or a valid backup code'),
 });
 
 export const forgotPasswordSchema = z.object({

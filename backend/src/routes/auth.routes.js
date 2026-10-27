@@ -1,4 +1,6 @@
 import express from "express";
+import { publicAuthOptions } from '../utils/authOptions.js';
+import { config } from '../config/config.js';
 import { changePassword, confirmEmailChangeController, disableTwoFactorController, enableTwoFactorController, forgotPassword, getProfile, getSecuritySessionsController, login, logout, refresh, register, requestEmailChangeController, resendOtpController, resetPassword, setupTwoFactorController, updateProfile, verifyEmail, verifyLoginOtp as verifyLoginOtpController, deleteAccountController, forceChangePasswordController, evaluatorBypassController } from "../controllers/auth.controller.js";
 import { redirectToProvider, handleProviderCallback } from "../controllers/oauth.controller.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
@@ -8,6 +10,8 @@ import { z } from "zod";
 import { changePasswordSchema, emailChangeConfirmSchema, emailChangeRequestSchema, forgotPasswordSchema, loginSchema, logoutSchema, profileUpdateSchema, refreshSchema, registerSchema, resetPasswordSchema, twoFactorOtpSchema, verifyEmailSchema, verifyLoginOtpSchema, deleteAccountSchema, forceChangePasswordSchema } from "../validators/auth.validators.js";
 
 const router = express.Router();
+
+router.get('/options', (_req, res) => res.json({ success: true, data: publicAuthOptions(config) }));
 
 router.get("/oauth/:provider", redirectToProvider);
 router.get("/oauth/:provider/callback", handleProviderCallback);
