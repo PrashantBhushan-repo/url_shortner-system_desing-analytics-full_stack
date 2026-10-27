@@ -1,3 +1,4 @@
+import { syncBillingPayment, requestAdministrativeRefund } from '../services/billing.service.js';
 import prisma from "../config/prismaClient.js";
 import { getRedisClient, isRedisReady } from "../config/redisClient.js";
 import { AppError } from "../utils/AppError.js";
@@ -404,63 +405,13 @@ export const getReconciliationLogs = async (req, res, next) => {
 // Force Reconcile state mismatch
 export const reconcilePaymentSync = async (req, res, next) => {
   try {
-    const { id } = req.params;
-
-    const payment = await prisma.payment.findUnique({
-      where: { id },
-      include: { plan: true },
-    });
-    if (!payment) throw new AppError("Payment record not found.", 404);
-
-    // Sync database payment to CAPTURED
-    await prisma.$transaction(async (tx) => {
-      await tx.payment.update({
-        where: { id },
-        data: { status: "CAPTURED" },
-      });
-
-      // Revoke any current active sub
-      await tx.subscription.updateMany({
-        where: { user_id: payment.user_id, status: "ACTIVE" },
-        data: { status: "CANCELED", canceled_at: new Date() },
-      });
-
-      // Construct subscription cycle dates
-      const periodEnd = new Date();
-      if (payment.billing_cycle === "MONTHLY") periodEnd.setMonth(periodEnd.getMonth() + 1);
-      else if (payment.billing_cycle === "QUARTERLY") periodEnd.setMonth(periodEnd.getMonth() + 3);
-      else if (payment.billing_cycle === "YEARLY") periodEnd.setFullYear(periodEnd.getFullYear() + 1);
-
-      const sub = await tx.subscription.create({
-        data: {
-          user_id: payment.user_id,
-          plan_id: payment.plan_id,
-          billing_cycle: payment.billing_cycle,
-          status: "ACTIVE",
-          started_at: new Date(),
-          current_period_end: periodEnd,
-          external_subscription_id: payment.gateway_order_id,
-        },
-      });
-
-      await tx.payment.update({
-        where: { id },
-        data: { subscription_id: sub.id },
-      });
-    });
-
-    await invalidateSubscriptionCache(payment.user_id);
+    const payment = await prisma.payment.findUnique({ where: { id: req.params.id } });
+    if (!payment) throw new AppError('Payment record not found.', 404);
+    const data = await syncBillingPayment(payment.user_id, payment.id);
     await clearDashboardCache();
-
-    res.status(200).json({
-      success: true,
-      message: "Payment successfully synchronized and reconciled with local tables.",
-    });
-  } catch (err) {
-    next(err);
-  }
+    res.json({ success: true, message: 'Payment reconciled against the provider. Unconfirmed payments do not activate access.', data });
+  } catch (error) { next(error); }
 };
-
 
 /**
  * 4. ADVANCED BILLING OPERATIONS & TELEMETRY
@@ -649,25 +600,8 @@ export const decideApprovalAdmin = async (req, res, next) => {
         const payment = await prisma.payment.findUnique({ where: { id: request.target_id } });
         if (!payment) throw new AppError("Payment record no longer exists.", 404);
 
-        // Update Payment status to REFUNDED
-        await prisma.payment.update({
-          where: { id: payment.id },
-          data: {
-            status: "REFUNDED",
-            refunded_amount: payment.amount,
-          },
-        });
-
-        // Deactivate User Subscription
-        if (payment.subscription_id) {
-          await prisma.subscription.update({
-            where: { id: payment.subscription_id },
-            data: { status: "CANCELED", canceled_at: new Date() },
-          });
-          await invalidateSubscriptionCache(payment.user_id);
-        }
-
-        executionMessage = "Goodwill refund processed in database.";
+        const refund = await requestAdministrativeRefund(payment.id, payload.amount, payload.reason || request.reason);
+        executionMessage = 'Refund request recorded with provider status: ' + refund.status + '.';
       } else if (request.action === "subscription.change_plan") {
         const sub = await prisma.subscription.findUnique({ where: { id: request.target_id } });
         if (!sub) throw new AppError("Subscription record no longer exists.", 404);

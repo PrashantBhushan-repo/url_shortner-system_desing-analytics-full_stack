@@ -7,30 +7,20 @@ const CACHE_TTL = 300; // 5 minutes in seconds
 
 /**
  * Fetch active subscription with joined Plan & PlanLimit.
- * Employs Redis caching.
+ * Entitlements are read from PostgreSQL so a failed Redis invalidation cannot
+ * preserve access after a refund, expiry, or administrative plan change.
  */
 export const getActiveSubscription = async (userId) => {
   const cacheKey = `${REDIS_PREFIX}${userId}`;
   const redis = getRedisClient();
 
-  if (isRedisReady()) {
-    try {
-      const cached = await redis.get(cacheKey);
-      if (cached) {
-        return JSON.parse(cached);
-      }
-    } catch (err) {
-      console.error("Redis error fetching subscription:", err.message);
-    }
-  }
-
-  // Check if the user is the demo evaluator or an administrator
+  // Administrators have managed access; retired demo identities receive no bypass.
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { email: true, role: true }
   });
 
-  if (user && (user.email === "evaluator.demo@pburls.com" || user.role === "ADMIN")) {
+  if (user?.role === "ADMIN") {
     const businessPlan = await prisma.plan.findFirst({
       where: { key: "business", is_active: true },
       include: { limit: true }
@@ -68,6 +58,7 @@ export const getActiveSubscription = async (userId) => {
     where: {
       user_id: userId,
       status: "ACTIVE",
+      OR: [{ current_period_end: null }, { current_period_end: { gt: new Date() } }],
     },
     include: {
       plan: {
@@ -89,7 +80,10 @@ export const getActiveSubscription = async (userId) => {
     }
   }
 
-  return subscription;
+  if (subscription) return subscription;
+  // Expired paid access falls back to Free. Existing links and payments are preserved.
+  const free = await prisma.plan.findUnique({ where: { key: "free" }, include: { limit: true } });
+  return free ? { id: "free-fallback", user_id: userId, plan_id: free.id, plan: free, billing_cycle: "MONTHLY", status: "ACTIVE", current_period_end: null, cancel_at_period_end: false } : null;
 };
 
 /**

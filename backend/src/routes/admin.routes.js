@@ -1,6 +1,7 @@
 import express from "express";
 import prisma from "../config/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
+import { currencyMinorFactor } from "../services/billingPolicy.js";
 import { authMiddleware, authorize, auditAdminAction, requireStepUpConfirmation, adminIpAllowlistMiddleware } from "../middlewares/auth.middleware.js";
 import { adminRateLimiter } from "../middlewares/rateLimit.middleware.js";
 import { listPlansAdmin, updatePlanAdmin, listSubscriptionsAdmin } from "../controllers/adminPlan.controller.js";
@@ -39,6 +40,7 @@ import {
   decideApprovalAdmin
 } from "../controllers/adminBilling.controller.js";
 
+import { listBillingRecovery, retryBillingRecovery } from '../controllers/billingRecovery.controller.js';
 const router = express.Router();
 
 // Apply auth and admin-only access constraints to all admin endpoints
@@ -46,6 +48,8 @@ router.use(adminIpAllowlistMiddleware);
 router.use(authMiddleware);
 router.use(authorize("ADMIN"));
 router.use(adminRateLimiter);
+router.get('/billing/recovery', listBillingRecovery);
+router.post('/billing/recovery/:id/retry', auditAdminAction('billing.recovery.retry', 'BillingRecoveryJob', req => req.params.id)(retryBillingRecovery));
 
 // --- Plan & Subscription Endpoints ---
 router.get("/plans", listPlansAdmin);
@@ -131,15 +135,19 @@ router.post("/payments/:id/refund", requireStepUpConfirmation, async (req, res, 
     const payment = await prisma.payment.findUnique({ where: { id } });
     if (!payment) throw new AppError("Payment record not found.", 404);
 
-    const refundAmount = amount ? parseInt(amount) * 100 : (payment.amount - payment.refunded_amount);
+    const factor = currencyMinorFactor(payment.currency);
+    const refundAmount = amount == null ? (payment.amount - payment.refunded_amount) : Math.round(Number(amount) * factor);
+    if (!Number.isSafeInteger(refundAmount) || refundAmount <= 0 || refundAmount !== payment.amount - payment.refunded_amount) {
+      throw new AppError("Only the full remaining balance can be refunded here. Use the provider dashboard for partial refunds, then reconcile payment status.", 400);
+    }
 
-    if (refundAmount > 100000 || requestApproval) {
+    if (payment.currency !== 'INR' || refundAmount > 100000 || requestApproval) {
       const request = await prisma.approvalRequest.create({
         data: {
           action: "payment.refund",
           status: "PENDING",
           target_id: id,
-          payload: { amount: refundAmount / 100, reason },
+          payload: { amount: refundAmount / factor, reason },
           requester_id: req.user.id,
           requester_email: req.user.email,
           reason: reason || "Large amount refund requiring dual-control authorization.",
@@ -148,7 +156,7 @@ router.post("/payments/:id/refund", requireStepUpConfirmation, async (req, res, 
       return res.status(202).json({
         success: true,
         queued: true,
-        message: "Refund amount exceeds single-operator limit (₹1,000). Dual-control authorization request has been queued.",
+        message: "Finance approval is required for this refund. A dual-control authorization request has been queued.",
         data: request,
       });
     }

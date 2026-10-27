@@ -71,6 +71,7 @@ model Click {
 
   @@index([url_id])
   @@index([clicked_at])
+  @@index([url_id, clicked_at])
 }
 
 model User {
@@ -106,6 +107,61 @@ model User {
   payments           Payment[]
   couponRedemptions  CouponRedemption[]
   must_change_password Boolean @default(false)
+  billingProfile BillingProfile?
+  billingCheckouts BillingCheckout[]
+  billingRefunds BillingRefund[]
+}
+
+model BillingProfile {
+  user_id      String @id
+  user         User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  name         String @default("")
+  email        String @default("")
+  company      String @default("")
+  address      String @default("")
+  city         String @default("")
+  region       String @default("")
+  postal_code  String @default("")
+  country      String @default("IN")
+  tax_id       String @default("")
+  updated_at   DateTime @updatedAt
+}
+
+model BillingCheckout {
+  id            String @id @default(uuid())
+  user_id       String
+  user          User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  request_key   String
+  fingerprint   String
+  plan_id       String
+  billing_cycle BillingCycle
+  amount        Int
+  currency      String
+  coupon_id     String?
+  status        String @default("CREATING")
+  payment_id    String? @unique
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@unique([user_id, request_key])
+  @@index([user_id, status])
+}
+
+model BillingRefund {
+  id              String @id @default(uuid())
+  payment_id      String @unique
+  user_id         String
+  user            User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  amount          Int
+  status          String @default("REQUESTED")
+  gateway_refund_id String? @unique
+  reason          String
+  note            String @default("")
+  failure_reason  String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@index([user_id, status])
 }
 
 enum Role {
@@ -435,6 +491,23 @@ model CouponRedemption {
   redeemed_at DateTime @default(now())
 
   @@unique([coupon_id, user_id])   // one redemption per user per coupon, keep it simple
+}
+
+model BillingRecoveryJob {
+  id              String   @id
+  kind            String
+  resource_id     String
+  user_id         String?
+  due_at          DateTime @default(now())
+  lease_until     DateTime?
+  lease_token     String?
+  failures        Int      @default(0)
+  last_error      String?
+  review_required Boolean  @default(false)
+  updated_at      DateTime @default(now())
+
+  @@index([due_at])
+  @@index([review_required])
 }
 
 model ApprovalRequest {
