@@ -4,11 +4,28 @@ import http from 'node:http';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { stripVTControlCharacters } from 'node:util';
 import { createLogger, createServer } from 'vite';
 import { createAnalyticsSocket } from '../src/services/analyticsSocket.js';
 
 const { Server } = createRequire(new URL('../../backend/package.json', import.meta.url))('socket.io');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const isExpectedDisconnectReset = message =>
+  /^ws proxy(?: socket)? error:\s*Error: read ECONNRESET(?:\s|$)/i.test(stripVTControlCharacters(message));
+
+test('proxy error checks recognize CI disconnect formatting without masking backend failures', () => {
+  for (const heading of ['ws proxy error:', 'ws proxy socket error:']) {
+    for (const newline of ['\n', '\r\n']) {
+      assert.equal(isExpectedDisconnectReset(`\u001b[31m${heading}\u001b[39m${newline}Error: read ECONNRESET${newline}    at TCP.onStreamRead`), true);
+    }
+  }
+  for (const message of [
+    'http proxy error:\nError: read ECONNRESET',
+    'ws proxy error:\nError: connect ECONNREFUSED',
+    'ws proxy socket error:\nError: certificate has expired',
+    'ws proxy error:\nError: unexpected failure\nCaused by ECONNRESET',
+  ]) assert.equal(isExpectedDisconnectReset(message), false, message);
+});
 async function until(check, message) {
   for (let i = 0; i < 100; i++) { if (check()) return; await delay(20); }
   assert.fail(message);
@@ -77,8 +94,7 @@ test('live analytics survives StrictMode cleanup, proxy upgrades and navigation 
     // Vite colors the heading and puts the Error on the next line. Only accept
     // read resets from WebSocket teardown; HTTP and other transport errors fail.
     const unexpectedProxyErrors = errors.filter(message => {
-      const plain = message.replace(/\u001b\[[0-9;]*m/g, '');
-      return plain.includes('proxy') && !/^ws proxy(?: socket)? error:\s*Error: read ECONNRESET(?:\s|$)/i.test(plain);
+      return message.includes('proxy') && !isExpectedDisconnectReset(message);
     });
     assert.deepEqual(unexpectedProxyErrors, [], errors.join('\n'));
 
