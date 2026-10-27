@@ -25,4 +25,3 @@ export const changeEmailConfirm = (payload, token) => API.post("/auth/change-ema
 export const deleteAccount = (payload, token) => API.delete("/auth/delete-account", { data: payload, headers: { Authorization: `Bearer ${token}` } });
 
 export const forceChangePassword = (payload) => API.post("/auth/force-change-password", payload);
-export const evaluatorBypass = (role) => API.post("/auth/evaluator-bypass", { role });

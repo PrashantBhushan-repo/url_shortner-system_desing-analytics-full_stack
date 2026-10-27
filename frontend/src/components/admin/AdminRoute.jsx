@@ -1,5 +1,8 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { lazy, Suspense } from 'react';
+import { RouteLoading } from '../../routes/RouteBoundary';
+const NotFoundPage = lazy(() => import('../../pages/NotFoundPage'));
 
 function AdminRoute() {
   const { user, token, loading } = useAuth();
@@ -19,7 +22,7 @@ function AdminRoute() {
     return <Navigate to="/auth" replace />;
   }
 
-  return user && user.role === "ADMIN" ? <Outlet /> : <Navigate to="/dashboard" replace />;
+  return user && user.role === "ADMIN" ? <Outlet /> : <Suspense fallback={<RouteLoading />}><NotFoundPage forbidden /></Suspense>;
 }
 
 export default AdminRoute;

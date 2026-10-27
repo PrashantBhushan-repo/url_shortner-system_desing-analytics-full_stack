@@ -1,103 +1,22 @@
-import { useState } from "react";
-import { useParams, useSearchParams, Link } from "react-router-dom";
-import { KeyRound, ShieldAlert, ArrowRight, ShieldCheck, ArrowLeft } from "lucide-react";
+import { useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowRight, KeyRound, ShieldCheck } from 'lucide-react';
+import { API_BASE_URL } from '../services/apiConfig';
+import SiteHeader from '../layout/SiteHeader';
+import SiteFooter from '../layout/SiteFooter';
 
-function PasswordProtectedPage() {
+export default function PasswordProtectedPage() {
   const { shortCode } = useParams();
-  const [searchParams] = useSearchParams();
-  const [password, setPassword] = useState("");
-  const isError = searchParams.get("error") === "true";
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!password.trim()) return;
-
-    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-    // Construct redirect directly to base URL gateway (removing '/api' suffix)
-    const baseRedirectUrl = apiUrl.replace(/\/api\/?$/, "");
-    window.location.href = `${baseRedirectUrl}/r/${shortCode}?password=${encodeURIComponent(password)}`;
-  };
-
-  return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4 relative overflow-hidden text-white">
-      {/* Floating Back to Home button */}
-      <div className="absolute top-6 left-6 z-50">
-        <Link 
-          to="/" 
-          className="flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-900/90 hover:bg-zinc-800 px-4 py-2.5 text-xs font-bold text-slate-300 hover:text-white transition duration-150 shadow-md cursor-pointer select-none"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Home</span>
-        </Link>
-      </div>
-
-      {/* Glow Effects */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] rounded-full bg-blue-600/10 blur-[120px]" />
-
-      <div className="max-w-md w-full relative z-10 space-y-6">
-        
-        {/* Brand Logo */}
-        <div className="flex justify-center mb-2">
-          <Link to="/" className="hover:opacity-90 transition-opacity">
-            <span className="font-black tracking-tighter text-white text-4xl">
-              pb<span className="bg-gradient-to-r from-blue-500 via-indigo-400 to-purple-600 bg-clip-text text-transparent">Urls</span>
-            </span>
-          </Link>
-        </div>
-
-        {/* Logo and Status */}
-        <div className="text-center space-y-3">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center shadow-lg">
-            <KeyRound className="h-6 w-6 text-blue-400 animate-pulse" />
-          </div>
-          <h1 className="text-2xl font-black tracking-tight">Decryption Key Required</h1>
-          <p className="text-xs text-slate-400 max-w-xs mx-auto">
-            This short link is encrypted and requires a security password to proceed to the destination.
-          </p>
-        </div>
-
-        {/* Form Container */}
-        <div className="rounded-[2rem] border border-white/10 bg-slate-900/60 p-6 backdrop-blur-md shadow-2xl">
-          {isError && (
-            <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/5 p-3.5 text-xs text-rose-300 flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0" />
-              <span>Incorrect password. Verification failed.</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Link Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password..."
-                autoFocus
-                className="w-full rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition font-mono"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={!password.trim()}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-xs font-bold hover:bg-blue-500 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              Unlock Destination <ArrowRight className="h-4 w-4" />
-            </button>
-          </form>
-        </div>
-
-        {/* Footer info */}
-        <p className="text-[10px] text-center text-slate-600 font-semibold tracking-wider uppercase flex items-center justify-center gap-1.5">
-          <ShieldCheck className="h-3.5 w-3.5" /> SECURED BY PBURLS
-        </p>
-
-      </div>
-    </div>
-  );
+  const [params] = useSearchParams();
+  const [password, setPassword] = useState('');
+  const [opening, setOpening] = useState(false);
+  function submit(event) {
+    event.preventDefault();
+    if (!password.trim() || opening) return;
+    const destination = new URL(API_BASE_URL, window.location.origin);
+    destination.pathname = destination.pathname.replace(/\/api\/?$/, '') + '/r/' + encodeURIComponent(shortCode);
+    destination.search = new URLSearchParams({ password }).toString(); destination.hash = '';
+    setOpening(true); window.location.assign(destination.href);
+  }
+  return <div className="site-page"><SiteHeader /><main className="site-content" id="main-content"><section className="site-state protected-link-state"><span className="site-state-icon"><KeyRound size={27} /></span><div className="site-eyebrow">Password-protected link</div><h1>A password is needed<br />to open this link.</h1><p>The link owner has restricted access. Enter the password they shared with you to continue.</p><form onSubmit={submit}><label htmlFor="link-password">Link password</label><input id="link-password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required autoFocus aria-invalid={params.get('error') === 'true'} aria-describedby={params.get('error') === 'true' ? 'link-password-error' : undefined} />{params.get('error') === 'true' && <p id="link-password-error" role="alert">That password did not match. Check it with the link owner and try again.</p>}<button className="site-link-button" disabled={!password.trim() || opening}>{opening ? 'Opening link…' : 'Open destination'}<ArrowRight size={15} /></button></form><p className="protected-link-note"><ShieldCheck size={14} />Only the link owner can provide its password.</p><Link to="/help#links">Help with links</Link></section></main><SiteFooter /></div>;
 }
-
-export default PasswordProtectedPage;
