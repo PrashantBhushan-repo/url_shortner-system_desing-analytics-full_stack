@@ -10,8 +10,15 @@ import subprocess
 import time
 
 
+def region():
+    value = os.environ.get('AWS_REGION') or os.environ.get('AWS_DEFAULT_REGION') or 'ap-southeast-2'
+    if not re.fullmatch(r'[a-z]{2}(?:-[a-z]+)+-[0-9]+', value):
+        raise ValueError('Invalid AWS region')
+    return value
+
+
 def aws(*args):
-    return json.loads(subprocess.check_output(['aws', *args, '--region', 'us-east-1', '--output', 'json'], text=True))
+    return json.loads(subprocess.check_output(['aws', *args, '--region', region(), '--output', 'json'], text=True))
 
 
 def deployment_commands(image, sha, username, prefix):
@@ -29,7 +36,7 @@ def deployment_commands(image, sha, username, prefix):
     commands = f'''set -Eeuo pipefail
 umask 077
 export DOCKER_CONFIG=/etc/pburls/docker
-export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1
+export AWS_REGION={q(region())} AWS_DEFAULT_REGION={q(region())}
 export PARAMETER_PREFIX={q(prefix)}
 aws ssm get-parameter --name {q(prefix + '/runtime-env')} --with-decryption --query Parameter.Value --output text > /etc/pburls/runtime.env.pending
 chmod 600 /etc/pburls/runtime.env.pending
@@ -57,7 +64,7 @@ def main():
     instance = os.environ.get('EC2_INSTANCE_ID', '')
     if not re.fullmatch(r'i-[0-9a-f]{8,17}', instance):
         raise ValueError('Set EC2_INSTANCE_ID to the production instance ID')
-    commands = ['bash /opt/pburls/current/infrastructure/scripts/rollback.sh'] if args.rollback else deployment_commands(
+    commands = [f'AWS_REGION={shlex.quote(region())} AWS_DEFAULT_REGION={shlex.quote(region())} bash /opt/pburls/current/infrastructure/scripts/rollback.sh'] if args.rollback else deployment_commands(
         args.image or '', args.sha or '', os.environ['GHCR_PULL_USERNAME'], os.environ.get('PARAMETER_PREFIX', '/pburls/production'))
     sent = aws('ssm', 'send-command', '--instance-ids', instance, '--document-name', 'AWS-RunShellScript',
                '--parameters', json.dumps({'commands': commands, 'executionTimeout': ['1800']}), '--timeout-seconds', '600',

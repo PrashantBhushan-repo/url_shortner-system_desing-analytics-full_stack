@@ -33,23 +33,66 @@ Docker login, Buildx setup and build/push actions use SHA-pinned Node.js 24 rele
 
 Only ports 80 and 443 are public. PostgreSQL, Redis, backend, metrics, and worker have no published production ports. Nginx overwrites forwarded headers; Express trusts only the configured Docker subnet. The backend still has outbound access for email, OAuth, payments, and link checks.
 
+## How the pipeline selects work
+
+`ci-cd.yml` is the only automatic coordinator. `backend.yml`, `frontend.yml` and `infrastructure.yml` are reusable validation workflows, not independent deployments. This prevents different workflows from deploying incomplete image combinations or overwriting each other's release.
+
+```mermaid
+flowchart TB
+  Push[Push to main / pull request] --> Plan[Plan changes from complete Git diff]
+  Manual[Manual run / weekly refresh] --> Full[Select all checks and rebuild images]
+  Full --> Plan
+  Plan --> Backend[Backend checks when affected]
+  Plan --> Frontend[Frontend checks when affected]
+  Plan --> Infra[Infrastructure checks when affected]
+  Backend --> Release[Runtime changes: resolve source fingerprints]
+  Frontend --> Release
+  Infra --> Release
+  Release --> Images[Reuse unchanged private digests / build missing images]
+  Images --> Verify[Full release smoke test + telemetry + k6 + vulnerability scans]
+  Verify --> Bundle[Main only: complete digest-pinned ops bundle]
+  Bundle --> Gate[CI gate: all planned checks must succeed]
+  Plan -->|Documentation only: no build| Gate
+  Gate --> Deploy[One deployment job: main, enabled, current revision]
+  Deploy --> SSM[OIDC → SSM → EC2 pull and run]
+```
+
+| Change | Component checks | Release verification |
+| --- | --- | --- |
+| Known documentation paths only | Planner unit tests and CI gate | No build or deploy |
+| `frontend/**` | Frontend tests, lint and build | Complete release smoke and scans; unchanged backend/migration images reused |
+| `backend/**` | Backend plus frontend Socket.IO contract checks | Complete release smoke and scans; unchanged frontend image reused |
+| Executable `infrastructure/**` | Shell, workflows, CloudFormation, Alloy, dashboards and benchmark harness | Complete release smoke and scans; unchanged application images reused |
+| Workflows, shared settings or unknown paths | All component checks | Complete release verification |
+| Manual run / weekly schedule | All component checks | Rebuild with current base images and run all verification |
+
+Pushes compare with the last successful push pipeline on `main`, so failed or superseded pushes do not hide unverified changes. Pull requests compare against their target base SHA. The planner uses a complete local Git diff rather than GitHub's limited path list. Missing history or an unavailable history API selects full checks and a refresh. The planner's own unit tests run even for documentation changes.
+
+Application image fingerprints include the committed component tree, Node version and build policy. On `main`, existing private source tags resolve to immutable digests; missing images are built with BuildKit caching. On the first run all images build. Pull requests build locally without private registry credentials and never publish or deploy. Every executable release tests the selected images together, including reused images, and scans runtime images for fixable high/critical vulnerabilities. Source tags are cache references; the release manifest and EC2 deployment use exact digests. The ops bundle always includes all image references.
+
+Weekly runs refresh base images and verify the release without deploying. A manual run also refreshes everything and can deploy when enabled. If a scan finds a fixed base-image vulnerability between weekly refreshes, use a manual run to rebuild immediately. Documentation-only pushes do not publish images.
+
+Require **`CI gate`** in branch protection. Production deployment additionally requires `PROD_DEPLOY_ENABLED=true`, the `production` environment and a successful verified release. Set the enable flag as a **repository variable**, since the job condition is evaluated before entering that environment. Deployment and rollback share a concurrency group; an active deployment is not interrupted. Before sending SSM commands, deployment compares its commit with the tip of `main` and skips releases superseded by executable changes. A newer documentation-only commit still allows the verified runtime release to deploy. EC2's host lock also serializes deployment scripts. Changing `main` during an already-running deployment can still briefly leave the preceding release live until the next verified deployment completes.
+
+GitHub artifacts retain smoke/measurement/security diagnostics for 14 days and release manifests for 30 days. Runtime secrets stay in Parameter Store; neither these artifacts nor the images should contain production `.env` files. The manual Grafana provisioning and rollback workflows remain separate operations.
+
 ## One-time setup
 
-### Deployment region: us-east-1 (N. Virginia)
+### Deployment region: ap-southeast-2 (Sydney)
 
-Deployment and rollback workflows, the SSM dispatcher and host scripts use **`us-east-1`**. Set GitHub's `AWS_REGION` variable to `us-east-1` as well; the workflows explicitly select this region. The configuration helper defaults to it and rejects conflicting region values. Check repository and `production` environment variables for stale values.
+Your existing production instance and data volume are in **`ap-southeast-2` (Sydney)**. Set GitHub's `AWS_REGION` variable to `ap-southeast-2`. Deployment and rollback pass the selected region through to SSM and host scripts; Sydney is the default when no region is configured. Check repository and `production` environment variables for conflicting overrides.
 
-Use an EC2 instance, VPC/subnet, data EBS volume, Elastic IP and SSM parameters in `us-east-1`. Select a subnet and data volume availability zone in that region. Existing resources in another region are not moved by these code changes; do not reuse their regional IDs or delete their data. Update `EC2_INSTANCE_ID`, DNS and region-specific IAM resource ARNs to match the intended deployment. IAM roles and OIDC providers are global, but their policies may reference regional resources.
+Use the EC2 instance, VPC/subnet, data EBS volume, Elastic IP and SSM parameters in the same selected region, with the data volume and instance in the same availability zone. Changing a variable does not move AWS resources. IAM roles and OIDC providers are global, but their policies may reference regional resources. Another region is supported when all regional resources and GitHub settings are configured consistently.
 
-In CloudShell, select N. Virginia and set:
+In CloudShell, select Sydney and set:
 
 ```bash
-export AWS_REGION=us-east-1
-export AWS_DEFAULT_REGION=us-east-1
+export AWS_REGION=ap-southeast-2
+export AWS_DEFAULT_REGION=ap-southeast-2
 export AWS_PAGER=""
 ```
 
-When deploying the uploaded template, pass `--region us-east-1` to `aws cloudformation deploy`. Supply the actual VPC, public subnet and matching availability zone from that region. An existing failed stack in another region is a separate resource and is not repaired by switching regions.
+When deploying the uploaded template, pass `--region "$AWS_REGION"` to `aws cloudformation deploy`. Supply the actual VPC, public subnet and matching availability zone from that region. An existing failed stack in another region is a separate resource and is not repaired by switching regions.
 
 Grafana Cloud's OTLP endpoint belongs to the Grafana stack and can be in a different region; retain the exact endpoint Grafana supplies. Changing AWS regions does not resolve an organization-level IAM/OIDC explicit deny.
 
@@ -94,7 +137,7 @@ Upload the env file to Parameter Store as a **SecureString** (standard tier limi
 
 ```bash
 aws ssm put-parameter --name /pburls/production/runtime-env \
-  --type SecureString --value file://production.env --overwrite --region us-east-1
+  --type SecureString --value file://production.env --overwrite --region "$AWS_REGION"
 ```
 
 Use the default SSM KMS key with the supplied IAM policy. If you choose your own KMS key, add an appropriately scoped `kms:Decrypt` permission to the EC2 role. Restrict local file permissions and do not commit the real file. This implementation expects single-line values; single-quote passwords containing `$` or `#` to preserve literal values consistently with Compose.
@@ -104,7 +147,7 @@ Create a GitHub personal access token (classic) with **read:packages**, owned by
 ```bash
 # Put the token in a protected file without a trailing newline; don't paste it into shell history.
 aws ssm put-parameter --name /pburls/production/ghcr-token \
-  --type SecureString --value file://ghcr-token.txt --overwrite --region us-east-1
+  --type SecureString --value file://ghcr-token.txt --overwrite --region "$AWS_REGION"
 ```
 
 GitHub Actions publishes with its built-in `GITHUB_TOKEN`; EC2's separate token only pulls. The token is fetched at deployment time and Docker's credentials are root-readable under `/etc/pburls/docker`. Rotate it before expiration. GitHub packages should remain **Private** and linked to this repository; never make them public to resolve an authentication error.
@@ -117,7 +160,7 @@ Repository variables:
 
 | Variable | Value |
 | --- | --- |
-| `AWS_REGION` | `us-east-1` (N. Virginia) |
+| `AWS_REGION` | `ap-southeast-2` (Sydney, matching the existing instance) |
 | `EC2_INSTANCE_ID` | Stack instance output |
 | `AWS_DEPLOY_ROLE_ARN` | Stack role output |
 | `GHCR_PULL_USERNAME` | Account that owns the read-only package token |
@@ -128,7 +171,7 @@ You can automate this with GitHub CLI from your workstation/CloudShell:
 
 ```bash
 gh auth login
-export AWS_REGION=us-east-1
+export AWS_REGION=ap-southeast-2
 export EC2_INSTANCE_ID=YOUR_INSTANCE_ID
 export AWS_DEPLOY_ROLE_ARN=YOUR_ROLE_ARN
 export GHCR_PULL_USERNAME=YOUR_GITHUB_USERNAME
@@ -137,7 +180,7 @@ bash infrastructure/scripts/configure-github.sh OWNER/REPOSITORY
 
 This script does not set or upload application secrets. If environment policies are unavailable for your private repository's GitHub plan, resolve that before enabling the environment-based OIDC deployment.
 
-Allow Actions to write packages. No Docker Hub password, AWS access key, EC2 private SSH key, or application secret belongs in the workflow. Protect `main` with the test/build checks appropriate to your repository permissions.
+Allow Actions to write packages. No Docker Hub password, AWS access key, EC2 private SSH key, or application secret belongs in the workflow. In branch protection or repository rulesets, require **`CI gate`**. Remove obsolete required check names from the previous pipeline: component jobs intentionally skip when unaffected, while this gate always reports and rejects failed or unexpectedly skipped checks.
 
 ### 5. First release
 

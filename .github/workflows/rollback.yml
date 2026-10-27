@@ -22,5 +22,5 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: us-east-1
+          aws-region: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
       - run: python3 infrastructure/scripts/dispatch.py --rollback

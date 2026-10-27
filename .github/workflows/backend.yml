@@ -1,0 +1,63 @@
+name: Backend validation
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: url_shortener_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d url_shortener_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      NODE_ENV: test
+      OTEL_SDK_DISABLED: 'true'
+      DATABASE_URL: postgresql://postgres:ci_only@127.0.0.1:5432/url_shortener_test
+      REDIS_URL: redis://127.0.0.1:6379
+      JWT_SECRET: ci-only-secret-not-used-outside-disposable-tests
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+      - name: Install locked backend dependencies
+        run: npm --prefix backend ci --include=dev --no-audit --no-fund
+      - name: Migrate and seed disposable database
+        working-directory: backend
+        run: |
+          npx --no-install prisma generate
+          npx --no-install prisma migrate deploy
+          node prisma/seed.js
+      - name: Backend regression and environment checks
+        working-directory: backend
+        run: |
+          npm run test:env
+          npm run test:demo
+          npm run test:auth
+          node --test test/validation.test.mjs
+          node --test test/nativeDevelopment.test.mjs
+          npm run test:workspace
+          npm run test:billing
+          npm run test:telemetry
+          node test/metrics.test.js
+          node --test test/observability.test.mjs
+          node --test test/observabilityPostgres.test.mjs
+          node --test test/readiness.test.mjs

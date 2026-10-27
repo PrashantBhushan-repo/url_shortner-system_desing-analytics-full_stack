@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: PBUrls production in us-east-1; single EC2 host, retained encrypted EBS, private services and GitHub OIDC. No S3 or Kubernetes.
+Description: PBUrls single EC2 host, retained encrypted EBS, private services and GitHub OIDC. Deploy in the selected production region (Sydney by default). No S3 or Kubernetes.
 Parameters:
   VpcId:
     Type: AWS::EC2::VPC::Id
   PublicSubnetId:
     Type: AWS::EC2::Subnet::Id
-    Description: Public subnet in us-east-1 with internet-gateway route; must be in DataAvailabilityZone.
+    Description: Public subnet in the deployment region with internet-gateway route; must be in DataAvailabilityZone.
   DataAvailabilityZone:
     Type: AWS::EC2::AvailabilityZone::Name
   InstanceType:

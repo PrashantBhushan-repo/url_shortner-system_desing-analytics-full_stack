@@ -4,8 +4,8 @@ set -Eeuo pipefail
 command -v gh >/dev/null || { echo 'Install GitHub CLI and run gh auth login first.'; exit 1; }
 repo=${1:?Usage: configure-github.sh owner/repository}
 [[ $repo =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || exit 1
-export AWS_REGION=${AWS_REGION:-us-east-1}
-[[ $AWS_REGION == us-east-1 ]] || { echo 'This project deploys to us-east-1. Set AWS_REGION=us-east-1.'; exit 1; }
+export AWS_REGION=${AWS_REGION:-ap-southeast-2}
+[[ $AWS_REGION =~ ^[a-z]{2}(-[a-z]+)+-[0-9]+$ ]] || { echo 'Set a valid AWS_REGION matching your EC2 instance.'; exit 1; }
 : "${EC2_INSTANCE_ID:?Set EC2_INSTANCE_ID}"
 : "${AWS_DEPLOY_ROLE_ARN:?Set AWS_DEPLOY_ROLE_ARN from CloudFormation outputs}"
 : "${GHCR_PULL_USERNAME:?Set GHCR_PULL_USERNAME to the read-only package token owner}"

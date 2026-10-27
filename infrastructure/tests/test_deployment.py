@@ -20,10 +20,19 @@ dispatch = module('dispatch')
 
 class DeploymentTests(unittest.TestCase):
     def test_aws_dispatch_uses_selected_region(self):
-        with patch.object(dispatch.subprocess, 'check_output', return_value='{}') as execute:
+        with patch.dict(dispatch.os.environ, {'AWS_REGION': 'ap-southeast-2'}), patch.object(dispatch.subprocess, 'check_output', return_value='{}') as execute:
             self.assertEqual(dispatch.aws('ssm', 'describe-instance-information'), {})
         self.assertEqual(execute.call_args.args[0], [
-            'aws', 'ssm', 'describe-instance-information', '--region', 'us-east-1', '--output', 'json'])
+            'aws', 'ssm', 'describe-instance-information', '--region', 'ap-southeast-2', '--output', 'json'])
+
+    def test_explicit_region_is_passed_to_host_and_invalid_regions_fail(self):
+        with patch.dict(dispatch.os.environ, {'AWS_REGION': 'us-east-1'}):
+            self.assertEqual(dispatch.region(), 'us-east-1')
+            commands = dispatch.deployment_commands('ghcr.io/owner/repo-ops@sha256:' + 'a' * 64, 'b' * 40, 'owner', '/pburls/production')
+            self.assertIn('AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1', commands[1])
+        with patch.dict(dispatch.os.environ, {'AWS_REGION': 'bad; command'}):
+            with self.assertRaises(ValueError):
+                dispatch.region()
 
     def test_literal_secrets_are_not_executed_or_expanded(self):
         with tempfile.TemporaryDirectory() as folder:

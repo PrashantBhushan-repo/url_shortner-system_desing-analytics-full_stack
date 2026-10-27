@@ -1,0 +1,33 @@
+name: Frontend validation
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Install frontend and Socket.IO fixture dependencies
+        run: |
+          npm --prefix frontend ci --include=dev --no-audit --no-fund
+          npm --prefix backend ci --include=dev --no-audit --no-fund
+      - name: Frontend regression checks
+        working-directory: frontend
+        run: |
+          node --experimental-test-module-mocks --test src/services/*.test.js src/routes/navigation.test.js src/pages/demo/demoData.test.js
+          npm run test:socket
+      - name: Frontend lint (blocking; no errors or warnings)
+        working-directory: frontend
+        run: npm run lint -- --max-warnings 0
+      - name: Verify frontend production build
+        working-directory: frontend
+        run: npm run build

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 export DOCKER_CONFIG=/etc/pburls/docker
-export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1
+export AWS_REGION=${AWS_REGION:-${AWS_DEFAULT_REGION:-ap-southeast-2}}
+export AWS_DEFAULT_REGION=$AWS_REGION
 RUNTIME_ENV=/etc/pburls/runtime.env
 
 load_release() {

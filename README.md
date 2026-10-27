@@ -213,7 +213,9 @@ For the complete seven-container integration workflow, stop the native processes
 
 ## Production deployment and CI/CD
 
-**Production AWS region: `us-east-1` (N. Virginia).** Deployment/rollback workflows and AWS scripts select this region. Set GitHub `AWS_REGION=us-east-1` and use EC2, storage, networking and SSM parameters from this region. Code changes do not relocate existing AWS resources. Follow the [region setup instructions](infrastructure/DEPLOYMENT.md#deployment-region-us-east-1-n-virginia) before enabling deployment. Grafana Cloud keeps its own supplied ingestion endpoint.
+**Production AWS region: `ap-southeast-2` (Sydney), matching your existing instance.** Set GitHub `AWS_REGION=ap-southeast-2`; deployment and rollback propagate it to SSM and host scripts. Other regions require matching EC2, storage, networking and SSM resources. Follow the [region setup instructions](infrastructure/DEPLOYMENT.md#deployment-region-ap-southeast-2-sydney) before enabling deployment. Grafana Cloud keeps its own supplied ingestion endpoint.
+
+One coordinator, `.github/workflows/ci-cd.yml`, calls reusable backend, frontend and infrastructure checks only when needed. It assembles one complete release and uses one deployment job. See the [pipeline guide](infrastructure/DEPLOYMENT.md#how-the-pipeline-selects-work) for change detection, image reuse and branch protection.
 
 GitHub Actions tests the application, builds cached backend/migration/Nginx images, and publishes private packages to GHCR. The production deployment uses AWS OIDC and Systems Manager to pull exact image digests, migrate once, issue/renew HTTPS certificates, and verify the release. Deployment remains disabled until the AWS/domain configuration is supplied.
 
@@ -304,7 +306,7 @@ These credentials serve different purposes and are not interchangeable. An insta
 
 | Location | Keys or parameter names | Meaning |
 |---|---|---|
-| GitHub repository variables | `AWS_REGION=us-east-1`, `EC2_INSTANCE_ID`, `AWS_DEPLOY_ROLE_ARN` | Deployment region, target instance and role GitHub requests. |
+| GitHub repository variables | `AWS_REGION=ap-southeast-2`, `EC2_INSTANCE_ID`, `AWS_DEPLOY_ROLE_ARN` | Deployment region, target instance and role GitHub requests. |
 | GitHub repository variables | `GHCR_PULL_USERNAME`, `PARAMETER_PREFIX`, `PROD_DEPLOY_ENABLED` | Registry account, configuration prefix and deployment switch. |
 | SSM SecureString | `/pburls/production/runtime-env` | Application URLs, database credentials, JWT secret and enabled integration settings. |
 | SSM SecureString | `/pburls/production/ghcr-token` | EC2's read-only GHCR pull token. |

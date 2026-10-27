@@ -13,112 +13,53 @@ concurrency:
   group: pipeline-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  test:
+  changes:
+    name: Plan affected checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_DB: url_shortener_test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ci_only
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd="pg_isready -U postgres -d url_shortener_test"
-          --health-interval 5s --health-timeout 3s --health-retries 20
-      redis:
-        image: redis:7.4-alpine
-        ports: ['6379:6379']
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval 5s --health-timeout 3s --health-retries 20
-    env:
-      NODE_ENV: test
-      OTEL_SDK_DISABLED: 'true'
-      DATABASE_URL: postgresql://postgres:ci_only@127.0.0.1:5432/url_shortener_test
-      REDIS_URL: redis://127.0.0.1:6379
-      JWT_SECRET: ci-only-secret-not-used-outside-disposable-tests
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      backend: ${{ steps.plan.outputs.backend }}
+      frontend: ${{ steps.plan.outputs.frontend }}
+      infrastructure: ${{ steps.plan.outputs.infrastructure }}
+      release: ${{ steps.plan.outputs.release }}
+      refresh: ${{ steps.plan.outputs.refresh }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
-      - name: Install locked dependencies
-        run: |
-          npm --prefix backend ci --include=dev --no-audit --no-fund
-          npm --prefix frontend ci --include=dev --no-audit --no-fund
-      - name: Migrate and seed disposable database
-        working-directory: backend
-        run: |
-          npx --no-install prisma generate
-          npx --no-install prisma migrate deploy
-          node prisma/seed.js
-      - name: Backend regression and environment checks
-        working-directory: backend
-        run: |
-          npm run test:env
-          npm run test:demo
-          npm run test:auth
-          node --test test/validation.test.mjs
-          node --test test/nativeDevelopment.test.mjs
-          npm run test:workspace
-          npm run test:billing
-          npm run test:telemetry
-          node test/metrics.test.js
-          node --test test/observability.test.mjs
-          node --test test/observabilityPostgres.test.mjs
-          node --test test/readiness.test.mjs
-      - name: Frontend regression checks
-        working-directory: frontend
-        run: |
-          node --experimental-test-module-mocks --test src/services/*.test.js src/routes/navigation.test.js src/pages/demo/demoData.test.js
-          npm run test:socket
-      - name: Frontend lint (blocking; no errors or warnings)
-        working-directory: frontend
-        run: npm run lint -- --max-warnings 0
-      - name: Validate shell scripts and workflows
-        run: |
-          for script in infrastructure/scripts/*.sh; do bash -n "$script"; done
-          shellcheck -S error infrastructure/scripts/*.sh
-          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
-          python3 -m unittest discover -s infrastructure/tests -p 'test_*.py'
-      - name: Verify benchmark runner against a synthetic redirect fixture
+          fetch-depth: 0
+      - name: Test pipeline planning and deployment helpers
+        run: python3 -m unittest discover -s infrastructure/tests -p 'test_*.py'
+      - name: Plan from complete Git diff
+        id: plan
         env:
-          RUN_K6_SMOKE: 'true'
-        run: node --test infrastructure/tests/observability.test.mjs infrastructure/tests/alert-rules.test.mjs
-      - name: Save benchmark harness reports
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: benchmark-harness
-          path: .artifacts/observability/
-          if-no-files-found: ignore
-          retention-days: 14
-      - name: Validate observability collector and generated dashboards
-        env:
-          OTLP_ENDPOINT: http://lgtm:4318
-          OTLP_USERNAME: local
-          OTLP_PASSWORD: local
-          OBS_ENVIRONMENT: test
-          OBS_POSTGRES_USER: postgres
-          OBS_POSTGRES_PASSWORD: ci_only
-          DB_NAME: url_shortener_test
-          DOMAIN: ci.company.test
-        run: |
-          docker run --rm -e OTLP_ENDPOINT -e OTLP_USERNAME -e OTLP_PASSWORD -e OBS_ENVIRONMENT -e OBS_POSTGRES_USER -e OBS_POSTGRES_PASSWORD -e DB_NAME -e DOMAIN -v "$PWD/infrastructure/observability:/etc/alloy:ro" grafana/alloy:v1.21.2 validate /etc/alloy
-          node infrastructure/observability/generate-dashboards.mjs
-          git diff --exit-code -- infrastructure/observability/grafana/dashboards
-      - name: Validate CloudFormation
-        run: |
-          pipx run cfn-lint infrastructure/aws/stack.yml
-
+          GH_TOKEN: ${{ github.token }}
+        run: python3 infrastructure/scripts/ci-plan.py plan
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    uses: ./.github/workflows/backend.yml
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    uses: ./.github/workflows/frontend.yml
+  infrastructure:
+    needs: changes
+    if: needs.changes.outputs.infrastructure == 'true'
+    uses: ./.github/workflows/infrastructure.yml
   build:
-    needs: test
+    needs: [changes, backend, frontend, infrastructure]
+    if: >-
+      always() && !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.release == 'true' &&
+      (needs.backend.result == 'success' || (needs.changes.outputs.backend == 'false' && needs.backend.result == 'skipped')) &&
+      (needs.frontend.result == 'success' || (needs.changes.outputs.frontend == 'false' && needs.frontend.result == 'skipped')) &&
+      (needs.infrastructure.result == 'success' || (needs.changes.outputs.infrastructure == 'false' && needs.infrastructure.result == 'skipped'))
+    env:
+      PUBLISH_IMAGES: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+      REFRESH_IMAGES: ${{ needs.changes.outputs.refresh }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
@@ -129,70 +70,58 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4 (Node.js 24)
-      - name: Image namespace
-        id: names
-        run: |
-          # Public GHCR packages cannot become private again. Publish new releases
-          # under distinct names; never delete historical packages automatically.
-          name="${GITHUB_REPOSITORY#*/}"
-          name="${name,,}-private"
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          {
-            echo "prefix=ghcr.io/$owner/$name"
-            echo "package_prefix=$name"
-          } >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4 (Node.js 24)
-        if: github.event_name != 'pull_request'
+        if: env.PUBLISH_IMAGES == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Reject existing public packages before publishing
-        if: github.event_name != 'pull_request'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PACKAGE_PREFIX: ${{ steps.names.outputs.package_prefix }}
-        run: |
-          for kind in backend migration frontend ops; do
-            package="$PACKAGE_PREFIX-$kind"
-            visibility=$(gh api "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package" --jq .visibility 2>/dev/null || gh api "orgs/$GITHUB_REPOSITORY_OWNER/packages/container/$package" --jq .visibility 2>/dev/null || true)
-            [[ -z "$visibility" || "$visibility" == private ]] || { echo "Package $package is not private. Use a new private package namespace; public packages cannot be made private."; exit 1; }
-          done
+      - name: Resolve private source-matched images or request builds
+        id: images
+        run: python3 infrastructure/scripts/ci-images.py plan
       - name: Build backend runtime
         id: backend
+        if: steps.images.outputs.backend_build == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (Node.js 24)
         with:
           context: backend
           target: runtime
           platforms: linux/amd64
           pull: true
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
-          tags: ${{ steps.names.outputs.prefix }}-backend:sha-${{ github.sha }}
+          push: ${{ env.PUBLISH_IMAGES == 'true' }}
+          load: ${{ env.PUBLISH_IMAGES != 'true' }}
+          tags: |
+            ${{ steps.images.outputs.prefix }}-backend:sha-${{ github.sha }}
+            ${{ steps.images.outputs.backend_source_tag }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
-          provenance: ${{ github.event_name != 'pull_request' }}
-          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ env.PUBLISH_IMAGES == 'true' }}
+          sbom: ${{ env.PUBLISH_IMAGES == 'true' }}
       - name: Build migration tools
         id: migration
+        if: steps.images.outputs.migration_build == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (Node.js 24)
         with:
           context: backend
           target: migration
+          pull: true
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
-          tags: ${{ steps.names.outputs.prefix }}-migration:sha-${{ github.sha }}
+          push: ${{ env.PUBLISH_IMAGES == 'true' }}
+          load: ${{ env.PUBLISH_IMAGES != 'true' }}
+          tags: |
+            ${{ steps.images.outputs.prefix }}-migration:sha-${{ github.sha }}
+            ${{ steps.images.outputs.migration_source_tag }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: |
             type=gha,scope=backend
             type=gha,scope=migration
           cache-to: type=gha,scope=migration,mode=max
-          provenance: ${{ github.event_name != 'pull_request' }}
-          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ env.PUBLISH_IMAGES == 'true' }}
+          sbom: ${{ env.PUBLISH_IMAGES == 'true' }}
       - name: Build static Nginx frontend
         id: frontend
+        if: steps.images.outputs.frontend_build == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (Node.js 24)
         with:
           context: frontend
@@ -200,22 +129,24 @@ jobs:
           platforms: linux/amd64
           pull: true
           build-args: VITE_API_URL=/api
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
-          tags: ${{ steps.names.outputs.prefix }}-frontend:sha-${{ github.sha }}
+          push: ${{ env.PUBLISH_IMAGES == 'true' }}
+          load: ${{ env.PUBLISH_IMAGES != 'true' }}
+          tags: |
+            ${{ steps.images.outputs.prefix }}-frontend:sha-${{ github.sha }}
+            ${{ steps.images.outputs.frontend_source_tag }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
-          provenance: ${{ github.event_name != 'pull_request' }}
-          sbom: ${{ github.event_name != 'pull_request' }}
+          provenance: ${{ env.PUBLISH_IMAGES == 'true' }}
+          sbom: ${{ env.PUBLISH_IMAGES == 'true' }}
       - name: Select exact images
         env:
-          PREFIX: ${{ steps.names.outputs.prefix }}
-          BACKEND_DIGEST: ${{ steps.backend.outputs.digest }}
-          MIGRATION_DIGEST: ${{ steps.migration.outputs.digest }}
-          FRONTEND_DIGEST: ${{ steps.frontend.outputs.digest }}
+          PREFIX: ${{ steps.images.outputs.prefix }}
+          BACKEND_DIGEST: ${{ steps.backend.outputs.digest || steps.images.outputs.backend_digest }}
+          MIGRATION_DIGEST: ${{ steps.migration.outputs.digest || steps.images.outputs.migration_digest }}
+          FRONTEND_DIGEST: ${{ steps.frontend.outputs.digest || steps.images.outputs.frontend_digest }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+          if [[ "$PUBLISH_IMAGES" != true ]]; then
             {
               echo "BACKEND_IMAGE=$PREFIX-backend:sha-$GITHUB_SHA"
               echo "MIGRATION_IMAGE=$PREFIX-migration:sha-$GITHUB_SHA"
@@ -256,7 +187,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
       - name: Write immutable release manifest
-        if: github.event_name != 'pull_request'
+        if: env.PUBLISH_IMAGES == 'true'
         run: |
           printf 'BACKEND_IMAGE=%s\nMIGRATION_IMAGE=%s\nFRONTEND_IMAGE=%s\n' "$BACKEND_IMAGE" "$MIGRATION_IMAGE" "$FRONTEND_IMAGE" > release.env
           printf 'APP_VERSION=%s\n' "$GITHUB_SHA" >> release.env
@@ -267,47 +198,52 @@ jobs:
             printf '%s=%s\n' "$key" "$digest" >> release.env
           done
       - name: Publish deployment bundle (no S3)
-        if: github.event_name != 'pull_request'
+        if: env.PUBLISH_IMAGES == 'true'
         id: bundle
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (Node.js 24)
         with:
           context: .
           file: infrastructure/Dockerfile
           push: true
-          tags: ${{ steps.names.outputs.prefix }}-ops:sha-${{ github.sha }}
+          tags: ${{ steps.images.outputs.prefix }}-ops:sha-${{ github.sha }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           provenance: true
           sbom: true
       - name: Ensure every published package is private
-        if: github.event_name != 'pull_request'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PACKAGE_PREFIX: ${{ steps.names.outputs.package_prefix }}
-        run: |
-          for kind in backend migration frontend ops; do
-            package="$PACKAGE_PREFIX-$kind"
-            visibility=$(gh api "users/$GITHUB_REPOSITORY_OWNER/packages/container/$package" --jq .visibility 2>/dev/null || gh api "orgs/$GITHUB_REPOSITORY_OWNER/packages/container/$package" --jq .visibility)
-            [[ "$visibility" == private ]] || { echo "Package $package must be private"; exit 1; }
-          done
+        if: env.PUBLISH_IMAGES == 'true'
+        run: python3 infrastructure/scripts/ci-images.py verify
       - name: Record bundle digest
-        if: github.event_name != 'pull_request'
+        if: env.PUBLISH_IMAGES == 'true'
         id: bundle-ref
         env:
-          PREFIX: ${{ steps.names.outputs.prefix }}
+          PREFIX: ${{ steps.images.outputs.prefix }}
           DIGEST: ${{ steps.bundle.outputs.digest }}
         run: |
           echo "image=$PREFIX-ops@$DIGEST" >> "$GITHUB_OUTPUT"
           echo "Deployment bundle: $PREFIX-ops@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: github.event_name != 'pull_request'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: env.PUBLISH_IMAGES == 'true'
         with:
           name: release-${{ github.sha }}
           path: release.env
           retention-days: 30
 
+  gate:
+    name: CI gate
+    needs: [changes, backend, frontend, infrastructure, build]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Require every planned job to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 infrastructure/scripts/ci-plan.py gate
   deploy:
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name != 'schedule' && vars.PROD_DEPLOY_ENABLED == 'true'
+    name: Deploy verified release
+    needs: [changes, build, gate]
+    if: always() && !cancelled() && needs.gate.result == 'success' && needs.build.result == 'success' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event_name != 'schedule' && vars.PROD_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     environment: production
@@ -323,12 +259,17 @@ jobs:
       PARAMETER_PREFIX: ${{ vars.PARAMETER_PREFIX || '/pburls/production' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Skip a runtime release superseded on main
+        id: current
+        run: python3 infrastructure/scripts/ci-plan.py deploy
       - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        if: steps.current.outputs.current == 'true'
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: us-east-1
+          aws-region: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
           role-session-name: pburls-github-deploy
-      - name: Deploy over Systems Manager and wait for verification
+      - name: Deploy exact bundle through Systems Manager and wait for checks
+        if: steps.current.outputs.current == 'true'
         env:
           BUNDLE_IMAGE: ${{ needs.build.outputs.bundle_image }}
         run: python3 infrastructure/scripts/dispatch.py --sha "$GITHUB_SHA" --image "$BUNDLE_IMAGE"
