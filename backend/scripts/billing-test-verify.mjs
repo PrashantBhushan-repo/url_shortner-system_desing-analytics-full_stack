@@ -1,0 +1,82 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import Razorpay from 'razorpay';
+import { config } from '../src/config/config.js';
+import prisma from '../src/config/prismaClient.js';
+import { fetchGatewayPayment, fetchProcessedRefunds } from '../src/services/billingGateway.js';
+import { requestBillingRefund } from '../src/services/billing.service.js';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const stateDir = path.join(root, '.billing-local');
+const report = { checkedAt: new Date().toISOString(), mode: 'test', checks: [], payments: [] };
+try {
+  assert.ok(config.razorpay.keyId.startsWith('rzp_test_'), 'Only test keys are allowed');
+  const host = config.db.connectionString ? new URL(config.db.connectionString).hostname : config.db.host;
+  assert.ok(['localhost', '127.0.0.1', '::1'].includes(host), 'Only local fixtures are allowed');
+  const state = JSON.parse(await fs.readFile(path.join(stateDir, 'state.json'), 'utf8'));
+  const hook = JSON.parse(await fs.readFile(path.join(stateDir, 'webhook.json'), 'utf8'));
+  assert.ok(state.fixtureUserId && state.fixturePlanId, 'Run sandbox checkout first');
+  const user = await prisma.user.findUnique({ where: { id: state.fixtureUserId } });
+  assert.ok(user?.email.endsWith('@example.invalid'), 'Only fictional QA fixtures are allowed');
+  const sdk = new Razorpay({ key_id: config.razorpay.keyId, key_secret: config.razorpay.keySecret });
+  const hooks = await sdk.webhooks.all({ count: 100 });
+  const registered = hooks.items.find(item => item.id === hook.id);
+  assert.equal(registered?.url, state.webhookUrl);
+  assert.equal(registered.active, true);
+  report.checks.push('Razorpay test webhook registered and active');
+  assert.equal((await fetch('http://127.0.0.1:5000/health')).status, 200);
+  report.checks.push('Local API running');
+  const payments = await prisma.payment.findMany({ where: { user_id: user.id }, orderBy: { created_at: 'asc' } });
+  assert.ok(payments.length >= 2, 'Normal and missing-callback scenarios must both run');
+  for (const payment of payments) {
+    const provider = await fetchGatewayPayment(payment.gateway_payment_id);
+    assert.equal(provider.amount, 100);
+    assert.equal(provider.currency, 'INR');
+    assert.ok(provider.captured, 'Provider must have captured payment');
+    assert.equal(provider.amount_refunded, 100);
+    assert.equal(payment.status, 'REFUNDED');
+    assert.equal(payment.refunded_amount, 100);
+    const refund = await prisma.billingRefund.findUnique({ where: { payment_id: payment.id } });
+    assert.equal(refund?.status, 'PROCESSED');
+    const repeated = await requestBillingRefund(user.id, { paymentId: payment.id, reason: 'Repeat sandbox refund request', acceptedTerms: true });
+    assert.equal(repeated.id, refund.id);
+    const providerRefunds = await fetchProcessedRefunds(provider.id);
+    assert.equal(providerRefunds.length, 1);
+    assert.equal(providerRefunds[0].amount, 100);
+    const sub = await prisma.subscription.findUnique({ where: { id: payment.subscription_id } });
+    assert.equal(sub.status, 'CANCELED');
+    report.payments.push({ paymentId: payment.id, providerPaymentId: provider.id, amount: 100, currency: 'INR', payment: 'REFUNDED', refund: 'PROCESSED', providerRefundId: refund.gateway_refund_id, subscription: sub.status, processedRefundCount: providerRefunds.length });
+  }
+  report.checks.push('Two genuine sandbox captures and full processed refunds verified against Razorpay', 'Repeated refund requests reused the original refund', 'Refunded subscriptions ended');
+  const events = await prisma.webhookEvent.findMany({ where: { received_at: { gte: new Date(state.testStartedAt || state.startedAt) } } });
+  const genuine = events.find(event => event.event_type === 'payment.captured');
+  assert.ok(genuine?.processed, 'Captured provider webhook must have processed');
+  assert.ok(events.some(event => event.event_type === 'refund.processed' && event.processed), 'Processed-refund provider webhook must have arrived');
+  const raw = JSON.stringify(genuine.payload);
+  const signature = crypto.createHmac('sha256', config.razorpay.webhookSecret).update(raw).digest('hex');
+  const started = Date.now();
+  const replay = await fetch(state.webhookUrl, { method: 'POST', body: raw, headers: { 'content-type': 'application/json', 'x-razorpay-event-id': genuine.event_id, 'x-razorpay-signature': signature }, signal: AbortSignal.timeout(10000) });
+  assert.equal(replay.status, 200);
+  report.publicWebhookAckMs = Date.now() - started;
+  assert.equal(await prisma.webhookEvent.count({ where: { event_id: genuine.event_id } }), 1);
+  const invalid = await fetch(state.webhookUrl, { method: 'POST', body: raw, headers: { 'content-type': 'application/json', 'x-razorpay-signature': '0'.repeat(64) }, signal: AbortSignal.timeout(10000) });
+  assert.equal(invalid.status, 400);
+  const apiProbe = await fetch(new URL('/api/plans', state.webhookUrl), { signal: AbortSignal.timeout(10000) });
+  assert.equal(apiProbe.status, 404);
+  const jobs = await prisma.$queryRaw`SELECT failures, last_error FROM "BillingRecoveryJob" WHERE user_id = ${user.id}`;
+  assert.ok(jobs.length && jobs.every(job => !job.failures && !job.last_error));
+  report.checks.push('Genuine payment and refund webhooks received and processed', 'Public HTTPS replay acknowledged without duplicate event', 'Invalid signatures rejected', 'Tunnel does not expose other API routes', 'Recovery worker processed fixture jobs without failures');
+  report.passed = true;
+  report.webhook = { id: hook.id, url: hook.url, active: true };
+} catch (error) {
+  report.passed = false;
+  report.failure = error.message;
+  process.exitCode = 1;
+} finally {
+  await fs.writeFile(path.join(stateDir, 'verification.json'), JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report, null, 2));
+  await prisma.$disconnect();
+}
