@@ -1,0 +1,56 @@
+# Full container overlay; local.mjs adds compose.native.yml for the default four-container mode.
+services:
+  backend:
+    environment:
+      OTEL_SDK_DISABLED: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: "1"
+      OBS_REQUEST_LOG_SAMPLE_RATIO: "1"
+  worker:
+    environment:
+      OTEL_SDK_DISABLED: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: "1"
+  lgtm:
+    image: grafana/otel-lgtm:0.38.0
+    restart: unless-stopped
+    ports: ["127.0.0.1:3001:3000"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - lgtm_data:/data
+      - ./infrastructure/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/observability/grafana/dashboards:/etc/grafana/dashboards:ro
+    mem_limit: 2g
+    logging: {driver: json-file, options: {max-size: "10m", max-file: "2"}}
+  alloy:
+    image: grafana/alloy:v1.21.2
+    user: alloy
+    restart: unless-stopped
+    command: [run, --server.http.listen-addr=0.0.0.0:12345, --storage.path=/var/lib/alloy/data, /etc/alloy]
+    environment:
+      OTLP_ENDPOINT: http://lgtm:4318
+      OTLP_USERNAME: local
+      OTLP_PASSWORD: local
+      OBS_ENVIRONMENT: development
+      GOMEMLIMIT: 256MiB
+      OBS_POSTGRES_USER: ${DB_USER:-postgres}
+      OBS_POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-url_shortener}
+    ports: ["127.0.0.1:4318:4318", "127.0.0.1:12345:12345"]
+    volumes:
+      - ./infrastructure/observability/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy
+    mem_limit: 384m
+    cpus: 0.5
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    depends_on: [lgtm]
+    logging: {driver: json-file, options: {max-size: "10m", max-file: "2"}}
+volumes:
+  lgtm_data:
+  alloy_data:

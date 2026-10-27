@@ -1,0 +1,50 @@
+# Added automatically by dc() when OBSERVABILITY_ENABLED=true.
+services:
+  monitor-setup:
+    image: ${MIGRATION_IMAGE:?Use the release manifest}
+    env_file: [/etc/pburls/runtime.env, /etc/pburls/observability.env]
+    environment: {NODE_ENV: production}
+    command: [node, scripts/prepare-monitoring.mjs]
+    profiles: [tools]
+    networks: [app]
+  backend:
+    environment:
+      OTEL_SDK_DISABLED: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: ${OBS_TRACE_SAMPLE_RATIO:-0.1}
+      OBS_REQUEST_LOG_SAMPLE_RATIO: ${OBS_REQUEST_LOG_SAMPLE_RATIO:-0.1}
+      APP_VERSION: ${APP_VERSION:-unknown}
+  worker:
+    environment:
+      OTEL_SDK_DISABLED: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: ${OBS_TRACE_SAMPLE_RATIO:-0.1}
+      APP_VERSION: ${APP_VERSION:-unknown}
+  alloy:
+    image: ${ALLOY_IMAGE:?Use the release manifest including Alloy}
+    restart: unless-stopped
+    init: true
+    command: [run, --server.http.listen-addr=0.0.0.0:12345, --storage.path=/var/lib/alloy, /etc/alloy]
+    env_file: [/etc/pburls/observability.env]
+    environment:
+      OBS_ENVIRONMENT: production
+      OBS_POSTGRES_USER: pburls_monitor
+      DB_NAME: ${DB_NAME:?Set DB_NAME}
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+      GOMEMLIMIT: 256MiB
+    volumes:
+      - ./observability/config.alloy:/etc/alloy/config.alloy:ro
+      - ./observability/host.alloy:/etc/alloy/host.alloy:ro
+      - ./observability/edge.alloy:/etc/alloy/edge.alloy:ro
+      - /srv/pburls-data/alloy:/var/lib/alloy
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+    mem_limit: 384m
+    cpus: 0.5
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging: {driver: json-file, options: {max-size: "10m", max-file: "3"}}
+    networks: [app]

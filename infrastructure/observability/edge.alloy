@@ -1,0 +1,15 @@
+// Probe public DNS + HTTPS + Nginx from EC2. This is not a worldwide uptime check.
+prometheus.exporter.blackbox "https" {
+  config = "{ modules: { https_2xx: { prober: http, timeout: 5s, http: { preferred_ip_protocol: ip4, fail_if_not_ssl: true, follow_redirects: false } } } }"
+  target {
+    name = "pburls-public-https"
+    address = "https://" + sys.env("DOMAIN") + "/healthz"
+    module = "https_2xx"
+  }
+}
+prometheus.scrape "https" {
+  targets = prometheus.exporter.blackbox.https.targets
+  scrape_interval = "30s"
+  scrape_timeout = "6s"
+  forward_to = [prometheus.relabel.infrastructure.receiver]
+}

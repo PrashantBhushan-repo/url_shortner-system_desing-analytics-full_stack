@@ -1,0 +1,11 @@
+{
+  "windowMinutes": 10,
+  "httpErrorRatio": 0.01,
+  "httpMinRequests": 100,
+  "httpMinErrors": 5,
+  "redirectP95Seconds": 0.25,
+  "redirectMinRequests": 100,
+  "clickQueueWaitingJobs": 100,
+  "clickQueueWaitSeconds": 60,
+  "failedJobs": 1
+}

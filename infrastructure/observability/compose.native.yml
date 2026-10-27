@@ -1,0 +1,12 @@
+# Overlay for PostgreSQL/Redis/Alloy/LGTM in Docker and application processes on the host.
+services:
+  backend:
+    profiles: [container-app]
+  worker:
+    profiles: [container-app]
+  frontend:
+    profiles: [container-app]
+  alloy:
+    environment:
+      OBS_BACKEND_METRICS_TARGET: host.docker.internal:${BACKEND_METRICS_PORT:-9464}
+      OBS_WORKER_METRICS_TARGET: host.docker.internal:${WORKER_METRICS_PORT:-9465}

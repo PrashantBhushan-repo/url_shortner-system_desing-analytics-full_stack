@@ -1,0 +1,4 @@
+# Disposable smoke tests only; the extra HTTP listener is never deployed.
+services:
+  frontend:
+    ports: ["127.0.0.1:18081:8080"]

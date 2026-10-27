@@ -1,0 +1,102 @@
+logging { level = "warn" }
+
+otelcol.auth.basic "destination" {
+  username = sys.env("OTLP_USERNAME")
+  password = sys.env("OTLP_PASSWORD")
+}
+otelcol.exporter.otlphttp "destination" {
+  client {
+    endpoint = sys.env("OTLP_ENDPOINT")
+    auth = otelcol.auth.basic.destination.handler
+    timeout = "10s"
+  }
+  sending_queue {
+    enabled = true
+    num_consumers = 2
+    queue_size = 256
+  }
+  retry_on_failure {
+    enabled = true
+    initial_interval = "1s"
+    max_interval = "30s"
+    max_elapsed_time = "300s"
+  }
+}
+otelcol.processor.batch "default" {
+  timeout = "5s"
+  send_batch_size = 512
+  send_batch_max_size = 1024
+  output {
+    metrics = [otelcol.exporter.otlphttp.destination.input]
+    logs = [otelcol.exporter.otlphttp.destination.input]
+    traces = [otelcol.exporter.otlphttp.destination.input]
+  }
+}
+otelcol.processor.memory_limiter "default" {
+  check_interval = "1s"
+  limit = "192MiB"
+  spike_limit = "48MiB"
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    logs = [otelcol.processor.batch.default.input]
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+otelcol.receiver.otlp "app" {
+  http { endpoint = "0.0.0.0:4318" }
+  output {
+    traces = [otelcol.processor.memory_limiter.default.input]
+    logs = [otelcol.processor.memory_limiter.default.input]
+  }
+}
+otelcol.receiver.prometheus "metrics" {
+  output { metrics = [otelcol.processor.memory_limiter.default.input] }
+}
+prometheus.scrape "app" {
+  job_name = "app"
+  targets = [
+    { "__address__" = coalesce(sys.env("OBS_BACKEND_METRICS_TARGET"), "backend:9464"), "service" = "pburls-backend", "environment" = sys.env("OBS_ENVIRONMENT") },
+    { "__address__" = coalesce(sys.env("OBS_WORKER_METRICS_TARGET"), "worker:9465"), "service" = "pburls-worker", "environment" = sys.env("OBS_ENVIRONMENT") },
+  ]
+  scrape_interval = "15s"
+  scrape_timeout = "5s"
+  honor_labels = true
+  forward_to = [otelcol.receiver.prometheus.metrics.receiver]
+}
+prometheus.exporter.postgres "db" {
+  data_source_names = ["postgresql://" + encoding.url_encode(sys.env("OBS_POSTGRES_USER")) + ":" + encoding.url_encode(sys.env("OBS_POSTGRES_PASSWORD")) + "@db:5432/" + encoding.url_encode(sys.env("DB_NAME")) + "?sslmode=disable"]
+  disable_settings_metrics = true
+}
+prometheus.scrape "postgres" {
+  job_name = "postgres"
+  targets = prometheus.exporter.postgres.db.targets
+  scrape_interval = "30s"
+  scrape_timeout = "10s"
+  forward_to = [prometheus.relabel.infrastructure.receiver]
+}
+prometheus.exporter.redis "cache" {
+  redis_addr = "redis:6379"
+  connection_timeout = "3s"
+  redis_metrics_only = true
+  export_key_values = false
+}
+prometheus.scrape "redis" {
+  job_name = "redis"
+  targets = prometheus.exporter.redis.cache.targets
+  scrape_interval = "30s"
+  scrape_timeout = "5s"
+  forward_to = [prometheus.relabel.infrastructure.receiver]
+}
+prometheus.scrape "alloy" {
+  job_name = "alloy"
+  targets = [{ "__address__" = "127.0.0.1:12345" }]
+  scrape_interval = "30s"
+  forward_to = [prometheus.relabel.infrastructure.receiver]
+}
+prometheus.relabel "infrastructure" {
+  rule {
+    target_label = "environment"
+    replacement = sys.env("OBS_ENVIRONMENT")
+  }
+  forward_to = [otelcol.receiver.prometheus.metrics.receiver]
+}

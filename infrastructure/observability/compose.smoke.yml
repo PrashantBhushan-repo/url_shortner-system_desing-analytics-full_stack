@@ -1,0 +1,34 @@
+services:
+  backend:
+    environment:
+      OTEL_SDK_DISABLED: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_TRACES_SAMPLER: always_on
+      OBS_REQUEST_LOG_SAMPLE_RATIO: "1"
+  worker:
+    environment:
+      OTEL_SDK_DISABLED: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_TRACES_SAMPLER: always_on
+  lgtm:
+    image: grafana/otel-lgtm:0.38.0
+    ports: ["127.0.0.1:13001:3000"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
+  alloy:
+    image: grafana/alloy:v1.21.2
+    command: [run, --server.http.listen-addr=0.0.0.0:12345, /etc/alloy/config.alloy]
+    environment:
+      OTLP_ENDPOINT: http://lgtm:4318
+      OTLP_USERNAME: local
+      OTLP_PASSWORD: local
+      OBS_ENVIRONMENT: production
+      OBS_POSTGRES_USER: pburls_monitor
+      OBS_POSTGRES_PASSWORD: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      DB_NAME: smoke
+    volumes: ["./observability/config.alloy:/etc/alloy/config.alloy:ro"]
