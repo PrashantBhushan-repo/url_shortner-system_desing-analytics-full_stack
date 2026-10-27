@@ -1,4 +1,5 @@
 import { trace, SpanStatusCode } from "@opentelemetry/api";
+import { logger } from '../telemetry/logger.js';
 
 export const errorHandler = (err, req, res, next) => {
   const statusCode = err.statusCode || 500;
@@ -11,8 +12,8 @@ export const errorHandler = (err, req, res, next) => {
     }
   }
 
-  console.error(`[Error ${statusCode}]`, err.message);
-  if (statusCode >= 500) {
+  logger.error('http.handler.error', { status_code: String(statusCode), error_type: err.name || 'Error' });
+  if (process.env.NODE_ENV !== 'production') {
     console.error(err.stack);
   }
 
@@ -35,7 +36,7 @@ export const errorHandler = (err, req, res, next) => {
   }
 
   if (err?.code && err.code.startsWith("23")) {
-    console.error("PostgreSQL error:", err.code, err.detail || err.message);
+    if (process.env.NODE_ENV !== 'production') console.error("PostgreSQL error:", err.code, err.detail || err.message);
     message = "Database error occurred";
     details = null;
   }

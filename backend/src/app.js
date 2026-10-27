@@ -28,13 +28,14 @@ import {
   redirectLimiter,
 } from "./middlewares/rateLimit.middleware.js";
 import { config } from "./config/config.js";
-import { requestTracing } from "./middlewares/requestTracing.middleware.js";
+import prisma from './config/prismaClient.js';
+import { getRedisClient, isRedisReady } from './config/redisClient.js';
+import { checkReadiness } from './utils/readiness.js';
 import { metricsMiddleware } from "./middlewares/metrics.middleware.js";
 
 const app = express();
 
-app.set("trust proxy", 1);
-app.use(requestTracing);
+app.set("trust proxy", config.trustProxy);
 app.use(metricsMiddleware);
 
 app.use(
@@ -66,6 +67,17 @@ app.get("/health", (req, res) => {
     message: "PBUrls API is running",
     timestamp: new Date().toISOString(),
   });
+});
+
+app.get('/ready', async (req, res) => {
+  const ready = await checkReadiness({
+    database: () => prisma.$queryRaw`SELECT 1`,
+    redis: async () => {
+      if (!isRedisReady()) throw new Error('Redis not ready');
+      await getRedisClient().ping();
+    },
+  });
+  res.status(ready ? 200 : 503).json({ ready });
 });
 
 app.get("/metrics", async (req, res) => {

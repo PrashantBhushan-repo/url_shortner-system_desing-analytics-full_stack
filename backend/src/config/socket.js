@@ -1,3 +1,6 @@
+import prisma from "./prismaClient.js";
+import { getJwtSecret } from "../utils/auth.utils.js";
+import { createSocketAuthorization } from "../utils/socketAuthorization.js";
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import Redis from "ioredis";
@@ -34,39 +37,34 @@ export const initSocket = (httpServer) => {
     console.warn("Socket.io Redis adapter fallback to in-memory:", adapterErr.message);
   }
 
-  // Middleware to authenticate socket connections using JWT
-  io.use((socket, next) => {
-    const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(" ")[1];
-    if (!token) {
-      return next(new Error("Authentication error: Token missing"));
-    }
-
-    try {
-      const decoded = jwt.verify(token, config.jwt.secret);
-      socket.user = decoded;
-      next();
-    } catch (err) {
-      next(new Error("Authentication error: Invalid token"));
-    }
+  const access = createSocketAuthorization({
+    verifyToken: token => jwt.verify(token, getJwtSecret()),
+    findUser: id => prisma.user.findUnique({ where: { id }, select: { id: true, role: true, status: true, tokenVersion: true } }),
+    findUrl: id => prisma.url.findUnique({ where: { id }, select: { id: true, user_id: true } }),
   });
-
-  io.on("connection", (socket) => {
-    console.log(`🔌 Socket connected: ${socket.id} (User: ${socket.user?.id})`);
-
-    // Listen for users joining/leaving specific URL rooms
-    socket.on("join-url", (urlId) => {
-      socket.join(`url:${urlId}`);
-      console.log(`User ${socket.user.id} joined room url:${urlId}`);
+  io.use(async (socket, next) => {
+    try {
+      const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(" ")[1];
+      if (!token) throw new Error("Authentication required");
+      socket.accessToken = token;
+      socket.user = await access.authenticate(token);
+      next();
+    } catch { next(new Error("Authentication required")); }
+  });
+  io.on("connection", socket => {
+    const expiration = socket.user.expiresAt ? setTimeout(() => socket.disconnect(true), Math.max(0, socket.user.expiresAt - Date.now())) : null;
+    socket.on("join-url", async (rawId, ack) => {
+      try {
+        await access.authorizeRoom(socket.accessToken, rawId);
+        await socket.join(`url:${BigInt(rawId)}`);
+        if (typeof ack === "function") ack({ success: true });
+      } catch {
+        if (typeof ack === "function") ack({ success: false, message: "Link unavailable" });
+        socket.emit("analytics-error", { message: "Link unavailable" });
+      }
     });
-
-    socket.on("leave-url", (urlId) => {
-      socket.leave(`url:${urlId}`);
-      console.log(`User ${socket.user.id} left room url:${urlId}`);
-    });
-
-    socket.on("disconnect", () => {
-      console.log(`🔌 Socket disconnected: ${socket.id}`);
-    });
+    socket.on("leave-url", rawId => { if (/^\d+$/.test(String(rawId))) socket.leave(`url:${BigInt(rawId)}`); });
+    socket.on("disconnect", () => clearTimeout(expiration));
   });
 
   // Subscribe directly to redis worker pub/sub channel

@@ -16,7 +16,7 @@ export const getRedisClient = () => {
       });
 
       redisClient.on("error", (err) => {
-        redisErrorsTotal.inc({ service: "redis" });
+        redisErrorsTotal.inc({ client: "ioredis" });
         // Log quietly once or suppress repeating unhandled events when offline
       });
 
