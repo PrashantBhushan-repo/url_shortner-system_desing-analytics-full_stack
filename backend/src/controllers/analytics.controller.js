@@ -1,3 +1,4 @@
+import { assertUrlAccess } from "../utils/urlAccess.js";
 import prisma from "../config/prismaClient.js";
 import { AppError } from "../utils/AppError.js";
 import {
@@ -12,26 +13,20 @@ import {
 } from "../services/analytics.service.js";
 import { getAnalyticsRetentionCutoff } from "../services/planLimitService.js";
 import { traceAnalytics } from "../telemetry/businessSpans.js";
+import { getLocationReport, locationQuery } from '../services/locationAnalytics.service.js';
 
 // Helper to verify that the URL belongs to the authenticated user (or user is ADMIN)
-const checkOwnership = async (urlId, user) => {
-  if (!urlId) {
-    throw new AppError("URL ID is required", 400);
-  }
-  
-  if (user.role === "ADMIN") return;
+const checkOwnership = (urlId, user) => assertUrlAccess(urlId, user, id => prisma.url.findUnique({ where: { id }, select: { id: true, user_id: true } }));
 
-  const url = await prisma.url.findUnique({
-    where: { id: BigInt(urlId) },
-  });
-
-  if (!url) {
-    throw new AppError("URL not found", 404);
-  }
-
-  if (url.user_id !== user.id) {
-    throw new AppError("Unauthorized access to this URL's analytics", 403);
-  }
+export const fetchLocations = async (req, res, next) => {
+  try {
+    const detail = req.path.endsWith('/detail');
+    const options = locationQuery(req.query, detail);
+    await checkOwnership(req.params.urlId, req.user);
+    const cutoff = await getAnalyticsRetentionCutoff(req.user.id);
+    const data = await getLocationReport(req.params.urlId, req.query.range, cutoff, options, detail);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
 };
 
 export const fetchOverview = async (req, res, next) => {

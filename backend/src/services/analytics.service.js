@@ -1,11 +1,14 @@
+import { analyticsWindow, fillTimeBuckets } from "../utils/analyticsWindow.js";
+import { observePrismaQuery } from '../telemetry/database.js';
 import { PrismaClient } from "../generated/prisma/index.js";
-import { getRedisClient, isRedisReady } from "../config/redisClient.js";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ log: [{ level: 'query', emit: 'event' }] });
+prisma.$on?.('query', observePrismaQuery);
 
 // Helper to convert BigInts to numbers recursively (safe up to 9 quadrillion)
 const serialize = (obj) => {
   if (obj === null || obj === undefined) return obj;
+  if (obj instanceof Date) return obj.toISOString();
   if (typeof obj === "bigint") return Number(obj);
   if (Array.isArray(obj)) return obj.map(serialize);
   if (typeof obj === "object") {
@@ -17,194 +20,43 @@ const serialize = (obj) => {
 };
 
 // Parse date range into start/end dates
-const parseRange = (range, cutoff = null) => {
-  const end = new Date();
-  let start = new Date();
-  
-  if (range === "24h") {
-    start.setHours(end.getHours() - 24);
-  } else if (range === "7d") {
-    start.setDate(end.getDate() - 7);
-  } else if (range === "30d") {
-    start.setDate(end.getDate() - 30);
-  } else {
-    // Default to 7 days
-    start.setDate(end.getDate() - 7);
-  }
+const parseRange = analyticsWindow;
 
-  if (cutoff && start < cutoff) {
-    start = new Date(cutoff);
-  }
-
-  return { start, end };
-};
-
-// 1. Overview stats: total, unique, bot clicks + growth comparison
+// Raw events make rolling windows accurate, including partial days and today's activity.
 export const getUrlOverview = async (urlId, range = "7d", cutoff = null) => {
-  const redis = getRedisClient();
-  const cacheKey = `dash_cache:${urlId}:overview:${range}:${cutoff ? cutoff.getTime() : "unlimited"}`;
-
-  // Check cache
-  if (isRedisReady()) {
-    try {
-      const cached = await redis.get(cacheKey);
-      if (cached) return JSON.parse(cached);
-    } catch (err) {
-      console.error("Cache read error in analytics overview:", err.message);
-    }
-  }
-
   const { start, end } = parseRange(range, cutoff);
-  const duration = end.getTime() - start.getTime();
-  const prevStart = new Date(start.getTime() - duration);
-
-  const urlBigIntId = BigInt(urlId);
-
-  // Get current period rollups from UrlStatsDaily
-  const currentDailyStats = await prisma.urlStatsDaily.aggregate({
-    _sum: {
-      total_clicks: true,
-      unique_clicks: true,
-      bot_clicks: true,
-    },
-    where: {
-      url_id: urlBigIntId,
-      bucket_date: {
-        gte: start,
-        lte: end,
-      },
-    },
-  });
-
-  // Get previous period rollups for growth comparison
-  const previousDailyStats = await prisma.urlStatsDaily.aggregate({
-    _sum: {
-      total_clicks: true,
-      unique_clicks: true,
-      bot_clicks: true,
-    },
-    where: {
-      url_id: urlBigIntId,
-      bucket_date: {
-        gte: prevStart,
-        lt: start,
-      },
-    },
-  });
-
-  const total = currentDailyStats._sum.total_clicks || 0;
-  const unique = currentDailyStats._sum.unique_clicks || 0;
-  const bot = currentDailyStats._sum.bot_clicks || 0;
-
-  const prevTotal = previousDailyStats._sum.total_clicks || 0;
-  const prevUnique = previousDailyStats._sum.unique_clicks || 0;
-
-  // Calculate Growth percentages
-  const totalGrowth = prevTotal === 0 ? (total > 0 ? 100 : 0) : ((total - prevTotal) / prevTotal) * 100;
-  const uniqueGrowth = prevUnique === 0 ? (unique > 0 ? 100 : 0) : ((unique - prevUnique) / prevUnique) * 100;
-
-  // Query live click volume in the last 15 minutes
-  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
-  const liveClicksCount = await prisma.click.count({
-    where: {
-      url_id: urlBigIntId,
-      clicked_at: {
-        gte: fifteenMinutesAgo,
-      },
-    },
-  });
-
-  const recentClicks = await prisma.click.findMany({
-    where: {
-      url_id: urlBigIntId,
-    },
-    select: {
-      country: true,
-      device_type: true,
-      clicked_at: true,
-    },
-    orderBy: {
-      clicked_at: "desc",
-    },
-    take: 10,
-  });
-
-  const result = serialize({
-    totalClicks: total,
-    uniqueClicks: unique,
-    botClicks: bot,
-    liveClicks: liveClicksCount,
-    recentClicks: recentClicks.map(rc => ({
-      country: rc.country || "Unknown",
-      device: rc.device_type || "desktop",
-      timestamp: rc.clicked_at.toISOString(),
-    })),
-    growth: {
-      total: Math.round(totalGrowth * 10) / 10,
-      unique: Math.round(uniqueGrowth * 10) / 10,
-    },
-  });
-
-  // Save to cache (2 mins TTL)
-  if (isRedisReady()) {
-    try {
-      await redis.set(cacheKey, JSON.stringify(result), "EX", 120);
-    } catch (err) {
-      console.error("Cache write error in analytics overview:", err.message);
-    }
-  }
-
-  return result;
+  const prevStart = new Date(Math.max(start.getTime() - (end - start), cutoff ? new Date(cutoff).getTime() : 0));
+  const id = BigInt(urlId);
+  const [rows, liveClicks, recentClicks] = await Promise.all([
+    prisma.$queryRaw`
+      SELECT COUNT(*) FILTER (WHERE clicked_at >= ${start}) AS total,
+        COUNT(DISTINCT visitor_id) FILTER (WHERE clicked_at >= ${start} AND NOT is_bot) AS unique,
+        COUNT(*) FILTER (WHERE clicked_at >= ${start} AND is_bot) AS bot,
+        COUNT(*) FILTER (WHERE clicked_at < ${start}) AS previous,
+        COUNT(DISTINCT visitor_id) FILTER (WHERE clicked_at < ${start} AND NOT is_bot) AS previous_unique,
+        COUNT(*) FILTER (WHERE clicked_at >= ${start} AND is_qr_scan) AS scans
+      FROM "Click" WHERE url_id = ${id} AND clicked_at >= ${prevStart} AND clicked_at <= ${end}
+    `,
+    prisma.click.count({ where: { url_id: id, clicked_at: { gte: new Date(Math.max(end - 900000, cutoff ? new Date(cutoff).getTime() : 0)), lte: end } } }),
+    prisma.click.findMany({ where: { url_id: id, clicked_at: { gte: start, lte: end } }, select: { country: true, device_type: true, clicked_at: true }, orderBy: { clicked_at: "desc" }, take: 10 }),
+  ]);
+  const row = rows[0] || {};
+  const total = Number(row.total || 0), unique = Number(row.unique || 0);
+  const growth = (value, previous) => Number(previous) ? Math.round((value - Number(previous)) / Number(previous) * 1000) / 10 : null;
+  return { totalClicks: total, uniqueClicks: unique, botClicks: Number(row.bot || 0), qrScans: Number(row.scans || 0), liveClicks, recentClicks: recentClicks.map(click => ({ country: click.country || "Unknown", device: click.device_type || "Unknown", timestamp: click.clicked_at.toISOString() })), growth: { total: growth(total, row.previous || 0), unique: growth(unique, row.previous_unique || 0) }, period: { start: start.toISOString(), end: end.toISOString() } };
 };
 
-// 2. Time-series chart: hourly or daily logs
 export const getUrlTimeseries = async (urlId, range = "7d", cutoff = null) => {
   const { start, end } = parseRange(range, cutoff);
-  const urlBigIntId = BigInt(urlId);
-
-  let data = [];
-
-  if (range === "24h") {
-    // Fetch hourly rollup bucket stats
-    const hourly = await prisma.urlStatsHourly.findMany({
-      where: {
-        url_id: urlBigIntId,
-        bucket_start: {
-          gte: start,
-          lte: end,
-        },
-      },
-      orderBy: { bucket_start: "asc" },
-    });
-
-    data = hourly.map(h => ({
-      label: new Date(h.bucket_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-      clicks: h.total_clicks,
-      unique: h.unique_clicks,
-      bots: h.bot_clicks,
-    }));
-  } else {
-    // Fetch daily rollup bucket stats
-    const daily = await prisma.urlStatsDaily.findMany({
-      where: {
-        url_id: urlBigIntId,
-        bucket_date: {
-          gte: start,
-          lte: end,
-        },
-      },
-      orderBy: { bucket_date: "asc" },
-    });
-
-    data = daily.map(d => ({
-      label: new Date(d.bucket_date).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-      clicks: d.total_clicks,
-      unique: d.unique_clicks,
-      bots: d.bot_clicks,
-    }));
-  }
-
-  return serialize(data);
+  const unit = range === "24h" ? "hour" : "day";
+  const rows = await prisma.$queryRaw`
+    SELECT date_trunc(${unit}, clicked_at) AS bucket,
+      COUNT(*) AS clicks, COUNT(DISTINCT visitor_id) FILTER (WHERE NOT is_bot) AS unique,
+      COUNT(*) FILTER (WHERE is_bot) AS bots
+    FROM "Click" WHERE url_id = ${BigInt(urlId)} AND clicked_at >= ${start} AND clicked_at <= ${end}
+    GROUP BY bucket ORDER BY bucket
+  `;
+  return fillTimeBuckets(rows, range, start, end);
 };
 
 // 3. Location breakdown (from raw clicks in range)

@@ -1,3 +1,4 @@
+import { requestAdministrativeRefund } from '../services/billing.service.js';
 import prisma from "../config/prismaClient.js";
 import { getRedisClient, isRedisReady } from "../config/redisClient.js";
 import { AppError } from "../utils/AppError.js";
@@ -332,70 +333,10 @@ export const listPayments = async (req, res, next) => {
  */
 export const refundPaymentAdmin = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const { amount, reason } = req.body;
-
-    const payment = await prisma.payment.findUnique({
-      where: { id },
-      include: { plan: true },
-    });
-
-    if (!payment) {
-      throw new AppError("Payment record not found.", 404);
-    }
-
-    if (payment.status !== "CAPTURED" && payment.status !== "PARTIALLY_REFUNDED") {
-      throw new AppError("Only captured or partially refunded payments can be refunded.", 400);
-    }
-
-    if (!payment.gateway_payment_id) {
-      throw new AppError("No captured gateway payment reference available.", 400);
-    }
-
-    const refundAmount = amount ? parseInt(amount) : (payment.amount - payment.refunded_amount);
-
-    if (refundAmount <= 0) {
-      throw new AppError("Refund amount must be greater than zero.", 400);
-    }
-
-    if (payment.refunded_amount + refundAmount > payment.amount) {
-      throw new AppError("Total refund amount cannot exceed original payment amount.", 400);
-    }
-
-    // Set audit metadata for logger middleware
-    req.auditMetadata = {
-      paymentId: payment.id,
-      amount: refundAmount,
-      reason: reason || "Admin support goodwill refund",
-    };
-
-    const razorpay = getRazorpayInstance();
-    const refund = await razorpay.payments.refund(payment.gateway_payment_id, {
-      amount: refundAmount,
-      notes: {
-        paymentId: payment.id,
-        reason: reason || "Admin manual refund",
-      },
-    });
-
-    // Invalidate dashboard metrics cache on refund initiation
-    if (isRedisReady()) {
-      try {
-        const redis = getRedisClient();
-        await redis.del("admin:dashboard:overview");
-      } catch (cacheErr) {
-        console.error("Dashboard overview invalidate error:", cacheErr.message);
-      }
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Refund initiated successfully. Hook process will reconcile database status.",
-      data: refund,
-    });
-  } catch (err) {
-    next(err);
-  }
+    const refund = await requestAdministrativeRefund(req.params.id, req.body.amount, req.body.reason);
+    req.auditMetadata = { paymentId: req.params.id, refundId: refund.id, amount: refund.amount };
+    res.status(refund.status === 'PROCESSED' ? 200 : 202).json({ success: true, message: 'Refund recorded with the provider. Payment history shows its confirmed status.', data: refund });
+  } catch (error) { next(error); }
 };
 
 /**
