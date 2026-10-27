@@ -7,21 +7,33 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:demo": "node --test src/pages/demo/demoData.test.js",
+    "test:workspace": "node --test src/services/workspace.test.js src/services/sessionBoundary.test.js src/services/chartData.test.js",
+    "test:auth": "node --test src/services/authFlow.test.js src/services/sessionBoundary.test.js",
+    "test:billing": "node --experimental-test-module-mocks --test src/services/billingModel.test.js src/services/billingCheckout.test.js",
+    "test:navigation": "node --test src/routes/navigation.test.js",
+    "test:navigation:browser": "node test/navigation.browser.mjs",
+    "test:env": "node --test src/services/apiConfig.test.js",
+    "test:socket": "node --test test/socket-proxy.test.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.1",
     "axios": "^1.18.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.21.0",
     "qr-code-styling": "^1.5.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-leaflet": "^5.0.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.1",
     "recharts": "^3.10.0",
     "socket.io-client": "^4.8.3",
-    "tailwindcss": "^4.3.1"
+    "tailwindcss": "^4.3.1",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
