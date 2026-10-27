@@ -74,13 +74,13 @@ function DomainSettings() {
   };
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
-      <div className="border-b border-white/10 pb-5">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <Globe className="w-5 h-5 text-blue-400" /> Custom Domains
+    <div className="settings-radius border settings-border settings-surface p-6 shadow-xl">
+      <div className="border-b settings-border pb-5">
+        <h2 className="text-xl font-bold settings-ink flex items-center gap-2">
+          <Globe className="w-5 h-5 settings-accent" /> Custom Domains
         </h2>
-        <p className="mt-1 text-xs text-slate-400">
-          Brand your short links with your own custom domain. (e.g. <code className="text-blue-300 font-mono">link.yourbrand.com</code>)
+        <p className="mt-1 text-xs settings-muted">
+          Brand your short links with your own custom domain. (e.g. <code className="settings-accent font-mono">link.yourbrand.com</code>)
         </p>
       </div>
 
@@ -107,14 +107,14 @@ function DomainSettings() {
             placeholder="e.g. link.mycompany.com"
             value={newDomain}
             onChange={(e) => setNewDomain(e.target.value)}
-            className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none focus:border-blue-500"
+            className="w-full rounded-2xl border settings-border settings-surface px-4 py-3 text-sm settings-ink outline-none focus:border-blue-500"
             disabled={submitting}
             required
           />
         </div>
         <button
           type="submit"
-          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-2xl px-6 py-3 text-xs font-black tracking-widest uppercase transition duration-150 flex items-center justify-center gap-2 cursor-pointer"
+          className="settings-primary hover:bg-blue-500 disabled:opacity-50 settings-ink rounded-2xl px-6 py-3 text-xs font-black tracking-widest uppercase transition duration-150 flex items-center justify-center gap-2 cursor-pointer"
           disabled={submitting}
         >
           {submitting ? (
@@ -127,28 +127,28 @@ function DomainSettings() {
       </form>
 
       {/* Domain Instructions */}
-      <div className="mt-6 rounded-2xl border border-white/5 bg-slate-950/40 p-4 text-xs text-slate-400 space-y-2">
-        <div className="flex items-center gap-1.5 font-bold text-white uppercase text-[10px] tracking-wider">
-          <Info className="w-3.5 h-3.5 text-blue-400" /> Setup Instructions
+      <div className="mt-6 rounded-2xl border settings-border settings-surface p-4 text-xs settings-muted space-y-2">
+        <div className="flex items-center gap-1.5 font-bold settings-ink uppercase text-[10px] tracking-wider">
+          <Info className="w-3.5 h-3.5 settings-accent" /> Setup Instructions
         </div>
         <ol className="list-decimal pl-4 space-y-1">
-          <li>Add a DNS <code className="text-white font-mono bg-zinc-800 px-1 rounded">CNAME</code> record pointing your subdomain to <code className="text-white font-mono bg-zinc-800 px-1 rounded">localhost</code> (or your deployment gateway).</li>
-          <li>Add a DNS <code className="text-white font-mono bg-zinc-800 px-1 rounded">TXT</code> record on your domain containing the verification token shown below.</li>
-          <li>Click <code className="text-white font-mono">Verify DNS</code> to activate your domain.</li>
+          <li>Add a DNS <code className="settings-ink font-mono settings-surface px-1 rounded">CNAME</code> record pointing your subdomain to <code className="settings-ink font-mono settings-surface px-1 rounded">localhost</code> (or your deployment gateway).</li>
+          <li>Add a DNS <code className="settings-ink font-mono settings-surface px-1 rounded">TXT</code> record on your domain containing the verification token shown below.</li>
+          <li>Click <code className="settings-ink font-mono">Verify DNS</code> to activate your domain.</li>
         </ol>
       </div>
 
       {/* Domains List */}
       <div className="mt-8 space-y-4">
-        <h3 className="text-xs uppercase tracking-wider text-slate-400 font-bold">Registered Domains</h3>
+        <h3 className="text-xs uppercase tracking-wider settings-muted font-bold">Registered Domains</h3>
 
         {loading ? (
-          <div className="p-8 text-center text-xs text-slate-500 flex flex-col items-center gap-2 animate-pulse">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+          <div className="p-8 text-center text-xs settings-muted flex flex-col items-center gap-2 animate-pulse">
+            <Loader2 className="w-6 h-6 animate-spin settings-accent" />
             <span>Synchronizing domain records...</span>
           </div>
         ) : domains.length === 0 ? (
-          <div className="rounded-2xl border border-white/5 bg-slate-950/20 p-8 text-center text-xs text-slate-500">
+          <div className="rounded-2xl border settings-border settings-surface p-8 text-center text-xs settings-muted">
             No custom domains added yet.
           </div>
         ) : (
@@ -156,16 +156,16 @@ function DomainSettings() {
             {domains.map((domain) => (
               <div
                 key={domain.id}
-                className="rounded-2xl border border-white/5 bg-slate-950/40 p-5 space-y-4 hover:border-white/10 transition"
+                className="rounded-2xl border settings-border settings-surface p-5 space-y-4 hover:border-white/10 transition"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-slate-900 border border-white/5 flex items-center justify-center text-slate-400">
+                    <div className="w-8 h-8 rounded-xl settings-surface border settings-border flex items-center justify-center settings-muted">
                       <Globe className="w-4 h-4" />
                     </div>
                     <div>
-                      <span className="text-sm font-bold text-white block">{domain.domain}</span>
-                      <span className="text-[10px] text-slate-500 font-medium">Domain identifier: {domain.id}</span>
+                      <span className="text-sm font-bold settings-ink block">{domain.domain}</span>
+                      <span className="text-[10px] settings-muted font-medium">Domain identifier: {domain.id}</span>
                     </div>
                   </div>
 
@@ -184,7 +184,7 @@ function DomainSettings() {
                       <button
                         onClick={() => handleVerifyDomain(domain.id)}
                         disabled={verifyingId === domain.id}
-                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                        className="px-3.5 py-1.5 settings-primary hover:bg-blue-500 disabled:opacity-50 settings-ink rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                       >
                         {verifyingId === domain.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         Verify DNS
@@ -194,15 +194,15 @@ function DomainSettings() {
                 </div>
 
                 {!domain.verified && domain.verificationToken && (
-                  <div className="rounded-xl bg-slate-900/60 p-3 border border-white/5 text-[11px] font-mono flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div className="rounded-xl settings-surface p-3 border settings-border text-[11px] font-mono flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                     <div className="truncate pr-4">
-                      <span className="text-slate-500 block uppercase text-[9px] font-sans font-bold tracking-wider mb-0.5">TXT Record Content</span>
-                      <span className="text-slate-300 font-mono select-all">{domain.verificationToken}</span>
+                      <span className="settings-muted block uppercase text-[9px] font-sans font-bold tracking-wider mb-0.5">TXT Record Content</span>
+                      <span className="settings-ink font-mono select-all">{domain.verificationToken}</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => copyToClipboard(domain.verificationToken, domain.id)}
-                      className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition duration-150 cursor-pointer shrink-0"
+                      className="p-2 rounded-lg settings-surface hover:bg-slate-700 settings-ink transition duration-150 cursor-pointer shrink-0"
                       title="Copy Token"
                     >
                       {copiedToken === domain.id ? (

@@ -1,21 +1,23 @@
 import { useMemo, useRef, useState } from "react";
-import { 
-  User, 
-  Mail, 
-  Upload, 
-  Trash2, 
-  Shield, 
-  CheckCircle2, 
-  AlertCircle, 
-  Loader2, 
-  Calendar, 
-  Lock, 
-  KeyRound, 
-  Check, 
-  X,
-  ArrowRight,
+import {
+  User,
+  Mail,
+  Upload,
+  Trash2,
   ShieldCheck,
-  Camera
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Calendar,
+  KeyRound,
+  Check,
+  ArrowRight,
+  Camera,
+  Globe2,
+  Sparkles,
+  ArrowUpRight,
+  ShieldAlert,
+  Fingerprint
 } from "lucide-react";
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -60,7 +62,7 @@ const resizeImage = (file) =>
     reader.readAsDataURL(file);
   });
 
-function ProfileSettings({
+export default function ProfileSettings({
   user,
   profileForm,
   setProfileForm,
@@ -79,7 +81,8 @@ function ProfileSettings({
   emailError,
   loadingEmailChange,
   onEmailRequest,
-  onEmailConfirm
+  onEmailConfirm,
+  onTabChange,
 }) {
   const fileInputRef = useRef(null);
   const [imageError, setImageError] = useState("");
@@ -96,6 +99,10 @@ function ProfileSettings({
     ? new Date(user.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })
     : null;
 
+  const isDirty =
+    (profileForm.name || "") !== (user?.name || "") ||
+    (profileForm.profileImage || "") !== (user?.profileImage || "");
+
   const handleImageChange = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -104,12 +111,12 @@ function ProfileSettings({
     setImageError("");
 
     if (!file.type.startsWith("image/")) {
-      setImageError("Please select a PNG, JPG, or WebP image.");
+      setImageError("Please select a PNG, JPG, or WebP image file.");
       return;
     }
 
     if (file.size > MAX_IMAGE_BYTES) {
-      setImageError("Image size must be 2 MB or smaller.");
+      setImageError("Image file size must be 2 MB or smaller.");
       return;
     }
 
@@ -127,355 +134,399 @@ function ProfileSettings({
   };
 
   return (
-    <div className="space-y-8 font-sans text-slate-200">
-      
-      {/* Top Banner Alert Messages */}
-      {(message || error) && (
-        <div className="space-y-3">
-          {message && (
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 px-4 py-3 text-xs text-emerald-300 flex items-center gap-2.5 font-mono">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-              <span>{message}</span>
-            </div>
-          )}
-          {error && (
-            <div className="rounded-2xl border border-rose-500/20 bg-rose-950/20 px-4 py-3 text-xs text-rose-300 flex items-center gap-2.5 font-mono">
-              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+    <div className="profile-panel-container">
+      {/* Feedback Messages */}
+      {message && (
+        <div className="profile-alert profile-alert-success" role="status">
+          <CheckCircle2 size={16} />
+          <span>{message}</span>
+        </div>
+      )}
+      {error && (
+        <div className="profile-alert profile-alert-error" role="alert">
+          <AlertCircle size={16} />
+          <span>{error}</span>
         </div>
       )}
 
-      {/* SECTION 1: IDENTITY CARD & AVATAR MANAGEMENT */}
-      <div className="rounded-3xl border border-zinc-800 bg-zinc-950/90 p-6 md:p-8 shadow-xl relative overflow-hidden space-y-6">
-        
-        {/* Header Title */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-zinc-800/80">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight">
-                Profile &amp; Identity
-              </h3>
-              <span className="px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider bg-blue-500/10 border border-blue-500/30 text-blue-400">
-                OPERATOR PROFILE
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Manage your personal credentials, identity photo, and contact channels.
+      {/* Main Profile & Identity Card */}
+      <div className="profile-card">
+        {/* Terminal / Window Bar Header */}
+        <div className="lp-window-bar">
+          <div className="lp-window-dots">
+            <i />
+            <i />
+            <i />
+          </div>
+          <span>
+            <Fingerprint size={12} /> Your personal profile
+          </span>
+          <span className="lp-sample">Account profile</span>
+        </div>
+
+        <div className="profile-card-body">
+          {/* Header Title */}
+          <div className="profile-card-header">
+            <span className="lp-eyebrow">PROFILE DETAILS</span>
+            <h3>Personal information</h3>
+            <p>
+              Update how you appear across your workspace, shared links, and team.
             </p>
           </div>
 
-          {memberSince && (
-            <div className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-zinc-900 px-3.5 py-1.5 rounded-xl border border-zinc-800 shrink-0">
-              <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Member since: <strong className="text-slate-200">{memberSince}</strong></span>
-            </div>
-          )}
-        </div>
-
-        {/* Avatar Presentation & Upload Controls */}
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/90">
-          
-          {/* Avatar Container */}
-          <div className="relative shrink-0 group">
-            {profileImagePreview ? (
-              <img
-                src={profileImagePreview}
-                alt="Profile Avatar"
-                className="h-24 w-24 rounded-2xl border-2 border-indigo-500/50 object-cover shadow-lg ring-4 ring-indigo-500/10 transition group-hover:scale-102"
-              />
-            ) : (
-              <div className="flex h-24 w-24 items-center justify-center rounded-2xl border-2 border-zinc-700 bg-gradient-to-br from-slate-900 to-indigo-950 text-2xl font-black font-mono text-indigo-300 shadow-lg ring-4 ring-white/5">
-                {initials}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute -bottom-2 -right-2 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg border-2 border-zinc-950 transition cursor-pointer"
-              title="Upload new avatar image"
-            >
-              <Camera className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Avatar Info & Actions */}
-          <div className="flex-1 space-y-3 text-center sm:text-left">
-            <div>
-              <div className="flex items-center justify-center sm:justify-start gap-2">
-                <h4 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
-                  {profileForm.name || user?.name || "Operator"}
-                </h4>
-                <span className="px-2 py-0.5 rounded-md text-[8.5px] font-mono font-bold uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center gap-1">
-                  <ShieldCheck className="w-2.5 h-2.5" />
-                  {user?.role || "USER"}
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-1 font-sans">
-                JPG, PNG, or WebP up to 2 MB. Square aspect ratio is recommended for best clarity.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1">
+          {/* Avatar Management Studio */}
+          <div className="profile-avatar-studio">
+            <div className="profile-avatar-wrapper">
+              {profileImagePreview ? (
+                <img
+                  src={profileImagePreview}
+                  alt="Profile Avatar"
+                  className="profile-avatar-preview"
+                />
+              ) : (
+                <div className="profile-avatar-initials">
+                  {initials}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-bold text-slate-200 hover:text-white transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                className="profile-avatar-camera-btn"
+                title="Change profile avatar"
+                aria-label="Upload profile image"
               >
-                <Upload className="w-3.5 h-3.5 text-blue-400" />
-                <span>Upload New Image</span>
+                <Camera size={15} />
               </button>
-
-              {profileImagePreview && (
-                <button
-                  type="button"
-                  onClick={handleRemoveImage}
-                  className="px-3.5 py-2 rounded-xl bg-rose-950/20 hover:bg-rose-900/30 border border-rose-500/30 text-xs font-bold text-rose-300 transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Remove</span>
-                </button>
-              )}
             </div>
 
-            {imageError && (
-              <p className="text-xs text-rose-400 font-mono flex items-center gap-1 mt-2 justify-center sm:justify-start">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>{imageError}</span>
+            <div className="profile-avatar-info">
+              <h4>
+                <span>{profileForm.name || user?.name || "Workspace member"}</span>
+                <span className="lp-announcement" style={{ margin: 0, padding: "3px 8px" }}>
+                  <span className="lp-live-dot" /> {user?.role || "USER"}
+                </span>
+              </h4>
+              <p>
+                PNG, JPG, or WebP up to 2 MB. Square images work best across share cards and dashboards.
               </p>
-            )}
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              onChange={handleImageChange}
-              className="hidden"
-            />
+              <div className="profile-avatar-actions">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="lp-btn lp-btn-small"
+                >
+                  <Upload size={14} /> Upload image
+                </button>
+
+                {profileImagePreview && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="lp-btn lp-btn-secondary lp-btn-small"
+                  >
+                    <Trash2 size={14} /> Remove avatar
+                  </button>
+                )}
+              </div>
+
+              {imageError && (
+                <p className="profile-input-hint" style={{ color: "#f87171", marginTop: 8 }}>
+                  <AlertCircle size={13} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />
+                  {imageError}
+                </p>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={handleImageChange}
+                style={{ display: "none" }}
+              />
+            </div>
           </div>
 
-        </div>
-
-      </div>
-
-      {/* SECTION 2: EDITABLE PROFILE PARAMETERS FORM */}
-      <form onSubmit={onSubmit} className="rounded-3xl border border-zinc-800 bg-zinc-950/90 p-6 md:p-8 shadow-xl space-y-6">
-        
-        <div className="pb-4 border-b border-zinc-800">
-          <h4 className="text-base font-bold text-white flex items-center gap-2">
-            <User className="w-4 h-4 text-blue-400" />
-            Account Parameters
-          </h4>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Configure how your name and identity appear across links, telemetry logs, and dashboards.
-          </p>
-        </div>
-
-        <div className="space-y-6 max-w-2xl">
-          
-          {/* Display Name Input */}
-          <div className="space-y-2">
-            <label htmlFor="profile-name" className="block text-xs font-mono font-bold uppercase text-slate-300 tracking-wider">
-              Display Name
-            </label>
-            <div className="relative">
+          {/* Form */}
+          <form onSubmit={onSubmit} className="profile-form-grid">
+            {/* Display Name */}
+            <div className="profile-form-group">
+              <div className="profile-form-label-row">
+                <label htmlFor="profile-name" className="profile-form-label">
+                  Display Name
+                </label>
+                <span className="profile-char-count">
+                  {profileForm.name.length} / 50
+                </span>
+              </div>
               <input
                 id="profile-name"
                 type="text"
                 value={profileForm.name}
                 onChange={(e) => setProfileForm((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="e.g. Prashant Bhushan"
+                placeholder="e.g. Alex Rivera"
                 maxLength={50}
                 required
-                className="w-full rounded-xl border border-zinc-750 bg-zinc-900/90 px-4 py-3 text-sm text-white font-mono placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 shadow-inner"
+                className="profile-input"
               />
-            </div>
-            <p className="text-[11px] text-slate-500 font-sans">
-              Letters, spaces, hyphens, and apostrophes only. Maximum 50 characters.
-            </p>
-          </div>
-
-          {/* Email Address & Change Email Action */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label htmlFor="profile-email" className="block text-xs font-mono font-bold uppercase text-slate-300 tracking-wider">
-                Primary Account Email
-              </label>
-              <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1 font-bold">
-                <Check className="w-3 h-3 text-emerald-400" /> Verified Email
+              <span className="profile-input-hint">
+                Your name appears on your short links, team workspaces, generated reports, and activity logs. Letters, spaces, hyphens, and apostrophes allowed.
               </span>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="flex-1 relative">
+            {/* Email Address */}
+            <div className="profile-form-group">
+              <div className="profile-form-label-row">
+                <label htmlFor="profile-email" className="profile-form-label">
+                  Primary Account Email
+                </label>
+                <span className="profile-stat-badge">
+                  <ShieldCheck size={13} /> Verified
+                </span>
+              </div>
+              <div className="profile-email-row">
                 <input
                   id="profile-email"
                   type="email"
                   value={user?.email || ""}
                   disabled
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm font-mono text-slate-400 cursor-not-allowed outline-none"
+                  className="profile-input"
                 />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEmailForm(!showEmailForm);
+                    setEmailStep(1);
+                  }}
+                  className="lp-btn lp-btn-secondary lp-btn-small"
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  <Mail size={14} />
+                  {showEmailForm ? "Cancel change" : "Change email"}
+                </button>
               </div>
+              <span className="profile-input-hint">
+                Used for sign-in, account notifications, and security recovery tokens.
+              </span>
+            </div>
+
+            {/* Expandable Email Verification Wizard */}
+            {showEmailForm && (
+              <div className="profile-email-wizard">
+                <div className="profile-wizard-header">
+                  <span>
+                    <Mail size={14} style={{ display: "inline", verticalAlign: "middle", marginRight: 6 }} />
+                    {emailStep === 1 ? "Step 1 of 2: Request Email Change" : "Step 2 of 2: Verify 6-Digit OTP"}
+                  </span>
+                  <span className="lp-announcement" style={{ margin: 0, padding: "2px 7px", fontSize: 9 }}>
+                    {emailStep === 1 ? "AUTHORIZE" : "CONFIRM OTP"}
+                  </span>
+                </div>
+
+                {emailMessage && (
+                  <div className="profile-alert profile-alert-success" style={{ margin: 0 }}>
+                    <CheckCircle2 size={15} />
+                    <span>{emailMessage}</span>
+                  </div>
+                )}
+                {emailError && (
+                  <div className="profile-alert profile-alert-error" style={{ margin: 0 }}>
+                    <AlertCircle size={15} />
+                    <span>{emailError}</span>
+                  </div>
+                )}
+
+                {emailStep === 1 ? (
+                  <div className="profile-form-grid" style={{ gap: 14 }}>
+                    <div className="profile-form-group">
+                      <label className="profile-form-label">New Email Address</label>
+                      <input
+                        type="email"
+                        required
+                        value={emailForm.newEmail}
+                        onChange={(e) => setEmailForm((prev) => ({ ...prev, newEmail: e.target.value }))}
+                        placeholder="you@domain.com"
+                        className="profile-input"
+                      />
+                    </div>
+
+                    <div className="profile-form-group">
+                      <label className="profile-form-label">Confirm Current Password</label>
+                      <input
+                        type="password"
+                        required
+                        value={emailForm.currentPassword}
+                        onChange={(e) => setEmailForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+                        placeholder="Enter account password"
+                        className="profile-input"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={onEmailRequest}
+                      disabled={loadingEmailChange || !emailForm.newEmail || !emailForm.currentPassword}
+                      className="lp-btn lp-btn-small"
+                      style={{ justifyContent: "center", marginTop: 4 }}
+                    >
+                      {loadingEmailChange ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          <span>Sending verification token...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Send verification code</span>
+                          <ArrowRight size={14} />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="profile-form-grid" style={{ gap: 14 }}>
+                    <div className="profile-form-group" style={{ textAlign: "center" }}>
+                      <label className="profile-form-label">Enter 6-Digit OTP Code</label>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        required
+                        value={emailOtp}
+                        onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
+                        placeholder="••••••"
+                        className="profile-input profile-otp-input"
+                      />
+                      <span className="profile-input-hint" style={{ marginTop: 6, display: "block" }}>
+                        We sent a 6-digit confirmation code to <strong>{emailForm.newEmail}</strong>.
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button
+                        type="button"
+                        onClick={() => setEmailStep(1)}
+                        className="lp-btn lp-btn-secondary lp-btn-small"
+                        style={{ flex: 1 }}
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onEmailConfirm}
+                        disabled={loadingEmailChange || emailOtp.length !== 6}
+                        className="lp-btn lp-btn-small"
+                        style={{ flex: 2, justifyContent: "center" }}
+                      >
+                        {loadingEmailChange ? "Confirming..." : "Confirm & Update Email"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Quick Connected Features Strip */}
+            <div className="profile-shortcuts-grid">
+              <div className="profile-shortcut-card">
+                <div>
+                  <div className="profile-shortcut-top">
+                    <span className="profile-shortcut-icon">
+                      <ShieldCheck size={18} />
+                    </span>
+                    <h5>Two-Factor Auth</h5>
+                  </div>
+                  <p style={{ marginTop: 8 }}>
+                    {user?.twoFactorEnabled ? "Active & protecting your sessions." : "Add extra security with TOTP verification."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onTabChange && onTabChange("twoFactor")}
+                  className="lp-text-link"
+                  style={{ alignSelf: "flex-start", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 }}
+                >
+                  {user?.twoFactorEnabled ? "Review 2FA" : "Enable 2FA"} <ArrowUpRight size={13} />
+                </button>
+              </div>
+
+              <div className="profile-shortcut-card">
+                <div>
+                  <div className="profile-shortcut-top">
+                    <span className="profile-shortcut-icon">
+                      <KeyRound size={18} />
+                    </span>
+                    <h5>Developer API</h5>
+                  </div>
+                  <p style={{ marginTop: 8 }}>
+                    Create API keys for MCP tools, automated shorteners, and integrations.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onTabChange && onTabChange("apiKeys")}
+                  className="lp-text-link"
+                  style={{ alignSelf: "flex-start", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 }}
+                >
+                  Manage API keys <ArrowUpRight size={13} />
+                </button>
+              </div>
+
+              <div className="profile-shortcut-card">
+                <div>
+                  <div className="profile-shortcut-top">
+                    <span className="profile-shortcut-icon">
+                      <Globe2 size={18} />
+                    </span>
+                    <h5>Branded Domains</h5>
+                  </div>
+                  <p style={{ marginTop: 8 }}>
+                    Put your custom domain on every short link you publish.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onTabChange && onTabChange("domains")}
+                  className="lp-text-link"
+                  style={{ alignSelf: "flex-start", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 }}
+                >
+                  Custom domains <ArrowUpRight size={13} />
+                </button>
+              </div>
+            </div>
+
+            {/* Action Bar */}
+            <div className="profile-action-bar">
+              <span className="profile-input-hint">
+                {isDirty ? (
+                  <span style={{ color: "var(--lp-accent)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span className="lp-live-dot" /> You have unsaved profile changes
+                  </span>
+                ) : (
+                  "Profile attributes are up to date."
+                )}
+              </span>
+
               <button
-                type="button"
-                onClick={() => {
-                  setShowEmailForm(!showEmailForm);
-                  setEmailStep(1);
-                }}
-                className="px-4 py-3 rounded-xl border border-blue-500/40 bg-blue-950/20 hover:bg-blue-900/30 text-blue-300 text-xs font-bold font-mono uppercase tracking-wider transition shrink-0 cursor-pointer active:scale-95"
+                type="submit"
+                disabled={saving || !profileForm.name.trim()}
+                className="lp-btn"
+                style={{ minHeight: 44, padding: "10px 22px" }}
               >
-                {showEmailForm ? "Cancel Edit" : "Change Email"}
+                {saving ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    <span>Saving profile...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={15} />
+                    <span>Save profile changes</span>
+                  </>
+                )}
               </button>
             </div>
-            <p className="text-[11px] text-slate-500 font-sans">
-              This email address is your primary login username and notification endpoint.
-            </p>
-          </div>
-
-          {/* Expandable Email Verification Wizard */}
-          {showEmailForm && (
-            <div className="rounded-2xl border border-blue-500/30 bg-zinc-900/90 p-5 space-y-4 shadow-lg animate-in fade-in duration-200">
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-blue-400" />
-                  <h4 className="text-xs font-bold font-mono text-white uppercase tracking-wider">
-                    {emailStep === 1 ? "Step 1: Request Email Change" : "Step 2: Enter Verification Code"}
-                  </h4>
-                </div>
-                <span className="text-[9px] font-mono bg-blue-500/15 border border-blue-500/30 text-blue-300 px-2 py-0.5 rounded-full font-bold uppercase">
-                  {emailStep === 1 ? "Credentials Verify" : "OTP Code"}
-                </span>
-              </div>
-
-              {emailMessage && (
-                <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 px-3.5 py-2.5 text-xs text-emerald-300 font-mono flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>{emailMessage}</span>
-                </div>
-              )}
-              {emailError && (
-                <div className="rounded-xl border border-rose-500/20 bg-rose-950/20 px-3.5 py-2.5 text-xs text-rose-300 font-mono flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                  <span>{emailError}</span>
-                </div>
-              )}
-
-              {emailStep === 1 ? (
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase">New Email Address</label>
-                    <input
-                      type="email"
-                      required
-                      value={emailForm.newEmail}
-                      onChange={(e) => setEmailForm((prev) => ({ ...prev, newEmail: e.target.value }))}
-                      placeholder="e.g. new-email@domain.com"
-                      className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-xs font-mono text-white outline-none focus:border-blue-500 transition"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase">Confirm Current Password</label>
-                    <input
-                      type="password"
-                      required
-                      value={emailForm.currentPassword}
-                      onChange={(e) => setEmailForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-                      placeholder="Enter current password"
-                      className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-xs font-mono text-white outline-none focus:border-blue-500 transition"
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={onEmailRequest}
-                    disabled={loadingEmailChange || !emailForm.newEmail || !emailForm.currentPassword}
-                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase font-mono tracking-wider transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md flex items-center justify-center gap-2"
-                  >
-                    {loadingEmailChange ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Sending OTP Verification...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Send 6-Digit OTP Code</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </>
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-1 text-center">
-                    <label className="text-[10px] font-mono font-bold text-slate-300 uppercase">Enter 6-Digit Verification Code</label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      required
-                      value={emailOtp}
-                      onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
-                      placeholder="••••••"
-                      className="w-full max-w-xs mx-auto rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-center font-mono text-lg font-bold text-white tracking-[0.5em] outline-none focus:border-blue-500 transition"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1">Check your new email inbox for the verification token.</p>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setEmailStep(1)}
-                      className="w-1/3 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-slate-300 text-xs font-bold uppercase font-mono transition cursor-pointer"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onEmailConfirm}
-                      disabled={loadingEmailChange || emailOtp.length !== 6}
-                      className="w-2/3 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase font-mono tracking-wider transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md flex items-center justify-center gap-2"
-                    >
-                      {loadingEmailChange ? "Confirming..." : "Confirm & Update Email"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
+          </form>
         </div>
-
-        {/* Save Changes Action Bar */}
-        <div className="pt-6 border-t border-zinc-800 flex items-center justify-between">
-          <p className="text-xs text-slate-500 font-mono">
-            Unsaved changes will be stored on this device.
-          </p>
-
-          <button
-            type="submit"
-            disabled={saving || !profileForm.name.trim()}
-            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase font-mono tracking-wider transition shadow-lg shadow-blue-500/25 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Saving Profile...</span>
-              </>
-            ) : (
-              <>
-                <Check className="w-3.5 h-3.5" />
-                <span>Save Profile Changes</span>
-              </>
-            )}
-          </button>
-        </div>
-
-      </form>
-
+      </div>
     </div>
   );
 }
-
-export default ProfileSettings;
-

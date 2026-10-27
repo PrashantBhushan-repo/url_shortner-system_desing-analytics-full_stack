@@ -159,12 +159,12 @@ function TeamSettings() {
   const isTeamManager = activeTeam && (activeTeam.role === "OWNER" || activeTeam.role === "ADMIN");
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl space-y-6">
-      <div className="border-b border-white/10 pb-5">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+    <div className="settings-radius border settings-border settings-surface p-6 shadow-xl space-y-6">
+      <div className="border-b settings-border pb-5">
+        <h2 className="text-xl font-bold settings-ink flex items-center gap-2">
           <Users className="w-5 h-5 text-indigo-400" /> Team Workspace Space
         </h2>
-        <p className="mt-1 text-xs text-slate-400">
+        <p className="mt-1 text-xs settings-muted">
           Collaborate on link management and analytics. Invite members and control project parameters together.
         </p>
       </div>
@@ -195,7 +195,7 @@ function TeamSettings() {
                 className="flex items-center justify-between gap-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-300"
               >
                 <div>
-                  <span className="font-bold text-white">{invite.name}</span> has invited you as a{" "}
+                  <span className="font-bold settings-ink">{invite.name}</span> has invited you as a{" "}
                   <span className="font-mono text-xs bg-amber-500/10 px-1.5 py-0.5 rounded text-amber-400 uppercase font-bold">{invite.role}</span>
                 </div>
                 <button
@@ -214,13 +214,13 @@ function TeamSettings() {
 
       {/* Creating team if none exists or options */}
       {acceptedTeams.length === 0 && !loadingTeams ? (
-        <div className="rounded-2xl border border-white/5 bg-slate-950/20 p-8 text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-slate-900 border border-white/5 flex items-center justify-center text-slate-400 mx-auto">
+        <div className="rounded-2xl border settings-border settings-surface p-8 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full settings-surface border settings-border flex items-center justify-center settings-muted mx-auto">
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <h4 className="text-sm font-bold text-white">Create a Team Workspace</h4>
-            <p className="text-xs text-slate-500 mt-1">You are not a member of any active team workspaces. Create one below to begin.</p>
+            <h4 className="text-sm font-bold settings-ink">Create a Team Workspace</h4>
+            <p className="text-xs settings-muted mt-1">You are not a member of any active team workspaces. Create one below to begin.</p>
           </div>
           <form onSubmit={handleCreateTeam} className="flex gap-3 max-w-md mx-auto">
             <input
@@ -228,12 +228,12 @@ function TeamSettings() {
               placeholder="e.g. Acme Marketing Team"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
-              className="flex-1 rounded-2xl border border-white/10 bg-slate-900 px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500"
+              className="flex-1 rounded-2xl border settings-border settings-surface px-4 py-2.5 text-sm settings-ink outline-none focus:border-blue-500"
               required
             />
             <button
               type="submit"
-              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-2xl px-5 py-2.5 text-xs font-bold uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer shrink-0"
+              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 settings-ink rounded-2xl px-5 py-2.5 text-xs font-bold uppercase transition duration-150 flex items-center gap-1.5 cursor-pointer shrink-0"
               disabled={creatingTeam}
             >
               {creatingTeam ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
@@ -246,12 +246,12 @@ function TeamSettings() {
           {/* Left Column: Team selection list & Create team */}
           <div className="space-y-4 lg:border-r lg:border-white/5 lg:pr-6">
             <div className="flex justify-between items-center">
-              <h3 className="text-xs uppercase tracking-wider text-slate-400 font-bold">Your Workspaces</h3>
+              <h3 className="text-xs uppercase tracking-wider settings-muted font-bold">Your Workspaces</h3>
             </div>
 
             {loadingTeams ? (
-              <div className="p-8 text-center text-xs text-slate-500 flex flex-col items-center gap-2 animate-pulse">
-                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+              <div className="p-8 text-center text-xs settings-muted flex flex-col items-center gap-2 animate-pulse">
+                <Loader2 className="w-6 h-6 animate-spin settings-accent" />
                 <span>Loading workspaces...</span>
               </div>
             ) : (
@@ -264,34 +264,34 @@ function TeamSettings() {
                       onClick={() => setActiveTeam(membership)}
                       className={`w-full text-left p-3.5 rounded-2xl border transition duration-150 flex items-center justify-between gap-3 cursor-pointer ${
                         isSelected
-                          ? "bg-slate-950 border-indigo-500 text-white shadow-lg"
-                          : "bg-slate-950/20 border-white/5 hover:border-white/20 text-slate-400 hover:text-white"
+                          ? "settings-surface border-indigo-500 settings-ink shadow-lg"
+                          : "settings-surface settings-border hover:border-white/20 settings-muted hover:text-white"
                       }`}
                     >
                       <div className="truncate">
                         <span className="font-bold block truncate text-xs">{membership.name}</span>
-                        <span className="text-[9px] uppercase tracking-wider text-slate-500 font-mono">Role: {membership.role}</span>
+                        <span className="text-[9px] uppercase tracking-wider settings-muted font-mono">Role: {membership.role}</span>
                       </div>
-                      <Shield className={`w-3.5 h-3.5 shrink-0 ${membership.role === "OWNER" ? "text-indigo-400" : "text-slate-500"}`} />
+                      <Shield className={`w-3.5 h-3.5 shrink-0 ${membership.role === "OWNER" ? "text-indigo-400" : "settings-muted"}`} />
                     </button>
                   );
                 })}
               </div>
             )}
 
-            <div className="border-t border-white/5 pt-4">
+            <div className="border-t settings-border pt-4">
               <form onSubmit={handleCreateTeam} className="flex gap-2">
                 <input
                   type="text"
                   placeholder="New Team Name"
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  className="flex-1 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
+                  className="flex-1 rounded-xl border settings-border settings-surface px-3 py-2 text-xs settings-ink outline-none focus:border-blue-500"
                   required
                 />
                 <button
                   type="submit"
-                  className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-xl transition duration-150 cursor-pointer"
+                  className="settings-surface hover:bg-slate-700 settings-ink p-2 rounded-xl transition duration-150 cursor-pointer"
                   disabled={creatingTeam}
                   title="Create Team"
                 >
@@ -307,8 +307,8 @@ function TeamSettings() {
               <>
                 {/* Invite form */}
                 {isTeamManager && (
-                  <form onSubmit={handleInviteMember} className="rounded-2xl border border-white/5 bg-slate-950/40 p-4 space-y-3">
-                    <h3 className="text-xs uppercase tracking-wider text-slate-300 font-bold flex items-center gap-1.5">
+                  <form onSubmit={handleInviteMember} className="rounded-2xl border settings-border settings-surface p-4 space-y-3">
+                    <h3 className="text-xs uppercase tracking-wider settings-ink font-bold flex items-center gap-1.5">
                       <UserPlus className="w-4 h-4 text-indigo-400" /> Invite Collaborator
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
@@ -318,7 +318,7 @@ function TeamSettings() {
                           placeholder="Collaborator's email address"
                           value={inviteEmail}
                           onChange={(e) => setInviteEmail(e.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
+                          className="w-full rounded-xl border settings-border settings-surface px-3 py-2 text-xs settings-ink outline-none focus:border-blue-500"
                           disabled={inviting}
                           required
                         />
@@ -327,7 +327,7 @@ function TeamSettings() {
                         <select
                           value={inviteRole}
                           onChange={(e) => setInviteRole(e.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
+                          className="w-full rounded-xl border settings-border settings-surface px-3 py-2 text-xs settings-ink outline-none focus:border-blue-500"
                           disabled={inviting}
                         >
                           <option value="MEMBER">Member</option>
@@ -337,7 +337,7 @@ function TeamSettings() {
                       <div className="sm:col-span-2">
                         <button
                           type="submit"
-                          className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl py-2 text-xs font-bold transition cursor-pointer"
+                          className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 settings-ink rounded-xl py-2 text-xs font-bold transition cursor-pointer"
                           disabled={inviting}
                         >
                           {inviting ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto" /> : "Invite"}
@@ -349,15 +349,15 @@ function TeamSettings() {
 
                 {/* Team Roster */}
                 <div className="space-y-3">
-                  <h3 className="text-xs uppercase tracking-wider text-slate-400 font-bold">Roster list for {activeTeam.name}</h3>
+                  <h3 className="text-xs uppercase tracking-wider settings-muted font-bold">Roster list for {activeTeam.name}</h3>
 
                   {loadingMembers ? (
-                    <div className="p-8 text-center text-xs text-slate-500 flex flex-col items-center gap-2 animate-pulse">
-                      <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                    <div className="p-8 text-center text-xs settings-muted flex flex-col items-center gap-2 animate-pulse">
+                      <Loader2 className="w-5 h-5 animate-spin settings-accent" />
                       <span>Synchronizing roster...</span>
                     </div>
                   ) : teamMembers.length === 0 ? (
-                    <div className="rounded-2xl border border-white/5 bg-slate-950/20 p-8 text-center text-xs text-slate-500">
+                    <div className="rounded-2xl border settings-border settings-surface p-8 text-center text-xs settings-muted">
                       Roster is empty.
                     </div>
                   ) : (
@@ -369,17 +369,17 @@ function TeamSettings() {
                         return (
                           <div
                             key={member.id}
-                            className="rounded-xl border border-white/5 bg-slate-950/40 p-3.5 flex items-center justify-between gap-4"
+                            className="rounded-xl border settings-border settings-surface p-3.5 flex items-center justify-between gap-4"
                           >
                             <div className="flex items-center gap-3 truncate">
-                              <div className="w-8 h-8 rounded-full bg-slate-900 border border-white/5 flex items-center justify-center text-slate-400 shrink-0 font-bold text-xs uppercase">
+                              <div className="w-8 h-8 rounded-full settings-surface border settings-border flex items-center justify-center settings-muted shrink-0 font-bold text-xs uppercase">
                                 {member.user?.name ? member.user.name[0] : <Mail className="w-4 h-4" />}
                               </div>
                               <div className="truncate">
-                                <span className="text-xs font-bold text-white block truncate">
+                                <span className="text-xs font-bold settings-ink block truncate">
                                   {member.user?.name || "Pending User"}
                                 </span>
-                                <span className="text-[10px] text-slate-500 block truncate">
+                                <span className="text-[10px] settings-muted block truncate">
                                   {member.user?.email || "Email undisclosed"}
                                 </span>
                               </div>
@@ -389,7 +389,7 @@ function TeamSettings() {
                               <span
                                 className={`text-[9px] uppercase tracking-wider font-mono font-bold px-1.5 py-0.5 rounded ${
                                   member.status === "ACCEPTED"
-                                    ? "bg-slate-800 text-slate-300"
+                                    ? "settings-surface settings-ink"
                                     : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                                 }`}
                               >
@@ -400,7 +400,7 @@ function TeamSettings() {
                                 <button
                                   onClick={() => handleRevokeMember(member.user_id)}
                                   disabled={actionId === member.user_id}
-                                  className="p-1.5 rounded-lg bg-slate-900 hover:bg-rose-950/40 text-slate-500 hover:text-rose-400 border border-white/5 hover:border-rose-500/20 transition duration-150 cursor-pointer"
+                                  className="p-1.5 rounded-lg settings-surface hover:bg-rose-950/40 settings-muted hover:text-rose-400 border settings-border hover:border-rose-500/20 transition duration-150 cursor-pointer"
                                   title={member.status === "PENDING" ? "Cancel invitation" : "Remove member"}
                                 >
                                   {actionId === member.user_id ? (

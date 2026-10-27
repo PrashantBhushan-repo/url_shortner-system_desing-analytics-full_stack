@@ -1,86 +1,38 @@
-function PasswordSettings({ passwordForm, setPasswordForm, onSubmit, message, error, passwordCriteria, doesPasswordMatch, showCurrentPassword, showNewPassword, showConfirmPassword, toggleShowCurrentPassword, toggleShowNewPassword, toggleShowConfirmPassword }) {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl">
-      <div className="flex flex-col gap-2">
-        <h2 className="text-2xl font-semibold text-white">Password</h2>
-        <p className="text-sm text-slate-400">Change the password used to log in to your account.</p>
-      </div>
+import { Check, Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react";
 
-      <div className="mt-6 space-y-4">
-        {message ? <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-300">{message}</div> : null}
-        {error ? <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-300">{error}</div> : null}
-      </div>
-
-      <form onSubmit={onSubmit} className="mt-6 grid gap-5">
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Current password</label>
-          <div className="relative">
-            <input
-              type={showCurrentPassword ? "text" : "password"}
-              value={passwordForm.currentPassword}
-              onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-blue-500"
-              required
-            />
-            <button type="button" onClick={toggleShowCurrentPassword} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-white" aria-label="Toggle current password visibility">
-              {showCurrentPassword ? "Hide" : "Show"}
-            </button>
+function PasswordSettings({ passwordForm, setPasswordForm, onSubmit, message, error, passwordCriteria, doesPasswordMatch, showCurrentPassword, showNewPassword, showConfirmPassword, toggleShowCurrentPassword, toggleShowNewPassword, toggleShowConfirmPassword, saving }) {
+  const fields = [
+    { key: "currentPassword", label: "Current password", shown: showCurrentPassword, toggle: toggleShowCurrentPassword, autocomplete: "current-password" },
+    { key: "newPassword", label: "New password", shown: showNewPassword, toggle: toggleShowNewPassword, autocomplete: "new-password" },
+    { key: "confirmPassword", label: "Confirm new password", shown: showConfirmPassword, toggle: toggleShowConfirmPassword, autocomplete: "new-password" },
+  ];
+  const requirements = [["length", "At least 8 characters"], ["uppercase", "An uppercase letter"], ["lowercase", "A lowercase letter"], ["number", "A number"], ["special", "A special character"]];
+  const passed = Object.values(passwordCriteria).filter(Boolean).length;
+  return <section className="profile-card settings-password">
+    <div className="settings-card-intro"><span className="settings-eyebrow">SIGN-IN CREDENTIALS</span><h2>Update your password</h2><p>A strong, unique password is your first line of defense.</p></div>
+    <div className="settings-password-body">
+      <form id="settings-password-form" onSubmit={onSubmit} className="profile-form-grid">
+        {message && <div className="profile-alert profile-alert-success" role="status">{message}</div>}
+        {error && <div className="profile-alert profile-alert-error" role="alert">{error}</div>}
+        {fields.map(field => <div className="profile-form-group" key={field.key}>
+          <label className="profile-form-label" htmlFor={field.key}>{field.label}</label>
+          <div className="settings-password-input">
+            <LockKeyhole size={15} />
+            <input id={field.key} className="profile-input" type={field.shown ? "text" : "password"} autoComplete={field.autocomplete} value={passwordForm[field.key]} onChange={e => setPasswordForm(prev => ({ ...prev, [field.key]: e.target.value }))} required disabled={saving} />
+            <button type="button" onClick={field.toggle} aria-label={(field.shown ? "Hide " : "Show ") + field.label.toLowerCase()} aria-pressed={field.shown}>{field.shown ? <EyeOff size={16} /> : <Eye size={16} />}</button>
           </div>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">New password</label>
-          <div className="relative">
-            <input
-              type={showNewPassword ? "text" : "password"}
-              value={passwordForm.newPassword}
-              onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-blue-500"
-              required
-            />
-            <button type="button" onClick={toggleShowNewPassword} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-white" aria-label="Toggle new password visibility">
-              {showNewPassword ? "Hide" : "Show"}
-            </button>
-          </div>
-          <div className="mt-3 grid gap-1 text-xs text-slate-400">
-            <p>Strong password should include:</p>
-            <div className={passwordCriteria.length ? "text-emerald-300" : "text-slate-500"}>• At least 8 characters</div>
-            <div className={passwordCriteria.uppercase ? "text-emerald-300" : "text-slate-500"}>• Uppercase letters</div>
-            <div className={passwordCriteria.lowercase ? "text-emerald-300" : "text-slate-500"}>• Lowercase letters</div>
-            <div className={passwordCriteria.number ? "text-emerald-300" : "text-slate-500"}>• Numbers</div>
-            <div className={passwordCriteria.special ? "text-emerald-300" : "text-slate-500"}>• Special symbols</div>
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Confirm new password</label>
-          <div className="relative">
-            <input
-              type={showConfirmPassword ? "text" : "password"}
-              value={passwordForm.confirmPassword}
-              onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none focus:border-blue-500"
-              required
-            />
-            <button type="button" onClick={toggleShowConfirmPassword} className="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-white" aria-label="Toggle confirm password visibility">
-              {showConfirmPassword ? "Hide" : "Show"}
-            </button>
-          </div>
-          {passwordForm.confirmPassword.length > 0 ? (
-            <p className={`mt-3 text-sm ${doesPasswordMatch ? "text-emerald-300" : "text-rose-300"}`}>
-              {doesPasswordMatch ? "Passwords match." : "Passwords do not match."}
-            </p>
-          ) : null}
-        </div>
-
-        <div>
-          <button type="submit" className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-500">
-            Change password
-          </button>
-        </div>
+          {field.key === "confirmPassword" && passwordForm.confirmPassword && <span role="status" className={doesPasswordMatch ? "settings-password-match" : "settings-password-mismatch"}>{doesPasswordMatch ? "Passwords match." : "Passwords do not match yet."}</span>}
+        </div>)}
       </form>
+      <aside className="settings-password-guide">
+        <span className="settings-section-icon"><ShieldCheck size={22} /></span>
+        <h3>Make it a strong one</h3><p>Your new password should include:</p>
+        <div className="settings-password-strength" aria-label={passed + " of 5 password requirements met"}>{requirements.map(([key]) => <i key={key} className={passwordCriteria[key] ? "is-met" : ""} />)}</div>
+        <ul>{requirements.map(([key,label]) => <li key={key} className={passwordCriteria[key] ? "is-met" : ""}><span>{passwordCriteria[key] ? <Check size={11} /> : <span />}</span>{label}</li>)}</ul>
+      </aside>
     </div>
-  );
+    <div className="settings-password-footer"><p><ShieldCheck size={15} /> You'll sign in again after changing your password.</p><button type="submit" form="settings-password-form" className="lp-btn lp-btn-small" disabled={saving || !doesPasswordMatch || passed !== 5 || !passwordForm.currentPassword}>{saving ? "Updating password…" : "Update password"}</button></div>
+  </section>;
 }
 
 export default PasswordSettings;
