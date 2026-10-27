@@ -3,7 +3,6 @@
 [![Node.js](https://img.shields.io/badge/Node.js-v20+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-v18-20232A?logo=react&logoColor=61DAFB)](https://react.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-Orchestrated-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
 [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
 [![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 
@@ -20,9 +19,9 @@ PBUrls uses a decoupled, event-driven architecture designed to keep the redirect
 ```mermaid
 graph TD
     User([🌐 Web Client / User])
-    Ingress[🛰️ Nginx Ingress Controller]
+    Ingress[🛰️ Nginx Reverse Proxy — Production]
     Frontend[🎨 Vite React Frontend / Nginx]
-    Backend[⚡ Express.js API Cluster]
+    Backend[⚡ Express.js Backend Container]
     Redis[🛑 Redis Cache & Rate Limiting]
     Queue[(🪵 BullMQ Message Queue)]
     Worker[⚙️ Background Queue Worker]
@@ -144,8 +143,7 @@ For deep-dive architectural blueprints, system designs, algorithm analyses, and 
 | **Background Queues** | BullMQ | Distributed background jobs and task runner |
 | **Payments** | Razorpay SDK & Webhooks | Multi-tier billing, checkouts, and subscription lifecycle |
 | **Containerization** | Docker, Docker-compose | Virtualization and environment parity |
-| **Orchestration** | Kubernetes, Kustomize | Scalable cluster deployments with ingress routers |
-| **CI/CD** | GitHub Actions | Automated linting, docker building (GHCR), and cloud delivery |
+| **CI / Image Builds** | GitHub Actions | Tests, cached builds, private GHCR publishing, and SSM deployments |
 
 ---
 
@@ -162,13 +160,13 @@ PBUrls uses a relational schema optimized with indexes for query speeds. Click r
 
 ---
 
-## 🚀 Local Quickstart (Docker Compose)
+## 🚀 Local Quickstart (4 Docker containers + native development)
 
-The easiest way to spin up the entire application ecosystem locally is using Docker Compose.
+Daily development runs PostgreSQL, Redis, Alloy and LGTM in Docker. The backend, worker and frontend run directly on your laptop with code watching and hot reload.
 
 ### Prerequisites
 - [Docker & Docker Compose](https://www.docker.com/get-started/)
-- Node.js v20 (optional, for local development outside Docker)
+- Node.js 24 (see `.node-version`)
 
 ### Steps
 
@@ -179,63 +177,143 @@ The easiest way to spin up the entire application ecosystem locally is using Doc
    ```
 
 2. **Configure Environment Variables:**
-   Create a `.env` file in the `./backend/` directory using `./backend/.env.example` as a template. Make sure to define:
-   ```env
-   PORT=5000
-   DATABASE_URL="postgresql://postgres:postgres_password@postgres:5432/url_shortener?schema=public"
-   REDIS_URL="redis://redis:6379"
-   JWT_SECRET="generate-a-secure-secret-key"
-   CLIENT_URL="http://localhost:5173"
-   ```
+   Copy the root `.env.example` to `.env` only if it does not exist, and fill in local settings. Compose reads this same file for database initialization and backend/worker settings. Keep `DB_*` credentials and `DATABASE_URL` consistent, especially with an existing database volume.
 
-3. **Spin up Services:**
-   Run the following command to start PostgreSQL, Redis, the Express Backend API, the background worker, and the React Frontend:
+   Native Node development, production, CI, and frontend mode-specific examples are documented in [ENVIRONMENT.md](ENVIRONMENT.md). Real env files are ignored; only safe examples belong in Git.
+
+3. **Start the four infrastructure containers:**
    ```bash
-   docker-compose up --build
+   node infrastructure/scripts/local.mjs up
    ```
 
-4. **Verify Database Seeding:**
-   The database container runs migrations and seats initial plans automatically during startup.
-   - Frontend runs on: `http://localhost:5173`
-   - Backend API runs on: `http://localhost:5000`
+4. **Install dependencies and initialize the local database once:**
+   ```bash
+   npm --prefix backend ci
+   npm --prefix frontend ci
+   npm --prefix backend run dev:setup
+   ```
+   Configure native backend secrets in `backend/.env.development.local` using the development example. If no native `DATABASE_URL` is configured, the launcher derives it from the root Docker configuration and published database port. Existing private env files are retained; do not overwrite them. `dev:setup` generates Prisma, applies migrations and seeds plans; run it deliberately at setup or after schema changes, not on every restart.
+
+5. **Start backend and worker together, then frontend in a second terminal:**
+   ```bash
+   npm --prefix backend run dev
+   ```
+   ```bash
+   npm --prefix frontend run dev
+   ```
+   - Frontend: `http://localhost:5173`
+   - Backend: `http://localhost:5000`
+   - Grafana: `http://localhost:3001` → Dashboards → PBUrls
+
+The backend `dev` command starts both backend and worker with hot reload. Ctrl+C stops both. Use `dev:backend` or `worker:dev` only when deliberately running a single service; stop those standalone processes before using the combined command. The native launchers enable telemetry, assign separate service identities/metrics ports and prevent the backend from forking a duplicate worker. `node infrastructure/scripts/local.mjs stop` stops the infrastructure containers while retaining their data.
+
+For the complete seven-container integration workflow, stop the native processes first and run `node infrastructure/scripts/local.mjs --full-stack up`. That serves the frontend through Nginx at `http://localhost:3000`. Returning to the default `up` stops application containers before starting the four infrastructure services. The launcher reuses the existing PostgreSQL/Redis Compose project so a checkout rename does not select new database volumes.
 
 ---
 
-## ☸️ Production Deployment (Kubernetes)
+## Production deployment and CI/CD
 
-PBUrls is configured for Kubernetes deployments via **Kustomize**. Complete deployment manifests are stored inside the `infrastructure/kubernetes` directory.
+**Production AWS region: `us-east-1` (N. Virginia).** Deployment/rollback workflows and AWS scripts select this region. Set GitHub `AWS_REGION=us-east-1` and use EC2, storage, networking and SSM parameters from this region. Code changes do not relocate existing AWS resources. Follow the [region setup instructions](infrastructure/DEPLOYMENT.md#deployment-region-us-east-1-n-virginia) before enabling deployment. Grafana Cloud keeps its own supplied ingestion endpoint.
 
-### Manifest Configurations Includes:
-- **`namespace.yaml`:** Isolated environment resource context (`pburls`).
-- **`postgres-deployment.yaml` & `postgres-service.yaml`:** State persistence configuration via PVCs.
-- **`redis-deployment.yaml` & `redis-service.yaml`:** Internal headless service config for caching and job queuing.
-- **`backend-deployment.yaml` & `worker-deployment.yaml`:** Clustered REST API configurations with dynamic Prisma migration `initContainers` and independent task workers.
-- **`frontend-deployment.yaml`:** Serves the built Vite assets using a high-performance Nginx container.
-- **`ingress.yaml`:** Ingress controller rule mappings for `pburls.local` and API routing.
+GitHub Actions tests the application, builds cached backend/migration/Nginx images, and publishes private packages to GHCR. The production deployment uses AWS OIDC and Systems Manager to pull exact image digests, migrate once, issue/renew HTTPS certificates, and verify the release. Deployment remains disabled until the AWS/domain configuration is supplied.
 
-### To Deploy Manually:
-```bash
-# 1. Select your Kubernetes context
-kubectl config current-context
+See [infrastructure/DEPLOYMENT.md](infrastructure/DEPLOYMENT.md) for infrastructure provisioning, secret setup, GitHub configuration, operations, and rollback. No Kubernetes or S3 is required.
 
-# 2. Bind secrets securely in your cluster namespace
-kubectl create secret generic pburls-secrets -n pburls \
-  --from-literal=DB_PASSWORD="your-secure-password" \
-  --from-literal=DATABASE_URL="postgresql://postgres:your-secure-password@postgres-service:5432/url_shortener?schema=public" \
-  --from-literal=REDIS_URL="redis://redis-service:6379" \
-  --from-literal=JWT_SECRET="your-jwt-signing-secret"
+Environment templates and mode-selection rules are documented in [ENVIRONMENT.md](ENVIRONMENT.md).
 
-# 3. Apply manifests using Kustomization
-kubectl apply -k infrastructure/kubernetes/
+### How GitHub, AWS and Grafana Cloud work together
+
+There are two separate flows: **deployment delivers the application**, and **observability reports how it behaves**. Think of GitHub Actions as the factory, GHCR as the warehouse, EC2 as the place the application runs, and Grafana Cloud as the monitoring room. This diagram describes the configured production architecture after its credentials, permissions and deployment settings are ready.
+
+```mermaid
+flowchart TB
+    You["YOU<br/>Write code and push to GitHub"]
+
+    subgraph GitHub["GITHUB"]
+        Repo["Repository<br/>Source code and deployment instructions"]
+        Actions["GitHub Actions<br/>Test code and build Docker images"]
+        GHCR[("Private GHCR<br/>Stores finished Docker images")]
+        Provision["Manual provisioning workflow<br/>Creates Grafana dashboards and alert rules"]
+    end
+
+    subgraph AWS["AWS"]
+        Trust["IAM deployment role + GitHub OIDC<br/>Checks GitHub's identity<br/>Grants temporary deployment permissions"]
+        SSM["Systems Manager<br/>Delivers deployment commands to EC2"]
+        Secrets[("SSM Parameter Store<br/>Stores private configuration and secrets")]
+        EC2["EC2 SERVER<br/>Docker runs Nginx, backend,<br/>worker, PostgreSQL and Redis"]
+        Alloy["Grafana Alloy on EC2<br/>Collects metrics, logs and traces"]
+    end
+
+    subgraph GrafanaCloud["GRAFANA CLOUD"]
+        Ingest["OTLP gateway<br/>Accepts authenticated telemetry"]
+        Storage[("Metrics, logs and traces storage")]
+        Dashboards["Grafana<br/>Dashboards, Explore and alerts"]
+    end
+
+    You --> Repo
+    Repo --> Actions
+    Actions -->|"Publish images using GITHUB_TOKEN"| GHCR
+    Actions -->|"Present GitHub identity"| Trust
+    Trust -->|"Temporary AWS credentials"| Actions
+    Actions -->|"Authorized deployment command"| SSM
+    SSM -->|"Run deployment scripts"| EC2
+    EC2 -->|"Read configuration using EC2 IAM role"| Secrets
+    GHCR -->|"EC2 pulls private images using pull token"| EC2
+
+    EC2 -.->|"Application and infrastructure telemetry"| Alloy
+    Alloy -->|"HTTPS with Grafana write token"| Ingest
+    Ingest --> Storage
+    Storage --> Dashboards
+
+    Provision -->|"Grafana service-account token"| Dashboards
+    Dashboards --> Browser["YOU OPEN GRAFANA<br/>See charts, logs, traces and alerts"]
 ```
 
----
+#### Follow the deployment flow
 
-## 🛠️ CI/CD Workflow (GitHub Actions)
+1. **Push code:** the configured workflow runs for pushes to `main` and pull requests targeting `main`. GitHub installs dependencies, tests the application and builds production images on its runners.
+2. **Store the release:** GitHub Actions publishes private GHCR images on non-PR runs. Built-image smoke tests and security checks must pass before deployment. The release manifest identifies exact image digests, so EC2 downloads the selected version.
+3. **Prove GitHub's identity:** OIDC means OpenID Connect. GitHub presents a signed identity token; AWS checks the IAM deployment role's trust rules and issues temporary credentials. The role limits the permitted AWS actions. No permanent AWS access key is required in GitHub.
+4. **Deliver instructions:** Actions uses those temporary credentials to send a command through Systems Manager. The SSM agent on EC2 receives it; public SSH is not required by this deployment.
+5. **Run the release:** EC2 uses its own IAM role to retrieve allowed Parameter Store values, authenticates to GHCR using a separate read-only token, pulls images, prepares storage, applies migrations and updates containers. It does not compile the frontend or install application npm dependencies on the host.
+6. **Verify success:** deployment checks application readiness and HTTPS before recording the release as current. Deployment runs only when enabled and its production-environment requirements are satisfied; PRs and scheduled runs do not deploy production.
 
-PBUrls uses continuous integration and delivery pipelines defined in `.github/workflows/`:
-1.  **Continuous Integration (`ci-cd.yml`):** Automatically triggers on pushes to `main`. It lints both directories, executes unit checks, builds optimized production Docker images, and pushes them to GitHub Container Registry (GHCR) with standard hash tags.
-2.  **Continuous Deployment (`deploy-k8s.yml`):** Connects to the host target, updates the deployment manifest image hashes, creates namespace structures, updates environment configurations, and does rolling upgrades with zero-downtime.
+An OIDC provider identifies the trusted issuer; the role's trust policy identifies which repository/environment may assume it; its permission policy defines the allowed actions. An organization-level explicit deny can block this setup even when an account role has administrator permissions. Manual Console creation does not bypass that restriction. Reuse an approved provider/role or resolve the restriction with the organization administrator before enabling this deployment.
+
+#### Follow the observability flow
+
+The backend and worker expose metrics and send structured logs/traces to Alloy. Alloy also reads PostgreSQL, Redis and production host statistics, and probes public HTTPS. It forwards telemetry directly to Grafana Cloud over authenticated HTTPS. Grafana stores the data and displays dashboards, log searches and trace timelines. GitHub is not in this continuous telemetry path.
+
+The separate **Provision observability dashboards and alerts** workflow is manually triggered: it configures Grafana using a service-account token. It does not deliver application telemetry. Alert notifications also require a Grafana contact point and notification policy. For exact libraries, collector components, sampling defaults and current coverage limits, see the [ordered observability diagrams](infrastructure/observability/README.md#architecture-diagrams-read-in-this-order).
+
+#### Which credential does what?
+
+| Credential or role | Used by | Purpose |
+|---|---|---|
+| GitHub `GITHUB_TOKEN` | Build workflow | Publish private container images to GHCR. |
+| GitHub OIDC identity + AWS deployment role | Deployment workflow | Obtain temporary AWS credentials and send authorized SSM commands. |
+| EC2 instance role | EC2 / SSM agent | Connect to Systems Manager and read allowed production parameters. |
+| GHCR read-only pull token | Docker on EC2 | Download the private application and deployment images. |
+| Grafana Cloud access-policy token | Alloy on EC2 | Write metrics, logs and traces to the selected Cloud stack. |
+| Grafana service-account token | Dashboard-provisioning workflow | Create/update project dashboards and alert rules. |
+| PostgreSQL monitoring password | Alloy's PostgreSQL exporter | Read database statistics through the dedicated monitoring role. |
+
+These credentials serve different purposes and are not interchangeable. An instance ID, role ARN or datasource UID identifies a resource; it does not grant access by itself. Keep real tokens and passwords out of Git and Docker images.
+
+#### Where the key-value settings belong
+
+| Location | Keys or parameter names | Meaning |
+|---|---|---|
+| GitHub repository variables | `AWS_REGION=us-east-1`, `EC2_INSTANCE_ID`, `AWS_DEPLOY_ROLE_ARN` | Deployment region, target instance and role GitHub requests. |
+| GitHub repository variables | `GHCR_PULL_USERNAME`, `PARAMETER_PREFIX`, `PROD_DEPLOY_ENABLED` | Registry account, configuration prefix and deployment switch. |
+| SSM SecureString | `/pburls/production/runtime-env` | Application URLs, database credentials, JWT secret and enabled integration settings. |
+| SSM SecureString | `/pburls/production/ghcr-token` | EC2's read-only GHCR pull token. |
+| SSM String, created by the AWS template | `/pburls/production/data-volume-id` | Identity of the persistent EBS data volume. |
+| SSM SecureString | `/pburls/production/observability-env` | `OTLP_ENDPOINT` is the Cloud ingestion address; `OTLP_USERNAME` is its instance ID; `OTLP_PASSWORD` is the Cloud write token; `OBS_POSTGRES_PASSWORD` is the separate database monitoring password. |
+| GitHub production-environment variables | `GRAFANA_URL`, `GRAFANA_PROMETHEUS_UID`, `GRAFANA_LOKI_UID` | Grafana website and the metrics/logs datasources used by provisioned dashboards. |
+| GitHub production-environment secret | `GRAFANA_SERVICE_ACCOUNT_TOKEN` | Permission for dashboard and alert-rule provisioning. |
+
+The `/pburls/production` prefix is configurable. The Grafana website URL and the OTLP ingestion endpoint are different addresses. Use values from the same intended Grafana stack, and obtain replacement credentials privately if a token has been shared. Follow the [production setup guide](infrastructure/DEPLOYMENT.md#one-time-setup) to configure these values in order.
 
 ---
 
@@ -257,3 +335,17 @@ PBUrls uses continuous integration and delivery pipelines defined in `.github/wo
 
 ## 📄 License
 This project is licensed under the ISC License. See the [LICENSE](LICENSE) file for details.
+## Observability
+
+Local Grafana, production Grafana Cloud, metrics/logs/traces, dashboards, alert rules and repeatable performance comparisons are documented in [the observability guide](infrastructure/observability/README.md).
+
+Read the architecture diagrams in sequence. The guide explains each library/tool, the four-container local setup, production collection on EC2, and viewing results in Grafana Cloud:
+
+1. [The application journey and its signals](infrastructure/observability/README.md#diagram-1-the-application-journey-and-its-signals)
+2. [Collection: pull versus push](infrastructure/observability/README.md#diagram-2-collection-pull-versus-push)
+3. [Deployment overview: local and production](infrastructure/observability/README.md#diagram-3-deployment-overview-local-and-production)
+4. [Local application and instrumentation](infrastructure/observability/README.md#diagram-4-local-application-and-instrumentation)
+5. [Local telemetry: collection, storage and display](infrastructure/observability/README.md#diagram-5-local-telemetry-collection-storage-and-display)
+6. [Exact local libraries and collector components](infrastructure/observability/README.md#diagram-6-exact-local-libraries-and-collector-components)
+7. [Production: EC2 collection and Grafana Cloud](infrastructure/observability/README.md#diagram-7-production-ec2-collection-and-grafana-cloud)
+8. [One redirect: request, trace and background job](infrastructure/observability/README.md#diagram-8-one-redirect-request-trace-and-background-job)

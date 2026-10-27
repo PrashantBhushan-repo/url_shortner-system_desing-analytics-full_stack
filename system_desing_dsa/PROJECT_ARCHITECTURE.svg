@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1320" viewBox="0 0 1700 1320" role="img" aria-labelledby="title desc">
+<title id="title">PBUrls architecture — current implementation</title><desc id="desc">Flowchart of browser and MCP traffic through NGINX and Express into PostgreSQL and Redis, with asynchronous click processing, realtime analytics, billing recovery and telemetry. Production additions are not part of this diagram.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#555261"/></marker><filter id="shadow" x="-10%" y="-15%" width="125%" height="145%"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#383044" flood-opacity=".14"/></filter></defs>
+<style>text{font-family:Segoe UI,Arial,sans-serif;fill:#27213b}.label{font-size:16px}.edgeLabel{font-size:13px;paint-order:stroke;stroke:#fff;stroke-width:7px;stroke-linejoin:round}.lane{font-size:17px;font-weight:600;fill:#5b39a8}.sub{font-size:13px;fill:#6f697c}.service,.client,.store{fill:#f0eaff;stroke:#a27cf4;stroke-width:1.15;filter:url(#shadow)}ellipse.store{filter:none}.external{fill:#f8f6fc;stroke:#b7afc8;stroke-width:1.15}.edge{stroke:#555261;stroke-width:1.4;fill:none}.async{stroke-dasharray:5 4}.rule{stroke:#e5dfef;stroke-width:1}</style><rect width="1700" height="1320" fill="white"/>
+<text x="40" y="44" class="lane" text-anchor="start"><tspan x="40" dy="0">PBUrls · URL shortener architecture</tspan></text>
+<text x="40" y="71" class="sub" text-anchor="start"><tspan x="40" dy="0">Implemented modules and request flows  /  source snapshot: 23 October 2026</tspan></text>
+<text x="1660" y="44" class="sub" text-anchor="end"><tspan x="1660" dy="0">Solid: request / data flow    Dashed: asynchronous event / telemetry</tspan></text>
+<line class="rule" x1="35" y1="95" x2="1665" y2="95"/>
+<text x="40" y="124" class="lane" text-anchor="start"><tspan x="40" dy="0">01   Entry, routing, and application modules</tspan></text>
+<text x="40" y="146" class="sub" text-anchor="start"><tspan x="40" dy="0">The API is one modular Express application. Kubernetes manifests currently declare one API replica.</tspan></text>
+<rect class="client" x="45" y="190" width="155" height="64" rx="32"/>
+<text x="122.5" y="227" class="label" text-anchor="middle"><tspan x="122.5" dy="0">User / browser</tspan></text>
+<rect class="service" x="290" y="180" width="185" height="85" rx="3"/>
+<text x="382.5" y="217.5" class="label" text-anchor="middle"><tspan x="382.5" dy="0">NGINX edge /</tspan><tspan x="382.5" dy="21">K8s ingress</tspan></text>
+<rect class="service" x="575" y="170" width="230" height="100" rx="3"/>
+<text x="690" y="205" class="label" text-anchor="middle"><tspan x="690" dy="0">Express API :5000</tspan><tspan x="690" dy="21">JWT · validation · limits</tspan><tspan x="690" dy="21">ownership · plan gates</tspan></text>
+<rect class="service" x="290" y="340" width="185" height="80" rx="3"/>
+<text x="382.5" y="375" class="label" text-anchor="middle"><tspan x="382.5" dy="0">React + Vite SPA</tspan><tspan x="382.5" dy="21">served by NGINX</tspan></text>
+<rect class="service" x="575" y="325" width="230" height="100" rx="3"/>
+<text x="690" y="360" class="label" text-anchor="middle"><tspan x="690" dy="0">Links / QR / identity</tspan><tspan x="690" dy="21">analytics / billing / teams</tspan><tspan x="690" dy="21">domains / keys / admin</tspan></text>
+<rect class="client" x="45" y="350" width="155" height="60" rx="30"/>
+<text x="122.5" y="385" class="label" text-anchor="middle"><tspan x="122.5" dy="0">MCP client</tspan></text>
+<path class="store" d="M905,196 C905,175 1150,175 1150,196 V264 C1150,285 905,285 905,264 Z"/><ellipse class="store" cx="1027.5" cy="196" rx="122.5" ry="16"/>
+<text x="1027.5" y="215" class="label" text-anchor="middle"><tspan x="1027.5" dy="0">Redis</tspan><tspan x="1027.5" dy="21">short:code cache</tspan><tspan x="1027.5" dy="21">rate limits / pub-sub</tspan></text>
+<path class="store" d="M1290,196 C1290,175 1615,175 1615,196 V264 C1615,285 1290,285 1290,264 Z"/><ellipse class="store" cx="1452.5" cy="196" rx="162.5" ry="16"/>
+<text x="1452.5" y="215" class="label" text-anchor="middle"><tspan x="1452.5" dy="0">PostgreSQL</tspan><tspan x="1452.5" dy="21">Url / User / RefreshToken</tspan><tspan x="1452.5" dy="21">teams / plans / billing / events</tspan></text>
+<rect class="service" x="905" y="330" width="245" height="85" rx="3"/>
+<text x="1027.5" y="357.5" class="label" text-anchor="middle"><tspan x="1027.5" dy="0">MCP / assistant</tspan><tspan x="1027.5" dy="21">SSE session map</tspan><tspan x="1027.5" dy="21">shared services + knowledge</tspan></text>
+<rect class="external" x="1290" y="340" width="325" height="75" rx="3"/>
+<text x="1452.5" y="382.5" class="label" text-anchor="middle"><tspan x="1452.5" dy="0">SMTP / OAuth providers</tspan></text>
+<path class="edge" d="M200 210H290" marker-end="url(#arrow)"/>
+<text x="245" y="193" class="edgeLabel" text-anchor="middle"><tspan x="245" dy="0">GET /r/:shortCode</tspan></text>
+<path class="edge" d="M475 214H575" marker-end="url(#arrow)"/>
+<text x="525" y="196" class="edgeLabel" text-anchor="middle"><tspan x="525" dy="0">/api/* + /r/*</tspan></text>
+<path class="edge" d="M382 265V340" marker-end="url(#arrow)"/>
+<text x="425" y="303" class="edgeLabel" text-anchor="middle"><tspan x="425" dy="0">UI pages</tspan></text>
+<path class="edge" d="M475 380H520V249H575" marker-end="url(#arrow)"/>
+<text x="520" y="305" class="edgeLabel" text-anchor="middle"><tspan x="520" dy="0">REST /api/*</tspan></text>
+<path class="edge" d="M690 270V325" marker-end="url(#arrow)"/>
+<text x="730" y="301" class="edgeLabel" text-anchor="middle"><tspan x="730" dy="0">dispatch</tspan></text>
+<path class="edge" d="M805 215H905" marker-end="url(#arrow)"/>
+<text x="855" y="198" class="edgeLabel" text-anchor="middle"><tspan x="855" dy="0">cache-aside</tspan></text>
+<path class="edge" d="M1150 230H1290" marker-end="url(#arrow)"/>
+<text x="1220" y="212" class="edgeLabel" text-anchor="middle"><tspan x="1220" dy="0">miss → SQL</tspan></text>
+<path class="edge" d="M805 375H850V307H1245V250H1290" marker-end="url(#arrow)"/>
+<text x="1045" y="303" class="edgeLabel" text-anchor="middle"><tspan x="1045" dy="0">pg pool + Prisma → same database</tspan></text>
+<path class="edge" d="M200 380H245V450H1027V415" marker-end="url(#arrow)"/>
+<text x="635" y="445" class="edgeLabel" text-anchor="middle"><tspan x="635" dy="0">/api/v1/mcp/sse + /messages</tspan></text>
+<path class="edge" d="M905 370H805" marker-end="url(#arrow)"/>
+<path class="edge" d="M805 399H850V475H1452V415" marker-end="url(#arrow)"/>
+<text x="1130" y="470" class="edgeLabel" text-anchor="middle"><tspan x="1130" dy="0">email / provider callbacks</tspan></text>
+<line class="rule" x1="35" y1="510" x2="1665" y2="510"/>
+<text x="40" y="539" class="lane" text-anchor="start"><tspan x="40" dy="0">02   Redirect and analytics pipeline</tspan></text>
+<text x="40" y="561" class="sub" text-anchor="start"><tspan x="40" dy="0">Cache lookup → validate active / expiry / password → 302. Analytics is enqueued without awaiting persistence.</tspan></text>
+<rect class="service" x="45" y="595" width="175" height="80" rx="3"/>
+<text x="132.5" y="630" class="label" text-anchor="middle"><tspan x="132.5" dy="0">Redirect controller</tspan><tspan x="132.5" dy="21">302 → destination</tspan></text>
+<path class="store" d="M310,606 C310,585 520,585 520,606 V669 C520,690 310,690 310,669 Z"/><ellipse class="store" cx="415" cy="606" rx="105" ry="16"/>
+<text x="415" y="632.5" class="label" text-anchor="middle"><tspan x="415" dy="0">BullMQ in Redis</tspan><tspan x="415" dy="21">click-queue</tspan></text>
+<rect class="service" x="620" y="590" width="245" height="95" rx="3"/>
+<text x="742.5" y="622.5" class="label" text-anchor="middle"><tspan x="742.5" dy="0">Click worker</tspan><tspan x="742.5" dy="21">UA / GeoIP / bot checks</tspan><tspan x="742.5" dy="21">concurrency: 5</tspan></text>
+<path class="store" d="M990,606 C990,585 1235,585 1235,606 V674 C1235,695 990,695 990,674 Z"/><ellipse class="store" cx="1112.5" cy="606" rx="122.5" ry="16"/>
+<text x="1112.5" y="625" class="label" text-anchor="middle"><tspan x="1112.5" dy="0">PostgreSQL</tspan><tspan x="1112.5" dy="21">Click insert</tspan><tspan x="1112.5" dy="21">hourly + daily upserts</tspan></text>
+<path class="store" d="M1370,606 C1370,585 1615,585 1615,606 V674 C1615,695 1370,695 1370,674 Z"/><ellipse class="store" cx="1492.5" cy="606" rx="122.5" ry="16"/>
+<text x="1492.5" y="625" class="label" text-anchor="middle"><tspan x="1492.5" dy="0">Redis</tspan><tspan x="1492.5" dy="21">daily HLL / minute count</tspan><tspan x="1492.5" dy="21">ws:url:ID publication</tspan></text>
+<rect class="service" x="990" y="765" width="245" height="80" rx="3"/>
+<text x="1112.5" y="800" class="label" text-anchor="middle"><tspan x="1112.5" dy="0">API Socket.IO</tspan><tspan x="1112.5" dy="21">JWT + authorized URL room</tspan></text>
+<rect class="service" x="1370" y="765" width="245" height="80" rx="3"/>
+<text x="1492.5" y="800" class="label" text-anchor="middle"><tspan x="1492.5" dy="0">React analytics UI</tspan><tspan x="1492.5" dy="21">click-tick + REST reports</tspan></text>
+<rect class="service" x="620" y="765" width="245" height="80" rx="3"/>
+<text x="742.5" y="790" class="label" text-anchor="middle"><tspan x="742.5" dy="0">Analytics API</tspan><tspan x="742.5" dy="21">owner / feature / retention</tspan><tspan x="742.5" dy="21">raw Click queries + SQL</tspan></text>
+<path class="edge async" d="M220 630H310" marker-end="url(#arrow)"/>
+<text x="265" y="614" class="edgeLabel" text-anchor="middle"><tspan x="265" dy="0">click event</tspan></text>
+<path class="edge" d="M520 630H620" marker-end="url(#arrow)"/>
+<text x="570" y="614" class="edgeLabel" text-anchor="middle"><tspan x="570" dy="0">consume</tspan></text>
+<path class="edge" d="M865 630H990" marker-end="url(#arrow)"/>
+<text x="927" y="613" class="edgeLabel" text-anchor="middle"><tspan x="927" dy="0">per-event writes</tspan></text>
+<path class="edge async" d="M1235 638H1370" marker-end="url(#arrow)"/>
+<text x="1303" y="620" class="edgeLabel" text-anchor="middle"><tspan x="1303" dy="0">counters / publish</tspan></text>
+<path class="edge async" d="M1492 690V730H1112V765" marker-end="url(#arrow)"/>
+<text x="1290" y="721" class="edgeLabel" text-anchor="middle"><tspan x="1290" dy="0">subscribe ws:url:*</tspan></text>
+<path class="edge async" d="M1235 805H1370" marker-end="url(#arrow)"/>
+<text x="1303" y="786" class="edgeLabel" text-anchor="middle"><tspan x="1303" dy="0">click-tick</tspan></text>
+<path class="edge" d="M1492 845V880H742V845" marker-end="url(#arrow)"/>
+<text x="1120" y="873" class="edgeLabel" text-anchor="middle"><tspan x="1120" dy="0">GET /api/analytics/:urlId/*</tspan></text>
+<path class="edge" d="M742 765V725H1112V690" marker-end="url(#arrow)"/>
+<text x="925" y="716" class="edgeLabel" text-anchor="middle"><tspan x="925" dy="0">query reports</tspan></text>
+<text x="45" y="818" class="sub" text-anchor="start"><tspan x="45" dy="0">QR embeds ?src=qr</tspan><tspan x="45" dy="21">Redis cache failure → DB</tspan><tspan x="45" dy="21">Missing code → 404</tspan><tspan x="45" dy="21">Inactive / expired → 410</tspan></text>
+<line class="rule" x1="35" y1="915" x2="1665" y2="915"/>
+<text x="40" y="944" class="lane" text-anchor="start"><tspan x="40" dy="0">03   Billing recovery, scheduled work, and operations</tspan></text>
+<text x="40" y="966" class="sub" text-anchor="start"><tspan x="40" dy="0">Billing recovery uses PostgreSQL leases and retries. Click, health, and dunning queues use Redis.</tspan></text>
+<rect class="service" x="45" y="1000" width="175" height="80" rx="3"/>
+<text x="132.5" y="1035" class="label" text-anchor="middle"><tspan x="132.5" dy="0">Billing REST module</tspan><tspan x="132.5" dy="21">order / verify / refund</tspan></text>
+<rect class="external" x="310" y="995" width="210" height="90" rx="3"/>
+<text x="415" y="1035" class="label" text-anchor="middle"><tspan x="415" dy="0">Razorpay</tspan><tspan x="415" dy="21">checkout + gateway API</tspan></text>
+<path class="store" d="M620,1011 C620,990 865,990 865,1011 V1079 C865,1100 620,1100 620,1079 Z"/><ellipse class="store" cx="742.5" cy="1011" rx="122.5" ry="16"/>
+<text x="742.5" y="1030" class="label" text-anchor="middle"><tspan x="742.5" dy="0">PostgreSQL</tspan><tspan x="742.5" dy="21">Payment / WebhookEvent</tspan><tspan x="742.5" dy="21">BillingCheckout / Refund</tspan></text>
+<path class="store" d="M990,1011 C990,990 1235,990 1235,1011 V1079 C1235,1100 990,1100 990,1079 Z"/><ellipse class="store" cx="1112.5" cy="1011" rx="122.5" ry="16"/>
+<text x="1112.5" y="1030" class="label" text-anchor="middle"><tspan x="1112.5" dy="0">BillingRecoveryJob</tspan><tspan x="1112.5" dy="21">durable queue in Postgres</tspan><tspan x="1112.5" dy="21">leases / retry / review</tspan></text>
+<rect class="service" x="1370" y="995" width="245" height="100" rx="3"/>
+<text x="1492.5" y="1030" class="label" text-anchor="middle"><tspan x="1492.5" dy="0">Recovery loop</tspan><tspan x="1492.5" dy="21">claim → sync → persist</tspan><tspan x="1492.5" dy="21">runs without Redis</tspan></text>
+<rect class="service" x="310" y="1170" width="210" height="75" rx="3"/>
+<text x="415" y="1192.5" class="label" text-anchor="middle"><tspan x="415" dy="0">Scheduled workers</tspan><tspan x="415" dy="21">health: every 6 hours</tspan><tspan x="415" dy="21">dunning: daily</tspan></text>
+<rect class="service" x="620" y="1170" width="245" height="75" rx="3"/>
+<text x="742.5" y="1202.5" class="label" text-anchor="middle"><tspan x="742.5" dy="0">API + worker telemetry</tspan><tspan x="742.5" dy="21">traces / metrics</tspan></text>
+<rect class="external" x="990" y="1170" width="245" height="75" rx="3"/>
+<text x="1112.5" y="1202.5" class="label" text-anchor="middle"><tspan x="1112.5" dy="0">OTel collector → Jaeger</tspan><tspan x="1112.5" dy="21">Prometheus / Grafana*</tspan></text>
+<path class="edge" d="M220 1035H310" marker-end="url(#arrow)"/>
+<text x="265" y="1018" class="edgeLabel" text-anchor="middle"><tspan x="265" dy="0">gateway calls</tspan></text>
+<path class="edge" d="M520 1035H620" marker-end="url(#arrow)"/>
+<text x="570" y="1018" class="edgeLabel" text-anchor="middle"><tspan x="570" dy="0">signed webhook*</tspan></text>
+<path class="edge" d="M865 1035H990" marker-end="url(#arrow)"/>
+<text x="927" y="1018" class="edgeLabel" text-anchor="middle"><tspan x="927" dy="0">seed recovery</tspan></text>
+<path class="edge" d="M1235 1035H1370" marker-end="url(#arrow)"/>
+<text x="1303" y="1018" class="edgeLabel" text-anchor="middle"><tspan x="1303" dy="0">lease / claim</tspan></text>
+<path class="edge" d="M1492 1095V1130H742V1095" marker-end="url(#arrow)"/>
+<text x="1115" y="1121" class="edgeLabel" text-anchor="middle"><tspan x="1115" dy="0">update durable outcomes / retry state</tspan></text>
+<path class="edge" d="M415 1170V1107H285V1060H310" marker-end="url(#arrow)"/>
+<text x="365" y="1138" class="edgeLabel" text-anchor="middle"><tspan x="365" dy="0">gateway sync</tspan></text>
+<path class="edge async" d="M865 1206H990" marker-end="url(#arrow)"/>
+<text x="927" y="1189" class="edgeLabel" text-anchor="middle"><tspan x="927" dy="0">OTLP / scrape</tspan></text>
+<text x="40" y="1285" class="sub" text-anchor="start"><tspan x="40" dy="0">* Razorpay webhook enters the API before persistence. Prometheus / Grafana use the separate observability configuration.</tspan></text>
+<text x="40" y="1306" class="sub" text-anchor="start"><tspan x="40" dy="0">See the companion document for auth, mutation, API catalog, deployment details, implementation limits, and the separately labeled production proposal.</tspan></text>
+</svg>

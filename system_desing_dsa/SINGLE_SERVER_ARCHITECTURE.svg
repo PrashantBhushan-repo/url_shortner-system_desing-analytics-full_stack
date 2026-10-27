@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1000" viewBox="0 0 1500 1000" role="img" aria-labelledby="title desc">
+<title id="title">PBUrls — single EC2 server with Docker Compose</title>
+<desc id="desc">Corrected design without Kubernetes or an observability stack. Browsers reach NGINX on an Ubuntu EC2 server; NGINX serves React and proxies the Express API. Redis supports caching and queues, the worker handles clicks and billing recovery, and PostgreSQL stores durable data. Resource figures are planning estimates.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#5a5269"/></marker><filter id="s" x="-10%" y="-15%" width="125%" height="140%"><feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity=".12"/></filter></defs>
+<style>text{font-family:Segoe UI,Arial,sans-serif;fill:#2d2540}.title{font-size:25px;font-weight:600}.sub{font-size:14px;fill:#736980}.h{font-size:17px;font-weight:600;fill:#63429b}.t{font-size:16px}.small{font-size:13px;fill:#645b73}.box{fill:#f0eaff;stroke:#a27cf4;stroke-width:1.2;filter:url(#s)}.store{fill:#f0eaff;stroke:#a27cf4;stroke-width:1.2}.boundary{fill:#fcfaff;stroke:#cfc0e5;stroke-width:1.3;stroke-dasharray:7 5}.edge{fill:none;stroke:#5a5269;stroke-width:1.4;marker-end:url(#a)}.async{stroke-dasharray:5 4}.el{font-size:13px;paint-order:stroke;stroke:white;stroke-width:7px;stroke-linejoin:round}.rule{stroke:#e5deee}</style>
+<rect width="1500" height="1000" fill="white"/>
+<text x="38" y="48" class="title">PBUrls · Corrected single-server setup</text>
+<text x="38" y="77" class="sub">One Ubuntu EC2 instance + Docker Compose · application analytics and background workers retained</text>
+<text x="38" y="108" class="sub">HTTPS requests → NGINX → API → Redis / PostgreSQL. No separate load balancer is required for this topology.</text>
+
+<rect x="265" y="150" width="815" height="605" rx="9" class="boundary"/>
+<text x="285" y="181" class="h">EC2 · Ubuntu · Docker Engine + Compose</text>
+<text x="285" y="205" class="small">2 vCPU / 4 GiB RAM · 25–30 GiB gp3 · five runtime containers</text>
+
+<rect x="35" y="275" width="165" height="82" rx="36" class="box"/>
+<text x="117" y="308" text-anchor="middle" class="t">Browser / client</text>
+<text x="117" y="331" text-anchor="middle" class="small">Domain DNS → EC2 IP</text>
+
+<rect x="300" y="270" width="220" height="112" rx="3" class="box"/>
+<text x="410" y="298" text-anchor="middle" class="t">NGINX + React files</text>
+<text x="410" y="324" text-anchor="middle" class="small">HTTPS / TLS termination*</text>
+<text x="410" y="346" text-anchor="middle" class="small">Static SPA + reverse proxy</text>
+<text x="410" y="367" text-anchor="middle" class="small">:80 → :443</text>
+
+<rect x="650" y="270" width="270" height="112" rx="3" class="box"/>
+<text x="785" y="299" text-anchor="middle" class="t">Express API :5000</text>
+<text x="785" y="325" text-anchor="middle" class="small">Auth / links / QR / analytics</text>
+<text x="785" y="347" text-anchor="middle" class="small">Teams / billing / MCP</text>
+<text x="785" y="369" text-anchor="middle" class="small">JWT / ownership / plan limits</text>
+
+<path d="M200 311H300" class="edge"/>
+<text x="249" y="295" text-anchor="middle" class="el">HTTPS :443</text>
+<path d="M520 305H650" class="edge"/>
+<text x="585" y="285" text-anchor="middle" class="el">/api/* · /r/*</text>
+<path d="M650 357H520" class="edge async"/>
+<text x="585" y="345" text-anchor="middle" class="el">/socket.io/</text>
+
+<path d="M300 465C300 443 520 443 520 465V548C520 570 300 570 300 548Z" class="store"/>
+<ellipse cx="410" cy="465" rx="110" ry="16" class="store"/>
+<text x="410" y="498" text-anchor="middle" class="t">Redis :6379</text>
+<text x="410" y="521" text-anchor="middle" class="small">Cache / limits / BullMQ</text>
+<text x="410" y="543" text-anchor="middle" class="small">Click queue + pub/sub</text>
+
+<path d="M740 465C740 443 1010 443 1010 465V548C1010 570 740 570 740 548Z" class="store"/>
+<ellipse cx="875" cy="465" rx="135" ry="16" class="store"/>
+<text x="875" y="498" text-anchor="middle" class="t">PostgreSQL :5432</text>
+<text x="875" y="521" text-anchor="middle" class="small">Users / URLs / clicks / billing</text>
+<text x="875" y="543" text-anchor="middle" class="small">Rollups + durable recovery jobs</text>
+
+<rect x="545" y="620" width="280" height="90" rx="3" class="box"/>
+<text x="685" y="648" text-anchor="middle" class="t">Background worker</text>
+<text x="685" y="673" text-anchor="middle" class="small">GeoIP / UA / bots / health / billing</text>
+<text x="685" y="695" text-anchor="middle" class="small">Separate Node process / container</text>
+
+<path d="M715 382V415H410V448" class="edge"/>
+<text x="530" y="407" text-anchor="middle" class="el">cache + enqueue clicks</text>
+<path d="M875 382V448" class="edge"/>
+<text x="923" y="419" text-anchor="middle" class="el">SQL / Prisma</text>
+<path d="M410 565V665H545" class="edge"/>
+<text x="425" y="602" class="el">consume jobs</text>
+<path d="M825 665H875V565" class="edge"/>
+<text x="911" y="608" class="el">persist / recover</text>
+<path d="M685 620V588H505V565" class="edge async"/>
+<text x="647" y="580" text-anchor="middle" class="el">publish live click ticks</text>
+<text x="285" y="737" class="small">EBS: named PostgreSQL + Redis volumes · configure persistence and off-server backups</text>
+
+<line x1="1120" y1="150" x2="1120" y2="965" class="rule"/>
+<text x="1150" y="181" class="h">Resource planning</text>
+<text x="1150" y="210" class="small">Low-traffic estimates; not measured usage</text>
+<text x="1150" y="245" class="t">API</text><text x="1460" y="245" text-anchor="end" class="t">250–500 MiB</text>
+<text x="1150" y="277" class="t">Worker + GeoIP</text><text x="1460" y="277" text-anchor="end" class="t">400–800 MiB</text>
+<text x="1150" y="309" class="t">Redis</text><text x="1460" y="309" text-anchor="end" class="t">150–300 MiB</text>
+<text x="1150" y="341" class="t">PostgreSQL</text><text x="1460" y="341" text-anchor="end" class="t">300–600 MiB</text>
+<text x="1150" y="373" class="t">NGINX + static UI</text><text x="1460" y="373" text-anchor="end" class="t">30–80 MiB</text>
+<text x="1150" y="405" class="t">Ubuntu / services</text><text x="1460" y="405" text-anchor="end" class="t">400–700 MiB</text>
+<text x="1150" y="437" class="t">Docker overhead</text><text x="1460" y="437" text-anchor="end" class="t">100–200 MiB</text>
+<line x1="1150" y1="454" x2="1460" y2="454" class="rule"/>
+<text x="1150" y="483" class="h">Total: ~1.6–3.1 GiB</text>
+<text x="1150" y="511" class="small">Start with 4 GiB; validate under real traffic.</text>
+<text x="1150" y="551" class="h">CPU + storage corrections</text>
+<text x="1150" y="580" class="t">700 millicpu = 0.7 vCPU</text>
+<text x="1150" y="607" class="small">CPU demand varies with load.</text>
+<text x="1150" y="638" class="t">25–30 GiB gp3; prefer 30 GiB</text>
+<text x="1150" y="667" class="small">Included baseline: 3,000 IOPS</text>
+<text x="1150" y="690" class="small">and 125 MiB/s volume throughput.</text>
+<text x="1150" y="735" class="h">Cost correction</text>
+<text x="1150" y="766" class="t">$0.08/h × 730 = $58.40/month</text>
+<text x="1150" y="794" class="small">Not $19/month. Add storage + IPv4.</text>
+<text x="1150" y="829" class="small">US-region example: ~$36.56/month</text>
+<text x="1150" y="852" class="small">t3.medium + 30 GB gp3 + one IPv4</text>
+<text x="1150" y="875" class="small">See document for rates and exclusions.</text>
+<text x="1150" y="898" class="small">Actual region / usage changes pricing.</text>
+
+<text x="38" y="804" class="h">Use the project's real routes</text>
+<text x="38" y="835" class="t">Create: POST /api/urls</text>
+<text x="420" y="835" class="t">Redirect: GET /r/:shortCode</text>
+<text x="38" y="866" class="t">Register: POST /api/auth/register</text>
+<text x="420" y="866" class="t">Login: POST /api/auth/login</text>
+<text x="38" y="909" class="small">* Proposed TLS configuration: the existing frontend NGINX currently listens on HTTP :80 only.</text>
+<text x="38" y="935" class="small">Expose only the web edge publicly. API, Redis, and PostgreSQL communicate over the private Compose network.</text>
+<text x="38" y="961" class="small">Razorpay webhooks enter through HTTPS → NGINX → API. SMTP / OAuth and gateway sync use outbound connections.</text>
+<text x="38" y="986" class="small">Source-based deployment proposal · 23 October 2026 · one host, no automatic failover · optional CDN not shown</text>
+</svg>

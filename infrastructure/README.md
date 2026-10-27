@@ -1,124 +1,16 @@
-# PBUrls DevOps & Kubernetes Infrastructure
+# PBUrls infrastructure
 
-This directory contains the Kubernetes manifests and orchestration configuration for deploying PBUrls in a production or local cluster environment.
+Read [DEPLOYMENT.md](DEPLOYMENT.md) for production setup and operations.
 
-## Directory Structure
+- `aws/stack.yml`: EC2, retained encrypted EBS, Elastic IP, IAM, and GitHub OIDC.
+- `compose.production.yml`: private PostgreSQL/Redis, backend, worker, migration tools, and public Nginx.
+- `nginx/`: HTTP certificate bootstrap and production HTTPS configuration.
+- `scripts/`: installation, disk checks, deployment, renewal, rollback, GitHub setup, and smoke testing.
+- `Dockerfile`: small deployment bundle transported through private GHCR.
+- `compose.smoke.yml` and `tests/`: disposable integration and configuration checks.
 
-```
-infrastructure/
-├── kubernetes/
-│   ├── namespace.yaml             # Dedicated namespace 'pburls'
-│   ├── configmap.yaml             # Non-sensitive app config variables
-│   # ❌ No secrets.yaml (secrets generated dynamically via CI/CD)
-│   ├── postgres-pvc.yaml          # PostgreSQL persistent volume claim
-│   ├── postgres-deployment.yaml   # PostgreSQL DB pod definition
-│   ├── postgres-service.yaml      # Internal headless service for PostgreSQL
-│   ├── redis-deployment.yaml      # Redis cache/rate-limiter pod
-│   ├── redis-service.yaml         # Internal service for Redis
-│   ├── backend-deployment.yaml    # Node/Express API with DB migration initContainer
-│   ├── backend-service.yaml       # Internal service for backend API
-│   ├── worker-deployment.yaml     # Queue consumer worker service
-│   ├── frontend-deployment.yaml   # Vite React application served by Nginx
-│   ├── frontend-service.yaml      # Internal service for frontend Nginx
-│   ├── ingress.yaml               # Ingress routing rules for domains
-│   └── kustomization.yaml         # Orchestration file to apply all resources
-└── README.md                      # This documentation
-```
+Local development still uses the root `docker-compose.yml` and private root `.env`. Do not use the local Compose file as the production deployment.
 
----
+`node infrastructure/scripts/local.mjs up` starts only PostgreSQL, Redis, Alloy and LGTM. Run backend, worker and frontend natively with the npm commands in the root README. `--full-stack up` selects the seven-container integration workflow. `observability/compose.native.yml` configures Alloy to scrape the laptop through `host.docker.internal`; production keeps the container targets.
 
-## 1. Setup Container Registry & Build Images
-
-First, replace the placeholder registry `ghcr.io/your-username` in the following files with your container registry path (e.g. Docker Hub `username/` or GHCR `ghcr.io/username/`):
-- `kubernetes/backend-deployment.yaml`
-- `kubernetes/worker-deployment.yaml`
-- `kubernetes/frontend-deployment.yaml`
-
-### CI/CD (GitHub Actions)
-The CI/CD pipeline in `.github/workflows/ci-cd.yml` automatically triggers on push to the `main` branch. It will lint, build, and push your images to GitHub Container Registry (GHCR).
-
-### Manual Build & Push
-To build and push manually:
-
-```bash
-# Build & Push Backend/Worker Image
-docker build -t <registry>/pburls-backend:latest ./backend
-docker push <registry>/pburls-backend:latest
-
-# Build & Push Frontend Image
-# Note: Pass the external API endpoint VITE_API_URL so frontend can contact backend
-docker build -t <registry>/pburls-frontend:latest --build-arg VITE_API_URL=http://api.pburls.local/api ./frontend
-docker push <registry>/pburls-frontend:latest
-```
-
----
-
-## 2. Cluster Deployment (using Kustomize)
-
-Ensure you are logged into your Kubernetes context (`kubectl config current-context`).
-
-### Step A: Apply Config & Secret
-Configure your secrets in GitHub Secrets (e.g., `DB_PASSWORD`, `DATABASE_URL`, `JWT_SECRET`, etc.).
-The CI/CD pipeline (`.github/workflows/deploy-k8s.yml`) will dynamically create the `pburls-secrets` Secret on your cluster.
-
-If deploying manually, create the secret before applying manifests:
-```bash
-kubectl create secret generic pburls-secrets -n pburls \
-  --from-literal=DB_PASSWORD="your-password" \
-  --from-literal=DATABASE_URL="postgresql://postgres:your-password@postgres-service:5432/url_shortener?schema=public" \
-  --from-literal=REDIS_URL="redis://redis-service:6379" \
-  --from-literal=JWT_SECRET="your-jwt-secret" \
-  --from-literal=SMTP_USER="smtp-user" \
-  --from-literal=SMTP_PASS="smtp-pass" \
-  --from-literal=RAZORPAY_KEY_ID="razorpay-key-id" \
-  --from-literal=RAZORPAY_KEY_SECRET="razorpay-key-secret" \
-  --from-literal=RAZORPAY_WEBHOOK_SECRET="" \
-  --from-literal=ADMIN_SEED_EMAIL="admin-email" \
-  --from-literal=ADMIN_SEED_PASSWORD="admin-password" \
-  --from-literal=ADMIN_SEED_NAME="Admin"
-
-# Then apply the remaining Kustomize manifests:
-kubectl apply -k infrastructure/kubernetes/
-```
-
-### Step B: Check Pod Status
-Verify all components start up successfully:
-
-```bash
-# Monitor deployment status in pburls namespace
-kubectl get pods -n pburls -w
-```
-
-*Note: The `backend` container will wait for the `db-migration-and-seed` initContainer to finish running Prisma migrations and seeding before the API becomes ready.*
-
----
-
-## 3. Exposing & Accessing the App (Local Testing)
-
-The ingress is configured to route traffic to:
-1. **Frontend**: `http://pburls.local`
-2. **Backend API**: `http://api.pburls.local`
-
-To access these domains locally:
-
-### Step A: Update Hosts File
-Add the following line to your machine's hosts file (`C:\Windows\System32\drivers\etc\hosts` on Windows or `/etc/hosts` on macOS/Linux):
-
-```text
-127.0.0.1   pburls.local api.pburls.local
-```
-*(Replace `127.0.0.1` with the IP of your cluster ingress controller if running on a remote cluster, or minikube IP).*
-
-### Step B: Enable Ingress Controller
-If using **Minikube**, enable the ingress addon:
-```bash
-minikube addons enable ingress
-# Start tunnel if on macOS/Windows:
-minikube tunnel
-```
-If using **Docker Desktop**, install the Nginx Ingress controller:
-```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
-```
-
-Now you can visit `http://pburls.local` in your browser to interact with the URL Shortener!
+See [observability/README.md](observability/README.md) for optional local Grafana and production Alloy → Grafana Cloud, dashboards, alerts and repeatable optimization measurements. No Kubernetes or S3 is required.
