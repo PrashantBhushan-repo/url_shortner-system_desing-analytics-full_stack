@@ -25,7 +25,7 @@ jobs:
           POSTGRES_PASSWORD: ci_only
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U postgres -d url_shortener_test'
+          --health-cmd pg_isready
           --health-interval 5s --health-timeout 3s --health-retries 20
       redis:
         image: redis:7.4-alpine
