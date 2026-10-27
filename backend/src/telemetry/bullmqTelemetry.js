@@ -1,5 +1,6 @@
 import { trace, context, propagation, SpanKind, SpanStatusCode, ROOT_CONTEXT } from "@opentelemetry/api";
-import { queueJobDuration, queueJobsTotal } from "./metrics.js";
+import { queueJobDuration, queueJobsTotal, queueWaitDuration, queueEndToEnd } from "./metrics.js";
+import { logger } from './logger.js';
 
 const getTracer = () => trace.getTracer("pburls-bullmq");
 
@@ -72,6 +73,8 @@ export const wrapWorkerJob = (queueName, processor) => {
         },
         async (span) => {
           const startedAt = process.hrtime.bigint();
+          const wait = Math.max(0, (Date.now() - Number(job.timestamp || Date.now())) / 1000);
+          queueWaitDuration.observe({ queue: queueName }, wait);
           let outcome = "success";
           if (job.data?.urlId) {
             span.setAttribute("url.id", String(job.data.urlId));
@@ -93,6 +96,8 @@ export const wrapWorkerJob = (queueName, processor) => {
             const durationSeconds = Number(process.hrtime.bigint() - startedAt) / 1_000_000_000;
             queueJobsTotal.inc({ queue: queueName, outcome });
             queueJobDuration.observe({ queue: queueName }, durationSeconds);
+            if (outcome === 'success') queueEndToEnd.observe({ queue: queueName }, wait + durationSeconds);
+            if (outcome === 'failed') logger.error('queue.job.failed', { queue: queueName, outcome, duration_ms: durationSeconds * 1000 });
             span.end();
           }
         }

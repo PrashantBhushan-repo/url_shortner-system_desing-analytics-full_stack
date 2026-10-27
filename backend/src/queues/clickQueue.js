@@ -34,8 +34,8 @@ export const addClickJob = async (data) => {
     async () => {
       const tracedData = injectTraceContext("click-queue", "click-event", data);
       await clickQueue.add("click-event", tracedData, {
-        removeOnComplete: { maxCount: 1000 },
-        removeOnFail: { maxCount: 1000 },
+        removeOnComplete: { count: 1000 },
+        removeOnFail: { count: 1000 },
       });
     }
   );

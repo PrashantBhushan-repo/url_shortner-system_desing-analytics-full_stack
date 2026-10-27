@@ -1,18 +1,42 @@
-import "../otel.js";
+import { shutdownTelemetry } from "../otel.js";
+import { observePrismaQuery } from '../src/telemetry/database.js';
 import { Worker, Queue } from "bullmq";
 import { resolveGeoLocation } from "../src/utils/location.js";
 import { UAParser } from "ua-parser-js";
 import crypto from "crypto";
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { PrismaClient } from "../src/generated/prisma/index.js";
-import { initRedis, getRedisClient } from "../src/config/redisClient.js";
-import { queueConnectionOptions } from "../src/queues/clickQueue.js";
+import { initRedis, getRedisClient, closeRedisConnection } from "../src/config/redisClient.js";
+import { queueConnectionOptions, clickQueue } from "../src/queues/clickQueue.js";
 import { sendEmail } from "../src/utils/mailer.js";
 import { invalidateSubscriptionCache } from "../src/services/planLimitService.js";
 import { wrapWorkerJob } from "../src/telemetry/bullmqTelemetry.js";
-import { startMetricsServer } from "../src/telemetry/metrics.js";
+import { startMetricsServer, monitorQueues } from "../src/telemetry/metrics.js";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ log: [{ level: 'query', emit: 'event' }] });
+prisma.$on?.('query', observePrismaQuery);
 const metricsServer = startMetricsServer(Number(process.env.METRICS_PORT || 9465));
+const resources = [];
+let stopRecovery, stopQueueMetrics, heartbeat, shuttingDown = false;
+const heartbeatPath = path.join(os.tmpdir(), 'pburls-worker-ready');
+
+for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, async () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  clearInterval(heartbeat);
+  stopRecovery?.();
+  stopQueueMetrics?.();
+  fs.rmSync(heartbeatPath, { force: true });
+  // Allow in-flight jobs to finish before Docker's stop_grace_period expires.
+  setTimeout(() => process.exit(1), 110000).unref();
+  await Promise.allSettled(resources.map(resource => resource.close()));
+  await Promise.allSettled([clickQueue.close(), closeRedisConnection(), prisma.$disconnect()]);
+  metricsServer.close();
+  await shutdownTelemetry();
+  process.exit(0);
+});
 
 // Helper to build a stable visitor fingerprint based on session, IP, and User Agent
 const getVisitorKey = (visitorId, sessionId, ip, ua) => {
@@ -217,8 +241,8 @@ const processClickEvent = async (job) => {
       country: geo.country || "Unknown",
       state: geo.region || "Unknown",
       city: geo.city || "Unknown",
-      latitude: geo.ll?.[0] || null,
-      longitude: geo.ll?.[1] || null,
+      latitude: geo.ll?.[0] ?? null,
+      longitude: geo.ll?.[1] ?? null,
       timezone: geo.timezone || "Unknown",
       referrer: referrer || "Direct",
       referer_host: referrerHost,
@@ -414,6 +438,9 @@ const processHealthCheck = async () => {
   console.log(`Processed health checks for ${urls.length} URLs.`);
 };
 
+// Billing recovery is independent of Redis and the daily reminder queue.
+import { startBillingRecovery } from '../src/services/billingRecovery.js';
+
 // Billing & Dunning scan: repeatable daily task
 const processBillingAndDunning = async () => {
   console.log("⏳ Processing daily billing and dunning scans...");
@@ -451,10 +478,10 @@ const processBillingAndDunning = async () => {
         html: `
           <div style="font-family: Arial, sans-serif; padding: 24px; color: #0f172a; background-color: #f8fafc; border-radius: 16px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0;">
             <h2 style="color: #0f172a; margin-top: 12px; font-weight: 800;">Renewal Reminder</h2>
-            <p>Hello <strong>${sub.user.name}</strong>,</p>
-            <p>Your subscription to the <strong>${sub.plan.name}</strong> plan is set to auto-renew on <strong>${new Date(sub.current_period_end).toLocaleDateString()}</strong>.</p>
-            <p>Amount: <strong>INR ${(sub.plan.price_monthly / 100).toFixed(2)}</strong>.</p>
-            <p style="color: #64748b; font-size: 14px; margin-top: 20px;">To update your payment details or cancel, please check your account settings.</p>
+            <p>Hello,</p>
+            <p>Your paid subscription ends on <strong>${new Date(sub.current_period_end).toLocaleDateString()}</strong>.</p>
+            <p>Renew manually in billing settings to extend access. No automatic payment will be taken.</p>
+            <p style="color: #64748b; font-size: 14px; margin-top: 20px;">Review the current price and billing cycle before confirming your purchase.</p>
           </div>
         `,
       });
@@ -494,8 +521,8 @@ const processBillingAndDunning = async () => {
     if (now < gracePeriodEnd) {
       // Within grace period. Shift to PAST_DUE if not already.
       if (sub.status !== "PAST_DUE") {
-        await prisma.subscription.update({
-          where: { id: sub.id },
+        await prisma.subscription.updateMany({
+          where: { id: sub.id, status: 'ACTIVE', current_period_end: { lt: now } },
           data: { status: "PAST_DUE" },
         });
         await invalidateSubscriptionCache(sub.user_id);
@@ -506,6 +533,9 @@ const processBillingAndDunning = async () => {
       console.log(`Subscription ${sub.id} grace period exceeded. Downgrading user ${sub.user_id} to Free plan.`);
       
       await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${sub.user_id}, 0))::text`;
+        const fresh = await tx.subscription.findFirst({ where: { id: sub.id, status: { in: ['ACTIVE', 'PAST_DUE'] }, current_period_end: { lt: now } } });
+        if (!fresh) return;
         // Cancel old subscription
         await tx.subscription.update({
           where: { id: sub.id },
@@ -515,6 +545,9 @@ const processBillingAndDunning = async () => {
           },
         });
 
+        // A purchase may have completed after this scan took its snapshot.
+        const replacement = await tx.subscription.findFirst({ where: { user_id: sub.user_id, status: 'ACTIVE', OR: [{ current_period_end: null }, { current_period_end: { gt: now } }] } });
+        if (replacement) return;
         // Create new free subscription
         await tx.subscription.create({
           data: {
@@ -535,11 +568,12 @@ const processBillingAndDunning = async () => {
 // Start background worker
 const startWorker = async () => {
   console.log("Starting background ingestion worker process...");
+  stopRecovery = startBillingRecovery();
   
   const redisConnected = await initRedis();
   if (!redisConnected) {
-    console.error("Failed to connect to Redis. Worker exiting.");
-    process.exit(1);
+    console.error("Redis unavailable. Billing recovery remains active; ingestion requires Redis.");
+    return;
   }
 
   // 1. Click Ingestion Worker
@@ -586,6 +620,9 @@ const startWorker = async () => {
   // Schedule repeatable job
   const healthQueue = new Queue("health-queue", { connection: queueConnectionOptions });
   const billingQueue = new Queue("billing-queue", { connection: queueConnectionOptions });
+  resources.push(clickWorker, healthWorker, billingWorker, healthQueue, billingQueue);
+  stopQueueMetrics = monitorQueues([clickQueue, healthQueue, billingQueue]);
+  await Promise.all([clickWorker.waitUntilReady(), healthWorker.waitUntilReady(), billingWorker.waitUntilReady(), prisma.$queryRaw`SELECT 1`]);
   
   // Clean old repeatable triggers and insert freshly
   const repeatableJobs = await healthQueue.getRepeatableJobs();
@@ -617,6 +654,9 @@ const startWorker = async () => {
   await billingQueue.add("billing-dunning-job-startup", {});
 
   console.log("Background worker is active and listening for events.");
+  const beat = () => fs.writeFileSync(heartbeatPath, String(Date.now()));
+  beat();
+  heartbeat = setInterval(beat, 10000);
 };
 
 startWorker().catch((err) => {
