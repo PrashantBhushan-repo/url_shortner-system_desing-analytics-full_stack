@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { captureMetrics } from './capture-metrics.mjs';
+import { k6Network } from './k6-network.mjs';
 const [mode, ...args] = process.argv.slice(2);
 const root = fileURLToPath(new URL('../../', import.meta.url));
 if (mode === 'compare') {
@@ -14,7 +15,7 @@ if (mode === 'compare') {
     const delta = typeof candidate === 'number' && typeof value === 'number' && value !== 0 ? `${((candidate / value - 1) * 100).toFixed(2)}%` : 'n/a';
     console.log(`| ${key} | ${value} | ${candidate ?? 'missing'} | ${delta} |`);
   }
-  if (before.rate !== after.rate || before.duration !== after.duration || before.environment !== after.environment || before.metrics_environment !== after.metrics_environment || before.target_origin !== after.target_origin) console.warn('Different load, targets or environments: this is not a controlled comparison.');
+  if (before.rate !== after.rate || before.duration !== after.duration || before.environment !== after.environment || before.metrics_environment !== after.metrics_environment || before.target_origin !== after.target_origin || before.k6_network !== after.k6_network || before.k6_runtime !== after.k6_runtime) console.warn('Different load, targets, environments or generator networking/runtime: this is not a controlled comparison.');
 } else if (mode === 'run') {
   const [label, rawUrl, rawRate = '1', rawDuration = '60'] = args;
   if (!/^[a-z0-9-]{1,48}$/.test(label || '')) throw new Error('Use a short lowercase run label');
@@ -25,13 +26,13 @@ if (mode === 'compare') {
   const rate = Number(rawRate), duration = Number(rawDuration);
   if (!local && process.env.ALLOW_REMOTE_LOAD_TEST !== 'true') throw new Error('For a staging/production test, explicitly set ALLOW_REMOTE_LOAD_TEST=true');
   if (!Number.isInteger(rate) || rate < 1 || rate > (local ? 1000 : 20) || !Number.isInteger(duration) || duration < 30 || duration > 600) throw new Error('Rate must be 1–1000 locally / 1–20 remotely; duration 30–600 seconds');
-  if (local && !process.env.K6_BINARY) target.hostname = 'host.docker.internal';
+  const network = k6Network(target, { platform: os.platform(), native: Boolean(process.env.K6_BINARY) });
   const directory = path.join(root, '.artifacts', 'observability', `${new Date().toISOString().replace(/[:.]/g, '-')}-${label}`);
   fs.mkdirSync(directory, { recursive: true });
   const started = Date.now();
-  const dockerArgs = ['run', '--rm', '--user', '0', '--add-host', 'host.docker.internal:host-gateway',
+  const dockerArgs = ['run', '--rm', '--user', '0', ...network.args,
     '-v', `${path.join(root, 'infrastructure/observability/load')}:/scripts:ro`, '-v', `${directory}:/results`,
-    '-e', `TARGET_URL=${target}`, '-e', `RATE=${rate}`, '-e', `DURATION=${duration}`,
+    '-e', `TARGET_URL=${network.target}`, '-e', `RATE=${rate}`, '-e', `DURATION=${duration}`,
     '-e', `P95_BUDGET_MS=${process.env.P95_BUDGET_MS || 250}`,
     'grafana/k6:2.3.0', 'run', '/scripts/redirect.js'];
   const result = process.env.K6_BINARY
@@ -80,6 +81,8 @@ if (mode === 'compare') {
     target_origin: target.origin, rate, duration, warmup_seconds: 10,
     thresholds: { p95_budget_ms: Number(process.env.P95_BUDGET_MS || 250), failure_fraction: 0.01, dropped_iterations: 0 },
     k6_runtime: process.env.K6_BINARY ? 'native (record version in notes)' : 'grafana/k6:2.3.0',
+    k6_network: process.env.K6_BINARY ? 'native' : network.args.includes('host') ? 'host' : 'bridge',
+    execution_target_origin: new URL(network.target).origin,
     git_commit: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout?.trim(),
     working_tree_dirty: Boolean(spawnSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).stdout?.trim()),
     load_generator: { platform: os.platform(), cpus: os.cpus().length, memory_bytes: os.totalmem() },

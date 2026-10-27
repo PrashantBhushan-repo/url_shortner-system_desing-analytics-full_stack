@@ -7,6 +7,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { captureMetrics } from '../observability/capture-metrics.mjs';
+import { k6Network } from '../observability/k6-network.mjs';
+
+test('local Linux Docker benchmarks reach loopback ports without exposing smoke listeners', () => {
+  for (const host of ['127.0.0.1', 'localhost', '[::1]']) {
+    const url = `http://${host}:18081/r/SmokeCI42`;
+    assert.deepEqual(k6Network(url, { platform: 'linux' }), { target: url, args: ['--network', 'host'] });
+  }
+  assert.deepEqual(k6Network('http://host.docker.internal:18081/r/SmokeCI42', { platform: 'linux' }),
+    { target: 'http://127.0.0.1:18081/r/SmokeCI42', args: ['--network', 'host'] });
+  assert.deepEqual(k6Network('http://localhost:5173/r/Example', { platform: 'win32' }),
+    { target: 'http://host.docker.internal:5173/r/Example', args: ['--add-host', 'host.docker.internal:host-gateway'] });
+  assert.deepEqual(k6Network('http://localhost:5173/r/Example', { platform: 'linux', native: true }),
+    { target: 'http://localhost:5173/r/Example', args: [] });
+  assert.deepEqual(k6Network('https://pburls.online/r/Example', { platform: 'linux' }),
+    { target: 'https://pburls.online/r/Example', args: [] });
+});
 
 test('metric capture preserves samples and missing/error data without inventing zeroes', async () => {
   await assert.rejects(captureMetrics({ endpoint: 'https://reader:PRIVATE_READ_TOKEN@example.test/query_range', environment: 'test', start: 0, end: 1 }), error => !error.message.includes('PRIVATE_READ_TOKEN'));
@@ -30,7 +46,9 @@ test('real k6 redirect runner saves a usable report and comparison', { skip: pro
     if (req.url === '/r/fixture') { res.writeHead(302, { Location: 'https://example.com/fixture' }); res.end(); return; }
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ status: 'success', data: { result: [{ values: [[Date.now() / 1000, '10']] }] } }));
-  }).listen(0, '0.0.0.0'); await once(server, 'listening');
+    // Match the smoke stack's loopback-only listener; a Linux bridge gateway
+    // must not accidentally make this test pass when host networking is missing.
+  }).listen(0, '127.0.0.1'); await once(server, 'listening');
   const port = server.address().port;
   const run = spawn(process.execPath, ['infrastructure/observability/benchmark.mjs', 'run', 'fixture-harness', `http://127.0.0.1:${port}/r/fixture`, '1', '30'], {
     cwd: root, env: { ...process.env, OBS_CAPTURE_DELAY_MS: '0', PROMETHEUS_QUERY_URL: `http://127.0.0.1:${port}/query_range`, BENCHMARK_NOTES: 'Synthetic fixture harness; these are not application performance results.' },
@@ -41,6 +59,7 @@ test('real k6 redirect runner saves a usable report and comparison', { skip: pro
     const report = output.match(/Result: (.+record\.json)/)?.[1].trim();
     assert.ok(report, output);
     const record = JSON.parse(fs.readFileSync(report, 'utf8'));
+    assert.equal(record.k6_network, process.env.K6_BINARY ? 'native' : process.platform === 'linux' ? 'host' : 'bridge');
     assert.equal(record.measurements.failure_fraction, 0);
     assert.ok(record.measurements.request_count >= 29);
     assert.ok(record.measurements.request_count <= 31, 'Warmup requests were incorrectly included in the measured count');

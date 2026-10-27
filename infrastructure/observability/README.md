@@ -541,6 +541,8 @@ This uses the official k6 image, warms the redirect for 10 seconds, then starts 
 
 Results live under `.artifacts/observability/` and are ignored by Git. `passed=false` and a nonzero exit code indicate a threshold failure; the report is retained. Initial budgets are p95 < 250 ms, failure fraction < 1%, and no dropped measured iterations. A failed redirect includes 4xx/429/5xx and network failures, not just server errors.
 
+When k6 runs in Docker against a local URL on Linux (including GitHub CI), the runner uses `--network host`, so it can reach test ports published only on `127.0.0.1`. Docker Desktop uses `host.docker.internal` instead. Native k6 keeps the supplied address. Remote targets keep their original address and require the existing explicit remote-load authorization. Reports record the generator network mode and execution origin; compare runs with equivalent networking. The smoke benchmark HTTP port remains loopback-only and is never published in production.
+
 The existing redirect rate limit is **100 per minute per client by default**. Keep it enabled in production. Before testing local throughput above this limit, explicitly raise `REDIRECT_RATE_LIMIT_MAX` in your private local root `.env`, recreate the backend, and record that setting in `BENCHMARK_NOTES`. Allow the existing rate-limit window to expire between low-rate runs. A 429 is a real limit response, not proof that the database or Node server is slow.
 
 For a local capacity experiment after adjusting the local limit, use the same command with e.g. `10 120` (10 RPS for 120 seconds). Increase gradually, observe resource/queue saturation, and stop when errors or queue backlog grow. Never infer maximum capacity from one low-rate run.
