@@ -23,6 +23,14 @@ flowchart TD
 
 The backend and worker share a small runtime image with production dependencies and a generated Prisma client. A separate migration image contains Prisma CLI and seed tools. The frontend image contains Nginx and static files only. The tiny ops image transports the Compose manifest, scripts, and exact image digests without S3.
 
+### Private registry package names
+
+New releases use `ghcr.io/<owner>/<repository>-private-<kind>`, with `kind` equal to `backend`, `migration`, `frontend` or `ops`. For this repository, the package names begin with `url_shortner-system_desing-analytics-full_stack-private-`. Backend and worker share the backend image. All image tags, digest manifests, smoke checks and the deployment bundle use the same generated prefix.
+
+This separates production publishing from older packages that were made public. GitHub does not support changing a public package back to private. The workflow checks the new package names before publishing and verifies all four are private afterward; it does not delete or change old public packages. Review old public packages separately if they should no longer be distributed. The EC2 pull-token account must have read access to the four new packages; the token remains in Parameter Store. No hardcoded image-name change is required on EC2 because releases carry exact image references.
+
+Docker login, Buildx setup and build/push actions use SHA-pinned Node.js 24 releases. This action runtime is separate from the Node.js version used inside application images.
+
 Only ports 80 and 443 are public. PostgreSQL, Redis, backend, metrics, and worker have no published production ports. Nginx overwrites forwarded headers; Express trusts only the configured Docker subnet. The backend still has outbound access for email, OAuth, payments, and link checks.
 
 ## One-time setup
