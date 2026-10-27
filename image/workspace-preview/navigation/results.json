@@ -1,0 +1,24 @@
+{
+  "passed": [
+    "Website navigation opens the complete pricing page",
+    "Public demos remain reachable without authentication",
+    "Protected deep link survives sign-in and legacy redirect",
+    "Billing and settings browser back navigation",
+    "OAuth callback restores the intended section and clears its callback URL",
+    "User role cannot open administrator pages",
+    "Link filters persist across reload and preserve one another",
+    "Pricing reviews the selected plan and cycle in shared checkout",
+    "Help anchors and search are usable",
+    "Unknown routes show recovery navigation",
+    "Billing has a dedicated page without account settings navigation",
+    "Legacy billing links preserve query values and anchors",
+    "Account settings stay separate from the billing console",
+    "Trailing slash URLs redirect to canonical pages",
+    "Protected links navigate to the configured redirect gateway",
+    "Mobile menu, Escape key, themes, and overflow checks",
+    "Administrator deep links, refresh, and all section destinations",
+    "Sign-out clears workspace access",
+    "No uncaught browser errors in tested flows"
+  ],
+  "errors": []
+}

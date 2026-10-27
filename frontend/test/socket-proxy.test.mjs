@@ -74,9 +74,12 @@ test('live analytics survives StrictMode cleanup, proxy upgrades and navigation 
     assert.match(error.message, /Authentication required/);
     rejected.close();
     await delay(100);
-    const unexpectedProxyErrors = errors.filter(message =>
-      message.includes('proxy') && !/ws proxy(?: socket)? error:.*ECONNRESET/i.test(message),
-    );
+    // Vite colors the heading and puts the Error on the next line. Only accept
+    // read resets from WebSocket teardown; HTTP and other transport errors fail.
+    const unexpectedProxyErrors = errors.filter(message => {
+      const plain = message.replace(/\u001b\[[0-9;]*m/g, '');
+      return plain.includes('proxy') && !/^ws proxy(?: socket)? error:\s*Error: read ECONNRESET(?:\s|$)/i.test(plain);
+    });
     assert.deepEqual(unexpectedProxyErrors, [], errors.join('\n'));
 
     await new Promise(resolve => io.close(resolve));
