@@ -1,24 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import {
-  User,
-  Mail,
-  Upload,
-  Trash2,
-  ShieldCheck,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Calendar,
-  KeyRound,
-  Check,
-  ArrowRight,
-  Camera,
-  Globe2,
-  Sparkles,
-  ArrowUpRight,
-  ShieldAlert,
-  Fingerprint
-} from "lucide-react";
+import { Mail, Upload, Trash2, ShieldCheck, CheckCircle2, AlertCircle, Loader2, KeyRound, Check, ArrowRight, Camera, Globe2, ArrowUpRight, Fingerprint } from "lucide-react";
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const AVATAR_SIZE = 256;
@@ -95,9 +76,6 @@ export default function ProfileSettings({
   }, [profileForm.profileImage, user]);
 
   const initials = getInitials(profileForm.name || user?.name, user?.email);
-  const memberSince = user?.createdAt
-    ? new Date(user.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })
-    : null;
 
   const isDirty =
     (profileForm.name || "") !== (user?.name || "") ||

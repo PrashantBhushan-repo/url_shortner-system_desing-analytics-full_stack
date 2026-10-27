@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Activity, Plus, AlertCircle, CheckCircle2, Loader2, Copy, Check, Trash2, ShieldAlert } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Activity, Plus, AlertCircle, CheckCircle2, Loader2, Copy, Check, Trash2 } from "lucide-react";
 import API from "../../services/urlApi";
 
 function WebhookSettings() {
@@ -21,7 +21,7 @@ function WebhookSettings() {
   const [deletingId, setDeletingId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
-  const fetchWebhooks = async () => {
+  const fetchWebhooks = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -32,11 +32,12 @@ function WebhookSettings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchWebhooks();
-  }, []);
+    const timer = setTimeout(() => { void fetchWebhooks(); }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchWebhooks]);
 
   const handleRegisterWebhook = async (e) => {
     e.preventDefault();

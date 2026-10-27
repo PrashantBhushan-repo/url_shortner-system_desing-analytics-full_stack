@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, Component } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, Component } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   Bot,
@@ -111,7 +111,7 @@ const createNewSession = (userName = "") => ({
 
 function AiAssistantWidget() {
   // 1. All hooks at top level
-  const { token, user } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -123,7 +123,7 @@ function AiAssistantWidget() {
     try {
       const saved = localStorage.getItem(SETTINGS_KEY);
       if (saved) return JSON.parse(saved);
-    } catch (_) {}
+    } catch { /* Storage may be unavailable; use the default settings. */ }
     return { mode: "dark", tone: "technical" };
   });
 
@@ -177,44 +177,11 @@ function AiAssistantWidget() {
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // Synchronize state strictly when user changes (defense in depth)
-  useEffect(() => {
-    if (!userStorageKey) return;
-    try {
-      const saved = localStorage.getItem(userStorageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const sanitized = sanitizeSessions(parsed, user?.name);
-        setSessions(sanitized);
-        setActiveSessionId(sanitized[0]?.id || `session-${Date.now()}`);
-        return;
-      }
-    } catch {
-      // Ignore storage error
-    }
-    const fresh = createNewSession(user?.name);
-    setSessions([fresh]);
-    setActiveSessionId(fresh.id);
-  }, [userStorageKey, user?.name]);
-
-  useEffect(() => {
-    if (!userStarredKey) return;
-    try {
-      const saved = localStorage.getItem(userStarredKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setStarredMessages(sanitizeMessages(parsed));
-      }
-    } catch {
-      setStarredMessages([]);
-    }
-  }, [userStarredKey]);
-
   const activeSession = useMemo(() => {
-    return sessions.find((s) => s.id === activeSessionId) || sessions[0] || createNewSession(user?.name);
-  }, [sessions, activeSessionId, user?.name]);
+    return sessions.find((s) => s.id === activeSessionId) || sessions[0];
+  }, [sessions, activeSessionId]);
 
-  const messages = activeSession?.messages || [];
+  const messages = useMemo(() => activeSession?.messages || [], [activeSession]);
 
   const filteredSessions = useMemo(() => {
     if (!historySearchQuery.trim()) return sessions;
@@ -260,7 +227,7 @@ function AiAssistantWidget() {
       const updated = { ...prev, [key]: value };
       try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
-      } catch (_) {}
+      } catch { /* Keep the in-memory settings when storage is unavailable. */ }
       return updated;
     });
   };
@@ -281,7 +248,7 @@ function AiAssistantWidget() {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
-        } catch (_) {}
+        } catch { /* Recognition may already have stopped. */ }
       }
       setIsListening(false);
       return;
@@ -421,7 +388,7 @@ function AiAssistantWidget() {
     if (user?.id && typeof window !== "undefined") {
       try {
         localStorage.removeItem(`${STORAGE_KEY_PREFIX}${user.id}`);
-      } catch (_) {}
+      } catch { /* The in-memory conversation was already cleared. */ }
     }
   };
 
@@ -437,7 +404,7 @@ function AiAssistantWidget() {
     );
   };
 
-  const handleSendMessage = async (textToSend = null) => {
+  const handleSendMessage = useCallback(async (textToSend = null) => {
     const query = (textToSend || inputMessage).trim();
     if (!query || loading) return;
 
@@ -520,7 +487,7 @@ function AiAssistantWidget() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [inputMessage, loading, activeSession, activeSessionId, settings]);
 
   const handleQuickFormSubmit = async (e) => {
     e.preventDefault();
@@ -1556,7 +1523,7 @@ class AiAssistantErrorBoundary extends Component {
         }
         keysToRemove.forEach((k) => localStorage.removeItem(k));
       }
-    } catch (_) {}
+    } catch { /* Reset the UI even if browser storage is unavailable. */ }
     this.setState({ hasError: false, error: null });
     window.location.reload();
   };
@@ -1588,8 +1555,9 @@ class AiAssistantErrorBoundary extends Component {
 }
 
 export default function SafeAiAssistantWidget(props) {
+  const { user } = useAuth();
   return (
-    <AiAssistantErrorBoundary>
+    <AiAssistantErrorBoundary key={user?.id || "guest"}>
       <AiAssistantWidget {...props} />
     </AiAssistantErrorBoundary>
   );

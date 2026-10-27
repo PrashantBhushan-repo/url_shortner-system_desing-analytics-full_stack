@@ -169,7 +169,7 @@ Normal application releases do not recreate existing PostgreSQL or Redis contain
 
 Dependency installation layers survive ordinary source changes. npm cache mounts speed local rebuilds; GitHub's external BuildKit cache preserves layers between runners. BuildKit cache mounts themselves are not automatically exported to GitHub cache. Actions are pinned to verified commit SHAs, and Dependabot proposes updates. Weekly scheduled runs build/test refreshed bases but do not automatically deploy them.
 
-The inherited frontend lint errors are reported as advisory. Tests, configuration checks, builds, vulnerability scans, and container smoke checks are blocking. Address the existing lint debt before making lint mandatory.
+Frontend lint is blocking and requires zero errors and warnings. Tests, configuration checks, builds, vulnerability scans, and container smoke checks are also blocking. Workflow runners are pinned to Ubuntu 24.04 to avoid unexpected changes when GitHub updates its `ubuntu-latest` image.
 
 ## Nginx behavior
 

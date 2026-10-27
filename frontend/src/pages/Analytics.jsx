@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams, useLocation, useNavigate } from "react-router-dom";
-import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid,
-  Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend
-} from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   Activity, ArrowLeft, ArrowUp, BarChart3, Download,
   ExternalLink, Globe, Loader2, LockKeyhole, Monitor,
@@ -262,7 +259,12 @@ function LinkAnalytics({ urlId, token }) {
 
   const cancelLoad = useCallback(() => { req.current++; ab.current?.abort(); }, []);
 
-  useEffect(() => { refreshRef.current = load; load(); return cancelLoad; }, [load, cancelLoad]);
+  useEffect(() => {
+    refreshRef.current = load;
+    // Start after setup so StrictMode cleanup cancels the discarded request.
+    const timer = setTimeout(() => { void load(); }, 0);
+    return () => { clearTimeout(timer); cancelLoad(); };
+  }, [load, cancelLoad]);
 
   useEffect(() => {
     if (!urlId || !token) return;

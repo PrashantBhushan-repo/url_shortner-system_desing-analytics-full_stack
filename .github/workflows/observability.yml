@@ -9,7 +9,7 @@ concurrency:
 jobs:
   provision:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: production
     env:
@@ -26,6 +26,10 @@ jobs:
           node-version-file: .node-version
       - name: Check configuration
         run: |
-          node --input-type=module -e 'for (const key of ["GRAFANA_URL", "GRAFANA_PROMETHEUS_UID", "GRAFANA_LOKI_UID", "GRAFANA_TOKEN"]) if (!process.env[key]) throw new Error(`Set production environment configuration: ${key}`)'
+          node --input-type=module <<'JS'
+          for (const key of ["GRAFANA_URL", "GRAFANA_PROMETHEUS_UID", "GRAFANA_LOKI_UID", "GRAFANA_TOKEN"]) {
+            if (!process.env[key]) throw new Error(`Set production environment configuration: ${key}`);
+          }
+          JS
       - name: Provision PBUrls dashboards and alert rules
         run: node infrastructure/observability/provision.mjs

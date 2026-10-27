@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Key, Plus, AlertCircle, CheckCircle2, Loader2, Copy, Check, Eye, EyeOff, Trash2, Bot, Sparkles, ArrowRight } from "lucide-react";
 import API from "../../services/urlApi";
 
@@ -14,9 +14,8 @@ function ApiKeySettings() {
   const [recentRawKey, setRecentRawKey] = useState("");
   const [showRawKey, setShowRawKey] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
-  const [copiedId, setCopiedId] = useState(null);
 
-  const fetchKeys = async () => {
+  const fetchKeys = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -27,11 +26,12 @@ function ApiKeySettings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchKeys();
-  }, []);
+    const timer = setTimeout(() => { void fetchKeys(); }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchKeys]);
 
   const handleGenerateKey = async (e) => {
     e.preventDefault();
@@ -82,15 +82,10 @@ function ApiKeySettings() {
     }
   };
 
-  const copyToClipboard = async (text, id = null) => {
+  const copyToClipboard = async (text) => {
     await navigator.clipboard.writeText(text);
-    if (id) {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } else {
-      setCopiedKey(true);
-      setTimeout(() => setCopiedKey(false), 2000);
-    }
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
   };
 
   return (

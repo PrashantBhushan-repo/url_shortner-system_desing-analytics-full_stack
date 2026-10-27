@@ -85,7 +85,6 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
         console.error("Failed to load user subscription plans:", err.message);
       }
     };
-    setShortCode(""); setShortUrl(""); setQrDataUrl(""); setLimits(null); setUserDomains([]);
     loadGatingLimits();
     return () => { cancelled = true; };
   }, [token]);
@@ -688,4 +687,8 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
   );
 }
 
-export default UrlForm;
+export default function AccountUrlForm(props) {
+  const { user } = useAuth();
+  // Reset private results synchronously on account switches, not after paint.
+  return <UrlForm key={user?.id || "guest"} {...props} />;
+}

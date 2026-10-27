@@ -1,38 +1,5 @@
 import { useState } from "react";
-import { 
-  Zap, 
-  Shield, 
-  BarChart3, 
-  QrCode, 
-  Key, 
-  Bot, 
-  Globe, 
-  Lock, 
-  Layers, 
-  Terminal, 
-  CheckCircle2, 
-  ChevronRight, 
-  Sparkles, 
-  Activity, 
-  Sliders, 
-  Link2, 
-  Eye, 
-  ArrowRight,
-  Smartphone,
-  MousePointerClick,
-  Copy,
-  Clock,
-  CreditCard,
-  Tag,
-  Receipt,
-  Server,
-  Cpu,
-  Database,
-  HelpCircle,
-  FileText,
-  UserCheck,
-  Check
-} from "lucide-react";
+import { Shield, BarChart3, QrCode, Bot, Lock, Terminal, ChevronRight, Link2, ArrowRight, Copy, Clock, CreditCard, Tag, Server } from "lucide-react";
 
 // SYSTEMATIC 8-MODULE FEATURE ARCHITECTURE WITH BRIGHT COLOR SCHEMES
 const PLATFORM_MODULES = [

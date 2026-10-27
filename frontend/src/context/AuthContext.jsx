@@ -17,13 +17,14 @@ export const AuthProvider = ({ children }) => {
   // A stored profile is never an authorization source. Load the current account from the API.
   useEffect(() => {
     let cancelled = false;
-    setProfileError("");
-    if (!user) setLoading(true);
     const restore = async () => {
       try {
         if (token) {
           const response = await getProfile(token);
-          if (!cancelled && getAccessToken() === token) setUser(response.data?.data || null);
+          if (!cancelled && getAccessToken() === token) {
+            setProfileError("");
+            setUser(response.data?.data || null);
+          }
         } else if (!getAccessToken() && allowRefresh.current) {
           if (!refreshPromise.current) refreshPromise.current = axios.post(API_BASE_URL + "/auth/refresh", {}, { withCredentials: true, timeout: 20000 });
           const response = await refreshPromise.current;
@@ -49,7 +50,7 @@ export const AuthProvider = ({ children }) => {
     return () => { window.removeEventListener("auth-refreshed", refreshed); window.removeEventListener("auth-failed", failed); };
   }, []);
 
-  const login = useCallback(newToken => { allowRefresh.current = false; setUser(null); setLoading(true); resetAuthSession(newToken); setToken(newToken); }, []);
+  const login = useCallback(newToken => { allowRefresh.current = false; setUser(null); setProfileError(""); setLoading(true); resetAuthSession(newToken); setToken(newToken); }, []);
   const logout = useCallback(async () => {
     // Clear local state before the network request, so old account data disappears immediately.
     allowRefresh.current = false;

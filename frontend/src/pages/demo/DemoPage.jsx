@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import QRCode from "qrcode";
 import { Activity, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, Bot, Check, ChevronRight, CreditCard, Eye, Globe2, KeyRound, LayoutDashboard, Link2, LockKeyhole, Moon, QrCode, Search, ShieldCheck, Sun, Users, Webhook, X } from "lucide-react";
@@ -50,8 +50,7 @@ function QRStudio() {
   const link = demoLinks.find(item => item.id === selected);
   useEffect(() => {
     let active = true;
-    setError("");
-    QRCode.toDataURL(link.destination, { width: 260, margin: 2, color: { dark: color, light: "#ffffff" } }).then(result => { if (active) setImage(result); }).catch(() => { if (active) setError("Unable to render this sample QR code."); });
+    QRCode.toDataURL(link.destination, { width: 260, margin: 2, color: { dark: color, light: "#ffffff" } }).then(result => { if (active) { setError(""); setImage(result); } }).catch(() => { if (active) setError("Unable to render this sample QR code."); });
     return () => { active = false; };
   }, [link, color]);
   return <div className="demo-qr-layout"><section className="demo-card demo-qr-controls"><span className="demo-eyebrow">TRY A VISUAL CUSTOMIZATION</span><h3>From a link to a scan.</h3><p>Change the sample campaign and color. These previews stay in your browser.</p><label htmlFor="demo-qr-campaign">Sample campaign</label><select id="demo-qr-campaign" value={selected} onChange={event => setSelected(event.target.value)}>{demoLinks.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><span className="demo-field-label">Code color</span><div className="demo-swatches">{[["Forest", "#245a3b"], ["Indigo", "#43378c"], ["Ink", "#202b3b"], ["Terracotta", "#963e2e"]].map(([label, value]) => <button key={value} style={{ background: value }} onClick={() => setColor(value)} aria-label={`Use ${label} QR color`} aria-pressed={color === value}>{color === value && <Check size={16} />}</button>)}</div><div className="demo-readonly-note"><QrCode size={18} /><p>The code opens an example.com destination. It doesn’t create a short link or record analytics.</p></div></section><section className="demo-card demo-qr-result"><span className="demo-tag">SAMPLE QR CODE</span>{image && <img src={image} width="260" height="260" alt={`Sample QR code for ${link.name}, opening ${link.destination}`} />}<h3>{link.name}</h3><code>{link.destination}</code>{error && <p role="alert">{error}</p>}<p>Preview only · no data is saved</p></section></div>;
@@ -68,7 +67,7 @@ export default function DemoPage({ admin = false }) {
   const [status, setStatus] = useState("All");
   const [selected, setSelected] = useState(null);
   const [campaign, setCampaign] = useState("all");
-  const closeDetails = useRef(() => setSelected(null)).current;
+  const closeDetails = useCallback(() => setSelected(null), []);
   const activeLink = demoLinks.find(link => link.id === campaign);
   const clicks = activeLink?.clicks ?? totalClicks;
   const chartValues = activeLink ? clickSeries.map((value, index) => index === 6 ? clicks - clickSeries.slice(0, 6).reduce((sum, v) => sum + Math.floor(v * clicks / totalClicks), 0) : Math.floor(value * clicks / totalClicks)) : clickSeries;

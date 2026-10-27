@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Globe, Plus, AlertCircle, CheckCircle2, Loader2, Copy, Check, Info } from "lucide-react";
 import API from "../../services/urlApi";
 
@@ -12,7 +12,7 @@ function DomainSettings() {
   const [verifyingId, setVerifyingId] = useState(null);
   const [copiedToken, setCopiedToken] = useState(null);
 
-  const fetchDomains = async () => {
+  const fetchDomains = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -23,11 +23,12 @@ function DomainSettings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchDomains();
-  }, []);
+    const timer = setTimeout(() => { void fetchDomains(); }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchDomains]);
 
   const handleAddDomain = async (e) => {
     e.preventDefault();

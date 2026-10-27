@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Bot,
   Sparkles,
@@ -16,35 +16,11 @@ import {
 import API from "../../services/urlApi";
 
 function McpSettings() {
-  const [keys, setKeys] = useState([]);
-  const [selectedKey, setSelectedKey] = useState("");
-  const [loading, setLoading] = useState(true);
   const [copiedTab, setCopiedTab] = useState(null);
   const [activePlatform, setActivePlatform] = useState("claude"); // 'claude' | 'cursor' | 'remote'
   const [generating, setGenerating] = useState(false);
   const [generatedKey, setGeneratedKey] = useState("");
   const [error, setError] = useState("");
-
-  const fetchKeys = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const response = await API.get("/api-keys");
-      const fetchedKeys = response.data?.data || [];
-      setKeys(fetchedKeys);
-      if (fetchedKeys.length > 0 && !selectedKey) {
-        setSelectedKey(fetchedKeys[0].id);
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to load API keys.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchKeys();
-  }, []);
 
   const handleQuickCreateKey = async () => {
     try {
@@ -52,13 +28,10 @@ function McpSettings() {
       setError("");
       const response = await API.post("/api-keys", { label: "Claude Desktop MCP" });
       const rawKey = response.data?.apiKey;
-      const keyData = response.data?.data;
 
       if (rawKey) {
         setGeneratedKey(rawKey);
       }
-      setKeys((prev) => [keyData, ...prev]);
-      setSelectedKey(keyData.id);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to generate MCP key.");
     } finally {

@@ -18,33 +18,7 @@ import {
   Pie,
   Cell
 } from "recharts";
-import {
-  Users,
-  Link as LinkIcon,
-  Shield,
-  Clock,
-  Search,
-  Ban,
-  CheckCircle,
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  User as UserIcon,
-  Trash2,
-  Lock,
-  Calendar,
-  Layers,
-  CreditCard,
-  Ticket,
-  Activity,
-  TrendingUp,
-  Download,
-  RefreshCw,
-  Plus,
-  Cpu,
-  Server,
-  ExternalLink
-} from "lucide-react";
+import { Users, Link as LinkIcon, Shield, Clock, Search, Ban, CheckCircle, AlertTriangle, ChevronLeft, ChevronRight, User as UserIcon, Trash2, Lock, Calendar, CreditCard, Ticket, Activity, TrendingUp, Download, RefreshCw, Plus, Cpu, Server, ExternalLink } from "lucide-react";
 
 const COLORS = ["#475569", "#6366f1", "#FF0055", "#10b981"]; // Free, Starter, Pro, Business
 

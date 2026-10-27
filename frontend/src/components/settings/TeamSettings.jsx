@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Users, Plus, AlertCircle, CheckCircle2, Loader2, Trash2, Mail, Check, Shield, UserPlus } from "lucide-react";
 import API from "../../services/urlApi";
 
@@ -23,7 +23,7 @@ function TeamSettings() {
   // General action loaders
   const [actionId, setActionId] = useState(null);
 
-  const fetchTeams = async () => {
+  const fetchTeams = useCallback(async () => {
     try {
       setLoadingTeams(true);
       setError("");
@@ -33,17 +33,15 @@ function TeamSettings() {
 
       // Default to the first accepted team if none selected
       const accepted = data.find((m) => m.status === "ACCEPTED");
-      if (accepted && !activeTeam) {
-        setActiveTeam(accepted);
-      }
+      if (accepted) setActiveTeam(current => current || accepted);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load team workspaces. Verify if your plan supports teams.");
     } finally {
       setLoadingTeams(false);
     }
-  };
+  }, []);
 
-  const fetchMembers = async (teamId) => {
+  const fetchMembers = useCallback(async (teamId) => {
     try {
       setLoadingMembers(true);
       setError("");
@@ -54,17 +52,18 @@ function TeamSettings() {
     } finally {
       setLoadingMembers(false);
     }
-  };
-
-  useEffect(() => {
-    fetchTeams();
   }, []);
 
   useEffect(() => {
-    if (activeTeam) {
-      fetchMembers(activeTeam.id);
-    }
-  }, [activeTeam]);
+    const timer = setTimeout(() => { void fetchTeams(); }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchTeams]);
+
+  useEffect(() => {
+    if (!activeTeam) return;
+    const timer = setTimeout(() => { void fetchMembers(activeTeam.id); }, 0);
+    return () => clearTimeout(timer);
+  }, [activeTeam, fetchMembers]);
 
   const handleCreateTeam = async (e) => {
     e.preventDefault();
@@ -75,7 +74,7 @@ function TeamSettings() {
     setCreatingTeam(true);
 
     try {
-      const response = await API.post("/teams", { name: teamName.trim() });
+      await API.post("/teams", { name: teamName.trim() });
       setSuccess(`Team Workspace "${teamName}" created!`);
       setTeamName("");
       // Reload teams list

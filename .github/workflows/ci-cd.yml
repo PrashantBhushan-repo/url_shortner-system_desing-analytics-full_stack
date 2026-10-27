@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:
@@ -25,7 +25,7 @@ jobs:
           POSTGRES_PASSWORD: ci_only
         ports: ['5432:5432']
         options: >-
-          --health-cmd pg_isready
+          --health-cmd="pg_isready -U postgres -d url_shortener_test"
           --health-interval 5s --health-timeout 3s --health-retries 20
       redis:
         image: redis:7.4-alpine
@@ -78,10 +78,9 @@ jobs:
         run: |
           node --experimental-test-module-mocks --test src/services/*.test.js src/routes/navigation.test.js src/pages/demo/demoData.test.js
           npm run test:socket
-      - name: Frontend lint report (existing lint debt; advisory)
-        continue-on-error: true
+      - name: Frontend lint (blocking; no errors or warnings)
         working-directory: frontend
-        run: npm run lint
+        run: npm run lint -- --max-warnings 0
       - name: Validate shell scripts and workflows
         run: |
           for script in infrastructure/scripts/*.sh; do bash -n "$script"; done
@@ -120,7 +119,7 @@ jobs:
 
   build:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
@@ -208,13 +207,17 @@ jobs:
           FRONTEND_DIGEST: ${{ steps.frontend.outputs.digest }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
-            echo "BACKEND_IMAGE=$PREFIX-backend:sha-$GITHUB_SHA" >> "$GITHUB_ENV"
-            echo "MIGRATION_IMAGE=$PREFIX-migration:sha-$GITHUB_SHA" >> "$GITHUB_ENV"
-            echo "FRONTEND_IMAGE=$PREFIX-frontend:sha-$GITHUB_SHA" >> "$GITHUB_ENV"
+            {
+              echo "BACKEND_IMAGE=$PREFIX-backend:sha-$GITHUB_SHA"
+              echo "MIGRATION_IMAGE=$PREFIX-migration:sha-$GITHUB_SHA"
+              echo "FRONTEND_IMAGE=$PREFIX-frontend:sha-$GITHUB_SHA"
+            } >> "$GITHUB_ENV"
           else
-            echo "BACKEND_IMAGE=$PREFIX-backend@$BACKEND_DIGEST" >> "$GITHUB_ENV"
-            echo "MIGRATION_IMAGE=$PREFIX-migration@$MIGRATION_DIGEST" >> "$GITHUB_ENV"
-            echo "FRONTEND_IMAGE=$PREFIX-frontend@$FRONTEND_DIGEST" >> "$GITHUB_ENV"
+            {
+              echo "BACKEND_IMAGE=$PREFIX-backend@$BACKEND_DIGEST"
+              echo "MIGRATION_IMAGE=$PREFIX-migration@$MIGRATION_DIGEST"
+              echo "FRONTEND_IMAGE=$PREFIX-frontend@$FRONTEND_DIGEST"
+            } >> "$GITHUB_ENV"
           fi
       - name: Smoke-test the built images, HTTPS, redirect and worker
         env:
@@ -296,7 +299,7 @@ jobs:
   deploy:
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name != 'schedule' && vars.PROD_DEPLOY_ENABLED == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     environment: production
     concurrency:
