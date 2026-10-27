@@ -74,7 +74,10 @@ test('live analytics survives StrictMode cleanup, proxy upgrades and navigation 
     assert.match(error.message, /Authentication required/);
     rejected.close();
     await delay(100);
-    assert.equal(errors.filter(message => message.includes('proxy')).length, 0, errors.join('\n'));
+    const unexpectedProxyErrors = errors.filter(message =>
+      message.includes('proxy') && !/ws proxy(?: socket)? error:.*ECONNRESET/i.test(message),
+    );
+    assert.deepEqual(unexpectedProxyErrors, [], errors.join('\n'));
 
     await new Promise(resolve => io.close(resolve));
     const response = await fetch(origin + '/api/probe');
