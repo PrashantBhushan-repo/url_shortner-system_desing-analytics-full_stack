@@ -1,0 +1,128 @@
+name: pburls
+
+x-app: &app
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  env_file: ["/etc/pburls/runtime.env"]
+  environment: &app-env
+    NODE_ENV: production
+    PORT: "5000"
+    DISABLE_CHILD_WORKER: "true"
+    OTEL_SDK_DISABLED: "true"
+    TRUST_PROXY: ${APP_SUBNET:-172.30.50.0/24}
+  logging: &logs
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+  networks: [app]
+
+services:
+  db:
+    image: ${POSTGRES_IMAGE:?Use an immutable release manifest}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:?Set DB_NAME}
+      POSTGRES_USER: ${DB_USER:?Set DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - type: bind
+        source: /srv/pburls-data/postgres
+        target: /var/lib/postgresql/data
+        bind: {create_host_path: false}
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    stop_grace_period: 60s
+    shm_size: 128m
+    logging: *logs
+    networks: [app]
+
+  redis:
+    image: ${REDIS_IMAGE:?Use an immutable release manifest}
+    restart: unless-stopped
+    command: [redis-server, --appendonly, "yes", --appendfsync, everysec, --maxmemory, "${REDIS_MAXMEMORY:-256mb}", --maxmemory-policy, noeviction]
+    volumes:
+      - type: bind
+        source: /srv/pburls-data/redis
+        target: /data
+        bind: {create_host_path: false}
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    stop_grace_period: 30s
+    logging: *logs
+    networks: [app]
+
+  backend:
+    <<: *app
+    image: ${BACKEND_IMAGE:?Use an immutable release manifest}
+    stop_grace_period: 30s
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment:
+      <<: *app-env
+      OTEL_SERVICE_NAME: pburls-backend
+
+  worker:
+    <<: *app
+    image: ${BACKEND_IMAGE:?Use an immutable release manifest}
+    command: [node, worker/index.js]
+    stop_grace_period: 120s
+    environment:
+      <<: *app-env
+      IS_CHILD_WORKER: "true"
+      OTEL_SERVICE_NAME: pburls-worker
+      METRICS_PORT: "9465"
+    healthcheck:
+      test: [CMD, node, scripts/healthcheck.mjs, --worker]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  migrate:
+    <<: *app
+    image: ${MIGRATION_IMAGE:?Use an immutable release manifest}
+    restart: "no"
+    profiles: [tools]
+    healthcheck: {disable: true}
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?Use an immutable release manifest}
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run, /tmp]
+    security_opt: ["no-new-privileges:true"]
+    ports: ["80:80", "443:443"]
+    volumes:
+      - /srv/pburls-data/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - /srv/pburls-data/certificates:/etc/letsencrypt:ro
+      - /srv/pburls-data/acme:/var/www/acme:ro
+    stop_grace_period: 30s
+    logging: *logs
+    networks: [app]
+
+  certbot:
+    image: ${CERTBOT_IMAGE:?Use an immutable release manifest}
+    profiles: [tools]
+    volumes:
+      - /srv/pburls-data/certificates:/etc/letsencrypt
+      - /srv/pburls-data/acme:/var/www/acme
+    logging: *logs
+    networks: [app]
+
+networks:
+  app:
+    ipam:
+      config: [{subnet: "${APP_SUBNET:-172.30.50.0/24}"}]

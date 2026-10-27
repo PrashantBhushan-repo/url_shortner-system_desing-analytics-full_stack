@@ -1,0 +1,20 @@
+server {
+    listen 80 default_server;
+    server_name __DOMAIN__;
+    location ^~ /.well-known/acme-challenge/ { root /var/www/acme; }
+    location = /healthz { access_log off; default_type text/plain; return 200 "ok\n"; }
+    location / { return 308 https://__DOMAIN__$request_uri; }
+}
+server {
+    listen 443 ssl default_server;
+    http2 on;
+    server_name __DOMAIN__;
+    if ($host != "__DOMAIN__") { return 444; }
+    ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+    include /etc/nginx/snippets/pburls-routes.conf;
+}
