@@ -1,6 +1,7 @@
 import { getRedisClient, isRedisReady } from "../config/redisClient.js";
 import { config } from "../config/config.js";
 import { trace, SpanStatusCode } from "@opentelemetry/api";
+import { recordCacheHit, recordCacheMiss } from "../telemetry/metrics.js";
 
 const CACHE_PREFIX = "short:";
 const tracer = trace.getTracer("pburls-cache");
@@ -28,6 +29,12 @@ export const getCachedUrl = async (shortCode) => {
         const hit = Boolean(cached);
         span.setAttribute("cache.hit", hit);
         span.setStatus({ code: SpanStatusCode.OK });
+
+        if (hit) {
+          recordCacheHit("url_cache");
+        } else {
+          recordCacheMiss("url_cache");
+        }
 
         if (!cached) return null;
         try {

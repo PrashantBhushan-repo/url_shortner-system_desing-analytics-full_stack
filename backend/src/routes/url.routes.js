@@ -1,4 +1,5 @@
 import express from "express";
+import { parseUrlId } from "../utils/urlAccess.js";
 
 import {
   createShortUrl,
@@ -22,6 +23,7 @@ import { requireFeature } from "../middlewares/planLimit.middleware.js";
 import prisma from "../config/prismaClient.js";
 
 const router = express.Router();
+router.param("id", (req, res, next, id) => { try { parseUrlId(id); next(); } catch (error) { next(error); } });
 
 router.get("/public-stats", fetchPublicStats);
 router.get("/me", authMiddleware, fetchUserUrls);

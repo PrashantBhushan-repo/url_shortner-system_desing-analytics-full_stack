@@ -9,7 +9,7 @@ import {
   findById,
 } from "../repositories/url.repository.js";
 
-import { generateShortCode } from "../utils/generateShortCode.js";
+import { insertWithUniqueCode, isShortCodeConflict } from "../utils/generateShortCode.js";
 import { AppError } from "../utils/AppError.js";
 import { getCachedUrl, setCachedUrl, invalidateCache } from "./cache.service.js";
 import { config } from "../config/config.js";
@@ -17,7 +17,6 @@ import bcrypt from "bcrypt";
 import { validateUrlGating } from "./planLimitService.js";
 import QRCode from "qrcode";
 
-const MAX_COLLISION_RETRIES = 5;
 
 const formatUrlResponse = (url) => ({
   id: url.id.toString(),
@@ -52,30 +51,20 @@ export const shortenUrl = async (longUrl, customAlias = null, expiresAt = null, 
       throw new AppError("Custom alias already taken", 409);
     }
 
-    const url = await createUrl(longUrl, customAlias, true, validatedExpiresAt, user?.id ?? null, passwordHash, customDomainId);
-    return formatUrlResponse(url);
-  }
-
-  for (let attempt = 0; attempt < MAX_COLLISION_RETRIES; attempt += 1) {
-    const shortCode = generateShortCode();
-
     try {
-      const url = await createUrl(longUrl, shortCode, false, validatedExpiresAt, user?.id ?? null, passwordHash, customDomainId);
+      const url = await createUrl(longUrl, customAlias, true, validatedExpiresAt, user?.id ?? null, passwordHash, customDomainId);
       return formatUrlResponse(url);
-    } catch (error) {
-      if (error?.code === "23505") {
-        continue;
-      }
-      throw error;
-    }
+    } catch (error) { if (isShortCodeConflict(error)) throw new AppError("Custom alias already taken", 409); throw error; }
   }
 
-  throw new AppError("Unable to generate a unique short code. Please try again.", 500);
+  const url = await insertWithUniqueCode(shortCode => createUrl(longUrl, shortCode, false, validatedExpiresAt, user?.id ?? null, passwordHash, customDomainId));
+  return formatUrlResponse(url);
 };
 
 export const getOriginalUrl = async (shortCode) => {
   const cachedUrl = await getCachedUrl(shortCode);
-  if (cachedUrl && cachedUrl.longUrl) {
+  if (cachedUrl?.longUrl && cachedUrl.isActive !== undefined && cachedUrl.expiresAt !== undefined) {
+    if (!cachedUrl.isActive || (cachedUrl.expiresAt && new Date(cachedUrl.expiresAt) <= new Date())) throw new AppError("This short URL has expired or is inactive", 410);
     return { ...cachedUrl, isCacheHit: true };
   }
 
@@ -89,7 +78,7 @@ export const getOriginalUrl = async (shortCode) => {
     throw new AppError("This short URL is no longer active", 410);
   }
 
-  if (url.expires_at && new Date(url.expires_at) < new Date()) {
+  if (url.expires_at && new Date(url.expires_at) <= new Date()) {
     throw new AppError("This short URL has expired", 410);
   }
 
@@ -97,6 +86,8 @@ export const getOriginalUrl = async (shortCode) => {
     id: url.id.toString(),
     longUrl: url.long_url,
     passwordHash: url.password_hash,
+    isActive: url.is_active !== false,
+    expiresAt: url.expires_at ?? null,
     isCacheHit: false,
   };
 
@@ -205,15 +196,16 @@ export const updateShortUrl = async (shortCode, updates, user = null) => {
 
   if (user && user.id) {
     const gated = await validateUrlGating(user.id, {
-      customAlias: nextCustomAlias ? nextShortCode : null,
-      expiresAt: nextExpiresAt,
+      customAlias: Object.hasOwn(normalizedUpdates, "customAlias") && nextShortCode !== existingUrl.short_code ? nextShortCode : null,
+      expiresAt: Object.hasOwn(normalizedUpdates, "expiresAt") ? nextExpiresAt : undefined,
       password: passwordToValidate,
       customDomainId: customDomainIdToValidate,
     });
-    nextExpiresAt = gated.expiresAt;
+    if (Object.hasOwn(normalizedUpdates, "expiresAt")) nextExpiresAt = gated.expiresAt;
   }
 
-  const updatedUrl = await updateUrl(
+  let updatedUrl;
+  try { updatedUrl = await updateUrl(
     shortCode,
     nextLongUrl,
     nextShortCode,
@@ -223,7 +215,7 @@ export const updateShortUrl = async (shortCode, updates, user = null) => {
     user?.role ?? "USER",
     nextPasswordHash,
     nextCustomDomainId
-  );
+  ); } catch (error) { if (isShortCodeConflict(error)) throw new AppError("Custom alias already taken", 409); throw error; }
 
   if (!updatedUrl) {
     throw new AppError("URL not found or is no longer active", 404);
@@ -268,5 +260,5 @@ export const generateUrlQrCode = async (shortCode, user = null) => {
     throw new AppError("URL not found", 404);
   }
   const shortUrl = `${config.baseUrl}/r/${url.short_code}`;
-  return await QRCode.toDataURL(shortUrl);
+  return await QRCode.toDataURL(`${shortUrl}?src=qr`);
 };

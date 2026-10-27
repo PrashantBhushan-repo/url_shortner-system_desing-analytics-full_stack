@@ -1,25 +1,25 @@
-import { randomBytes } from "crypto";
+import { randomInt } from "node:crypto";
 
-// Base62 character set: 0-9, A-Z, a-z (62 characters)
-const BASE62_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-const BASE62_LENGTH = BASE62_CHARS.length;
-const SHORT_CODE_LENGTH = 7;
+export const BASE62_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+export const SHORT_CODE_LENGTH = 7;
 
-/**
- * Generate a random Base62 short code of specified length
- * Uses crypto.randomBytes for cryptographically secure random generation
- * @param {number} length - Length of the short code (default 7)
- * @returns {string} - Base62 encoded short code
- */
-export const generateShortCode = (length = SHORT_CODE_LENGTH) => {
-  const bytes = randomBytes(length);
-  let code = "";
-  
-  for (let i = 0; i < length; i++) {
-    // Use each byte to index into Base62 character set
-    const index = bytes[i] % BASE62_LENGTH;
-    code += BASE62_CHARS[index];
+// randomInt uses unbiased sampling over the alphabet; seven characters give 62^7 possibilities.
+export function generateShortCode(length = SHORT_CODE_LENGTH) {
+  if (!Number.isInteger(length) || length < 1 || length > 64) throw new RangeError("Short code length must be an integer from 1 to 64");
+  return Array.from({ length }, () => BASE62_ALPHABET[randomInt(BASE62_ALPHABET.length)]).join("");
+}
+
+export function isShortCodeConflict(error) {
+  return error?.code === "23505" && (!error.constraint || /short.?code/i.test(error.constraint));
+}
+
+// The database UNIQUE constraint arbitrates concurrent requests; never rely on a pre-check.
+export async function insertWithUniqueCode(insert, generate = generateShortCode, attempts = 5) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try { return await insert(generate()); }
+    catch (error) { if (!isShortCodeConflict(error)) throw error; }
   }
-  
-  return code;
-};
+  const error = new Error("Unable to allocate a unique short code. Please try again.");
+  error.statusCode = 503;
+  throw error;
+}

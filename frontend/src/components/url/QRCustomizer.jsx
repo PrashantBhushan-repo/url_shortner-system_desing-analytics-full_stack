@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { trackedQrUrl } from "../../services/linkModel";
 import QRCodeStyling from "qr-code-styling";
 import { 
   Palette, 
@@ -62,7 +63,7 @@ function QRCustomizer({ url, onClose }) {
     if (!url) return;
 
     if (qrRef.current) {
-      qrRef.current.update({ data: url });
+      qrRef.current.update({ data: trackedQrUrl(url) });
       return;
     }
 

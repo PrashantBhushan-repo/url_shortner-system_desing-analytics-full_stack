@@ -65,8 +65,8 @@ export const redirectUrl = async (req, res, next) => {
       }
     }
 
-    const forwardedIps = req.headers["x-forwarded-for"]?.split(",").map((item) => item.trim()).filter(Boolean) || [];
-    const realIp = req.headers["x-real-ip"] || req.headers["cf-connecting-ip"] || req.headers["true-client-ip"] || forwardedIps[0] || req.socket.remoteAddress || req.ip || "unknown";
+    // Express resolves the client through the configured trusted proxy boundary.
+    const realIp = req.ip || req.socket.remoteAddress || "unknown";
     const ip = normalizeIpAddress(realIp) || "unknown";
     const userAgent = req.headers["user-agent"] || "";
     const referrer = req.headers["referer"] || "";

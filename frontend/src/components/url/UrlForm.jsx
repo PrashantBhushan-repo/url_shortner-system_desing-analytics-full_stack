@@ -1,3 +1,4 @@
+import { trackedQrUrl, localDateTime } from "../../services/linkModel";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
@@ -52,6 +53,8 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [savedExpiry, setSavedExpiry] = useState(null);
   
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { token } = useAuth();
@@ -61,6 +64,7 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
   const [userDomains, setUserDomains] = useState([]);
 
   useEffect(() => {
+    let cancelled = false;
     const loadGatingLimits = async () => {
       if (!token) {
         setLimits(null);
@@ -70,21 +74,25 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
       try {
         const subRes = await API.get("/subscription");
         const userLimits = subRes.data?.data?.limits || null;
+        if (cancelled) return;
         setLimits(userLimits);
 
         if (userLimits?.custom_domain_allowed) {
           const domainsRes = await API.get("/domains");
-          setUserDomains(domainsRes.data?.data?.filter(d => d.verified) || []);
+          if (!cancelled) setUserDomains(domainsRes.data?.data?.filter(d => d.verified) || []);
         }
       } catch (err) {
         console.error("Failed to load user subscription plans:", err.message);
       }
     };
+    setShortCode(""); setShortUrl(""); setQrDataUrl(""); setLimits(null); setUserDomains([]);
     loadGatingLimits();
+    return () => { cancelled = true; };
   }, [token]);
 
   const handleShorten = async (e) => {
     e.preventDefault();
+    if (loading) return;
 
     if (!longUrl.trim()) {
       setError("Please enter a valid URL");
@@ -143,8 +151,9 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
       setShortCode(createdUrl.shortCode);
       setShortUrl(createdUrl.shortUrl);
       setEditLongUrl(createdUrl.longUrl || "");
-      setEditCustomAlias(createdUrl.customAlias || "");
-      setEditExpiresAt(createdUrl.expiresAt ? createdUrl.expiresAt.slice(0, 16) : "");
+      setEditCustomAlias(createdUrl.customAlias ? createdUrl.shortCode : "");
+      setEditExpiresAt(localDateTime(createdUrl.expiresAt));
+      setSavedExpiry(createdUrl.expiresAt ?? null);
       setEditPassword("");
       setEditCustomDomainId(createdUrl.customDomainId || "");
       setIsEditing(false);
@@ -158,7 +167,7 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
       setCustomExpiry("");
       setShowAdvanced(false);
 
-      if (generateQr) {
+      if (generateQr && limits?.qr_code_allowed) {
         generateQrCode(createdUrl.shortUrl);
       }
 
@@ -169,7 +178,7 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
       const details = err?.response?.data?.details;
 
       if (status === 429) {
-        setError("Rate limit exceeded. Free tier allows 5 URLs per day — try again tomorrow.");
+        setError(err.response?.data?.message || "Too many requests. Please wait and try again.");
       } else if (status === 409) {
         setError("That custom alias is already taken. Please choose another.");
       } else if (status === 400 && Array.isArray(details)) {
@@ -192,12 +201,8 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
 
     const payload = {};
     if (editLongUrl.trim()) payload.longUrl = editLongUrl.trim();
-    if (editCustomAlias.trim()) payload.customAlias = editCustomAlias.trim();
-    if (editExpiresAt) {
-      payload.expiresAt = new Date(editExpiresAt).toISOString();
-    } else {
-      payload.expiresAt = null;
-    }
+    if (editCustomAlias.trim() && editCustomAlias.trim() !== shortCode) payload.customAlias = editCustomAlias.trim();
+    if (editExpiresAt !== localDateTime(savedExpiry)) payload.expiresAt = editExpiresAt ? new Date(editExpiresAt).toISOString() : null;
 
     if (editPassword.trim()) {
       payload.password = editPassword.trim();
@@ -207,6 +212,7 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
       payload.customDomainId = editCustomDomainId;
     }
 
+    if (!Object.keys(payload).length) { setIsEditing(false); return; }
     try {
       setEditLoading(true);
       setEditError("");
@@ -215,10 +221,12 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
       const response = await API.patch(`/urls/${shortCode}`, payload);
       const updatedUrl = response.data.data;
 
+      setShortCode(updatedUrl.shortCode);
       setShortUrl(updatedUrl.shortUrl);
       setEditLongUrl(updatedUrl.longUrl || "");
-      setEditCustomAlias(updatedUrl.customAlias || "");
-      setEditExpiresAt(updatedUrl.expiresAt ? updatedUrl.expiresAt.slice(0, 16) : "");
+      setEditCustomAlias(updatedUrl.customAlias ? updatedUrl.shortCode : "");
+      setEditExpiresAt(localDateTime(updatedUrl.expiresAt));
+      setSavedExpiry(updatedUrl.expiresAt ?? null);
       setEditSuccess("Short link updated successfully.");
       setIsEditing(false);
       onLinkUpdated?.(updatedUrl);
@@ -261,14 +269,13 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
 
   const copyToClipboard = async () => {
     if (!shortUrl) return;
-    await navigator.clipboard.writeText(shortUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try { await navigator.clipboard.writeText(shortUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    catch { setError("Copy unavailable. Select the short URL to copy it manually."); }
   };
 
   const generateQrCode = async (text) => {
     try {
-      const dataUrl = await QRCode.toDataURL(text, {
+      const dataUrl = await QRCode.toDataURL(trackedQrUrl(text), {
         width: 300,
         margin: 2,
         color: {
@@ -283,13 +290,13 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
   };
 
   useEffect(() => {
-    if (generateQr && shortUrl) {
+    if (generateQr && shortUrl && limits?.qr_code_allowed) {
       generateQrCode(shortUrl);
     } else {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setQrDataUrl("");
     }
-  }, [generateQr, shortUrl]);
+  }, [generateQr, shortUrl, limits?.qr_code_allowed]);
 
   return (
     <div className="w-full">
@@ -439,10 +446,11 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
             <input
               type="checkbox"
               checked={generateQr}
+              disabled={!limits?.qr_code_allowed}
               onChange={(e) => setGenerateQr(e.target.checked)}
               className="h-4.5 w-4.5 rounded border-white/10 bg-slate-950 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900 cursor-pointer"
             />
-            <span className="group-hover:text-white transition duration-200">Automatically generate styling-ready QR Code</span>
+            <span className="group-hover:text-white transition duration-200">Generate a QR code (eligible plans)</span>
           </label>
 
           <button
@@ -533,12 +541,12 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
                 
                 <button
                   type="button"
-                  onClick={handleDelete}
+                  onClick={() => confirmDelete ? handleDelete() : setConfirmDelete(true)}
                   disabled={deleteLoading}
                   className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-rose-500/25 transition disabled:opacity-50 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  {deleteLoading ? "Deactivating..." : "Deactivate short code"}
+                  {deleteLoading ? "Deactivating..." : confirmDelete ? "Confirm deactivate" : "Deactivate short code"}
                 </button>
               </div>
 
@@ -593,7 +601,7 @@ function UrlForm({ onLinkCreated, onLinkUpdated, onLinkDeleted }) {
 
           <div className="md:col-span-5 bg-slate-900/40 border border-white/5 rounded-3xl p-5 flex flex-col items-center justify-between gap-4 self-stretch">
             <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block w-full text-left">Link QR Code Centre</span>
-            {generateQr && qrDataUrl ? (
+            {!limits?.qr_code_allowed ? <p className="text-xs text-slate-400">QR codes are available on eligible plans. <Link to="/pricing">Compare plans</Link></p> : generateQr && qrDataUrl ? (
               <div className="flex flex-col items-center gap-4 w-full">
                 <div className="bg-white p-3.5 rounded-2xl border border-white/10 shadow-lg">
                   <img src={qrDataUrl} alt="Short URL QR code" className="h-44 w-44 object-contain" />

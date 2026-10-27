@@ -136,10 +136,10 @@ export const listUrlsForUser = async (userId = null, role = "USER") => {
     `
       SELECT u.*, COALESCE((SELECT COUNT(*)::integer FROM "Click" WHERE url_id = u.id), 0) as clicks_count
       FROM "Url" u
-      WHERE $2 = 'ADMIN' OR u.user_id = $1
+      WHERE u.user_id = $1
       ORDER BY u.created_at DESC
     `,
-    [userId, role]
+    [userId]
   );
 
   return result.rows;
