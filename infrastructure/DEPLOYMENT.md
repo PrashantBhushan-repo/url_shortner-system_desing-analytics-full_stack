@@ -31,6 +31,8 @@ This separates production publishing from older packages that were made public. 
 
 Docker login, Buildx setup and build/push actions use SHA-pinned Node.js 24 releases. This action runtime is separate from the Node.js version used inside application images.
 
+If a package in the `-private-` namespace has also been made public, use a fresh namespace rather than deleting it or bypassing the privacy check. In **Settings → Secrets and variables → Actions → Variables**, add the **repository variable** `GHCR_PACKAGE_NAMESPACE` with a new unused prefix, for example `pburls-production-v2`. Use only that prefix, without `ghcr.io`, a username or an image suffix. The workflow then consistently uses `ghcr.io/<owner>/pburls-production-v2-{backend,migration,frontend,ops}` for checks, builds, smoke tests and the complete release bundle. Start a **new run on main** after the updated workflow is present; re-running an old commit uses its old workflow code. Leave the new packages private and grant this repository Actions access in package settings if needed. The existing EC2 pull-token owner must be able to read these new packages; no EC2 image-name edit is needed. The original namespace remains the default when the variable is absent.
+
 Only ports 80 and 443 are public. PostgreSQL, Redis, backend, metrics, and worker have no published production ports. Nginx overwrites forwarded headers; Express trusts only the configured Docker subnet. The backend still has outbound access for email, OAuth, payments, and link checks.
 
 ## How the pipeline selects work

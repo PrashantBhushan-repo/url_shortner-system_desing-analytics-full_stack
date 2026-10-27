@@ -60,6 +60,7 @@ jobs:
       PUBLISH_IMAGES: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
       REFRESH_IMAGES: ${{ needs.changes.outputs.refresh }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GHCR_PACKAGE_NAMESPACE: ${{ vars.GHCR_PACKAGE_NAMESPACE }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:

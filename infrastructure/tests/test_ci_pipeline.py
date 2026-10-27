@@ -113,10 +113,10 @@ class ImageReuseTests(unittest.TestCase):
                 target.write_text('fixture\n')
             git('add', '.')
             git('-c', 'user.name=CI test', '-c', 'user.email=ci@example.test', 'commit', '-m', 'fixture')
-            def run_images():
+            def run_images(package_name=''):
                 output = root / 'image-output'
                 output.unlink(missing_ok=True)
-                env = dict(os.environ, GITHUB_REPOSITORY='owner/repo', PUBLISH_IMAGES='false', REFRESH_IMAGES='false', GITHUB_OUTPUT=str(output), GH_TOKEN='')
+                env = dict(os.environ, GITHUB_REPOSITORY='owner/repo', PUBLISH_IMAGES='false', REFRESH_IMAGES='false', GITHUB_OUTPUT=str(output), GH_TOKEN='', GHCR_PACKAGE_NAMESPACE=package_name)
                 subprocess.check_output([sys.executable, str(ROOT / 'scripts/ci-images.py'), 'plan'], cwd=folder, env=env)
                 return dict(line.split('=', 1) for line in output.read_text().splitlines())
             before = run_images()
@@ -128,11 +128,33 @@ class ImageReuseTests(unittest.TestCase):
             self.assertEqual(before['migration_source_tag'], after['migration_source_tag'])
             self.assertNotEqual(before['frontend_source_tag'], after['frontend_source_tag'])
             self.assertTrue(all(after[k + '_build'] == 'true' for k in images.KINDS[:-1]))
+            custom = run_images('pburls-production-v2')
+            self.assertEqual(custom['prefix'], 'ghcr.io/owner/pburls-production-v2')
+            for kind in images.KINDS[:-1]:
+                self.assertTrue(custom[kind + '_source_tag'].startswith(custom['prefix'] + '-' + kind + ':source-'))
 
     def test_namespace_never_reuses_old_public_package_names(self):
         self.assertEqual(images.namespace('Owner/Repo'), ('owner', 'repo-private', 'ghcr.io/owner/repo-private'))
         with self.assertRaises(ValueError):
             images.namespace('owner/repo; shell')
+
+    def test_custom_namespace_updates_all_four_privacy_checks_without_changing_owner(self):
+        with patch.dict(os.environ, {'GHCR_PACKAGE_NAMESPACE': 'pburls-production-v2'}):
+            registry = images.Registry('Owner/Repo')
+        self.assertEqual(registry.prefix, 'ghcr.io/owner/pburls-production-v2')
+        with patch.object(registry, 'api', side_effect=lambda path: {'owner': {'type': 'User'}} if path.startswith('repos/') else {'visibility': 'private'}) as api:
+            registry.verify(False)
+        self.assertEqual([call.args[0] for call in api.call_args_list[1:]], [
+            'users/owner/packages/container/pburls-production-v2-' + kind for kind in images.KINDS])
+        for value in ['Owner/Repo', 'ghcr.io/owner/pkg', 'UPPERCASE', '../bad', '-bad', 'bad ', 'x' * 201]:
+            with self.assertRaises(ValueError):
+                images.namespace('owner/repo', value)
+
+    def test_public_package_recovery_is_actionable_and_never_changes_visibility(self):
+        registry = images.Registry('owner/repo')
+        with patch.object(registry, 'api', side_effect=lambda path: {'owner': {'type': 'User'}} if path.startswith('repos/') else {'visibility': 'public'}):
+            with self.assertRaisesRegex(ValueError, "visibility='public'.*GHCR_PACKAGE_NAMESPACE"):
+                registry.verify(True)
 
     def test_all_four_packages_must_be_private_after_publication(self):
         registry = images.Registry('owner/repo')

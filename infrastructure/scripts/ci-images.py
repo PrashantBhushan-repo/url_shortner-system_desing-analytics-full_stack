@@ -13,11 +13,14 @@ KINDS = ('backend', 'migration', 'frontend', 'ops')
 DIGEST = re.compile(r'sha256:[a-f0-9]{64}')
 
 
-def namespace(repository):
+def namespace(repository, package_name=''):
     if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repository):
         raise ValueError('Invalid GitHub repository')
     owner, name = repository.lower().split('/')
-    return owner, name + '-private', f'ghcr.io/{owner}/{name}-private'
+    name = package_name or name + '-private'
+    if not re.fullmatch(r'[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*', name) or len(name) > 200:
+        raise ValueError('GHCR_PACKAGE_NAMESPACE must be a lowercase package name, without ghcr.io, owner, slash or image suffix')
+    return owner, name, f'ghcr.io/{owner}/{name}'
 
 
 def fingerprint(kind):
@@ -32,7 +35,7 @@ def fingerprint(kind):
 class Registry:
     def __init__(self, repository):
         self.repository = repository
-        self.owner, self.name, self.prefix = namespace(repository)
+        self.owner, self.name, self.prefix = namespace(repository, os.environ.get('GHCR_PACKAGE_NAMESPACE', ''))
 
     def api(self, path):
         token = os.environ.get('GH_TOKEN', '')
@@ -62,7 +65,11 @@ class Registry:
             if package is None and allow_missing:
                 continue
             if not package or package.get('visibility') != 'private':
-                raise ValueError(f'Package {self.name}-{kind} must be private; do not reuse a public namespace')
+                visibility = package.get('visibility', 'unknown') if package else 'missing'
+                raise ValueError(f'Package {self.name}-{kind} reports visibility={visibility!r}, expected private. '
+                                 'Public packages cannot become private. Set repository variable GHCR_PACKAGE_NAMESPACE '
+                                 'to a new unused package prefix, then start a NEW workflow on main. '
+                                 'Do not delete existing packages or disable this check.')
 
 
 def inspect_digest(tag):
