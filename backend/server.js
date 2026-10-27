@@ -1,4 +1,4 @@
-import "./otel.js";
+import { shutdownTelemetry } from "./otel.js";
 import { config } from "./src/config/config.js";
 import { initRedis, closeRedisConnection } from "./src/config/redisClient.js";
 import { initSocket } from "./src/config/socket.js";
@@ -35,7 +35,7 @@ const startServer = async () => {
     console.log(`Server running on port ${config.port}`);
   });
 
-  initSocket(server);
+  const io = initSocket(server);
 
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
@@ -51,11 +51,17 @@ const startServer = async () => {
     process.exit(1);
   });
 
+  let shuttingDown = false;
   const shutdown = async (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    setTimeout(() => process.exit(1), 25000).unref();
     console.log(`${signal} received, shutting down gracefully`);
     if (workerProcess) workerProcess.kill("SIGTERM");
+    io.close();
     server.close(async () => {
       await closeRedisConnection();
+      await shutdownTelemetry();
       process.exit(0);
     });
   };

@@ -1,13 +1,8 @@
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+import { loadEnvironment, validateEnvironment } from './environment.js';
+import { parseTrustProxy } from '../utils/trustProxy.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Ensure .env is always loaded from backend directory regardless of working directory
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
-dotenv.config();
+loadEnvironment();
+validateEnvironment();
 
 const toNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -19,6 +14,7 @@ export const config = {
   port: toNumber(process.env.PORT, 5000),
   baseUrl: process.env.BASE_URL || "http://localhost:5000",
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
 
   jwt: {
     secret: process.env.JWT_SECRET || null,
@@ -48,6 +44,7 @@ export const config = {
     keyId: process.env.RAZORPAY_KEY_ID || "",
     keySecret: process.env.RAZORPAY_KEY_SECRET || "",
     webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || "",
+    previousWebhookSecret: process.env.RAZORPAY_PREVIOUS_WEBHOOK_SECRET || "",
   },
 
   rateLimit: {

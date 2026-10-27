@@ -1,13 +1,7 @@
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+import '../src/config/config.js';
 import { startStdioServer } from "../src/mcp/transports/stdio.transport.js";
 
 export const runCli = async () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-  dotenv.config({ path: path.resolve(__dirname, "../.env"), quiet: true });
-  dotenv.config({ quiet: true });
 
   const args = process.argv.slice(2);
   let apiKey = process.env.PBURLS_API_KEY;

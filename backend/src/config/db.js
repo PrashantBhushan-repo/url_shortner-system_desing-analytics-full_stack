@@ -1,5 +1,6 @@
 import pg from "pg";
 import { config } from "./config.js";
+import { instrumentPool } from '../telemetry/database.js';
 
 const { Pool } = pg;
 
@@ -12,4 +13,4 @@ const pool = new Pool({
   password: config.db.connectionString ? undefined : config.db.password,
 });
 
-export default pool;
+export default instrumentPool(pool);
