@@ -1,0 +1,8 @@
+**
+!infrastructure
+!infrastructure/**
+!release.env
+infrastructure/**/.env*
+infrastructure/**/*.local
+infrastructure/**/__pycache__
+infrastructure/**/*.pyc
