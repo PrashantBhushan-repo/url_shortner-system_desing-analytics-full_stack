@@ -1,0 +1,2 @@
+ALTER TABLE "Url"
+ALTER COLUMN "short_code" TYPE VARCHAR(64);
