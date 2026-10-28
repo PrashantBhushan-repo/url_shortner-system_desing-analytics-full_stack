@@ -65,10 +65,11 @@ def main():
         validate_runtime(values)
         print('Canonical HTTPS and certificate settings valid; no secrets displayed.')
     elif args.action == 'exports':
-        allowed = {'DOMAIN', 'LETSENCRYPT_EMAIL', 'DATA_VOLUME_ID', 'ALLOW_FORMAT_DATA_VOLUME', 'PRE_MIGRATION_BACKUP', 'APP_SUBNET'}
+        allowed = {'DOMAIN', 'LETSENCRYPT_EMAIL', 'DATA_VOLUME_ID', 'ALLOW_FORMAT_DATA_VOLUME', 'PRE_MIGRATION_BACKUP', 'APP_SUBNET', 'OBSERVABILITY_ENABLED'}
+        # Validate the complete request before emitting any shell assignments.
+        if any(key not in allowed for key in args.values):
+            raise ValueError('Unsupported exported setting')
         for key in args.values:
-            if key not in allowed:
-                raise ValueError('Unsupported exported setting')
             print(f'export {key}={shlex.quote(values.get(key, ""))}')
     else:
         template, output = map(pathlib.Path, args.values)

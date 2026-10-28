@@ -9,7 +9,9 @@ load_release() {
   RELEASE_DIR=$(realpath "$1")
   [[ $RELEASE_DIR =~ ^/opt/pburls/releases/[0-9a-f]{40}-[0-9a-f]{12}$ ]] || { echo 'Invalid release directory'; return 1; }
   [[ -r $RUNTIME_ENV && -r $RELEASE_DIR/release.env ]] || { echo 'Runtime configuration or manifest missing'; return 1; }
-  eval "$(python3 "$RELEASE_DIR/infrastructure/scripts/settings.py" exports "$RUNTIME_ENV" DOMAIN LETSENCRYPT_EMAIL DATA_VOLUME_ID ALLOW_FORMAT_DATA_VOLUME PRE_MIGRATION_BACKUP APP_SUBNET OBSERVABILITY_ENABLED)"
+  local exported_settings
+  exported_settings=$(python3 "$RELEASE_DIR/infrastructure/scripts/settings.py" exports "$RUNTIME_ENV" DOMAIN LETSENCRYPT_EMAIL DATA_VOLUME_ID ALLOW_FORMAT_DATA_VOLUME PRE_MIGRATION_BACKUP APP_SUBNET OBSERVABILITY_ENABLED) || return $?
+  eval "$exported_settings"
 }
 
 dc() {

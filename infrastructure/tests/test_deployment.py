@@ -1,5 +1,11 @@
 import importlib.util
+import os
 import pathlib
+import re
+import shlex
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -19,6 +25,56 @@ dispatch = module('dispatch')
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_settings_exporter_accepts_every_setting_requested_by_release_loader(self):
+        common = (ROOT / 'scripts/common.sh').read_text()
+        requested = re.search(r'exports "\$RUNTIME_ENV" ([A-Z_ ]+)\)', common).group(1).split()
+        self.assertIn('OBSERVABILITY_ENABLED', requested)
+        with tempfile.TemporaryDirectory() as folder:
+            runtime = pathlib.Path(folder) / 'runtime.env'
+            runtime.write_text('DOMAIN=short.company.test\nOBSERVABILITY_ENABLED=true\nJWT_SECRET=not-exported\n')
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/settings.py'), 'exports', str(runtime), *requested], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('export OBSERVABILITY_ENABLED=true', result.stdout)
+            self.assertNotIn('JWT_SECRET', result.stdout)
+            bad = subprocess.run([sys.executable, str(ROOT / 'scripts/settings.py'), 'exports', str(runtime), 'DOMAIN', 'JWT_SECRET'], capture_output=True, text=True)
+            self.assertNotEqual(bad.returncode, 0)
+            self.assertEqual(bad.stdout, '')
+
+    @unittest.skipIf(os.name == 'nt' or not shutil.which('bash'), 'Requires Bash on Linux')
+    def test_shell_loader_handles_real_exports_and_never_evaluates_failed_exporter_output(self):
+        for fail in (False, True):
+            with tempfile.TemporaryDirectory() as folder:
+                directory = pathlib.Path(folder)
+                releases = directory / 'releases'
+                release = releases / ('a' * 40 + '-' + 'b' * 12)
+                scripts = release / 'infrastructure/scripts'
+                scripts.mkdir(parents=True)
+                (release / 'release.env').write_text('APP_VERSION=fixture\n')
+                runtime = directory / 'runtime.env'
+                runtime.write_text('DOMAIN=short.company.test\nOBSERVABILITY_ENABLED=true\n')
+                exporter = 'import sys\nprint("echo UNSAFE_EVALUATION")\nsys.exit(9)\n' if fail else (ROOT / 'scripts/settings.py').read_text()
+                (scripts / 'settings.py').write_text(exporter)
+                # Keep the production guard; substitute only the test's release root.
+                common = (ROOT / 'scripts/common.sh').read_text().replace('^/opt/pburls/releases/', '^' + re.escape(str(releases)) + '/')
+                fixture = directory / 'common.sh'
+                fixture.write_text(common)
+                command = f'''set -Eeuo pipefail
+source {shlex.quote(str(fixture))}
+RUNTIME_ENV={shlex.quote(str(runtime))}
+trap 'echo "Deployment failed."; exit 41' ERR
+load_release {shlex.quote(str(release))}
+printf 'loaded:%s\\n' "$OBSERVABILITY_ENABLED"
+'''
+                result = subprocess.run(['bash', '-c', command], capture_output=True, text=True)
+                if fail:
+                    self.assertEqual(result.returncode, 41, result.stderr)
+                    self.assertNotIn('UNSAFE_EVALUATION', result.stdout)
+                    self.assertNotIn('command not found', result.stderr)
+                    self.assertNotIn('loaded:', result.stdout)
+                else:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn('loaded:true', result.stdout)
+
     def test_deployment_config_rejects_bad_target_without_aws_calls(self):
         for value in ['', '52.65.189.62', 'arn:aws:ec2:region:account:instance/i-12345678', 'i-123456789', 'i-1234567890123456', 'i-12345678; command']:
             with patch.dict(dispatch.os.environ, {'EC2_INSTANCE_ID': value}, clear=True), patch.object(dispatch, 'aws') as aws:
