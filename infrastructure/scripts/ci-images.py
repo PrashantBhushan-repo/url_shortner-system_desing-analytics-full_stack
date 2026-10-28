@@ -52,7 +52,7 @@ class Registry:
                 return None
             raise RuntimeError(f'GitHub registry API returned HTTP {error.code}; refusing to publish') from None
 
-    def verify(self, allow_missing):
+    def verify(self, allow_missing, kinds=KINDS):
         repo = self.api('repos/' + self.repository)
         if not repo:
             raise ValueError('Cannot inspect repository owner for registry privacy checks')
@@ -60,15 +60,16 @@ class Registry:
         if owner_type not in ('User', 'Organization'):
             raise ValueError('Unsupported registry owner type')
         route = 'orgs' if owner_type == 'Organization' else 'users'
-        for kind in KINDS:
+        for kind in kinds:
             package = self.api(f'{route}/{self.owner}/packages/container/{self.name}-{kind}')
             if package is None and allow_missing:
                 continue
             if not package or package.get('visibility') != 'private':
                 visibility = package.get('visibility', 'unknown') if package else 'missing'
                 raise ValueError(f'Package {self.name}-{kind} reports visibility={visibility!r}, expected private. '
-                                 'Public packages cannot become private. Set repository variable GHCR_PACKAGE_NAMESPACE '
-                                 'to a new unused package prefix, then start a NEW workflow on main. '
+                                 'Public packages cannot become private. First run the local private-package setup: '
+                                 f'node infrastructure/scripts/bootstrap-ghcr.mjs --repository {self.repository}. '
+                                 'Follow its Manage Actions access and GHCR_PACKAGE_NAMESPACE instructions, then start a NEW workflow on main. '
                                  'Do not delete existing packages or disable this check.')
 
 
@@ -90,12 +91,13 @@ def inspect_digest(tag):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', choices=['plan', 'verify'])
+    parser.add_argument('--kind', choices=KINDS)
     args = parser.parse_args()
     registry = Registry(os.environ['GITHUB_REPOSITORY'])
     publish = os.environ.get('PUBLISH_IMAGES') == 'true'
     if args.mode == 'verify':
-        registry.verify(allow_missing=False)
-        print('All release packages are private.')
+        registry.verify(allow_missing=False, kinds=(args.kind,) if args.kind else KINDS)
+        print('Selected release packages are private.')
         return
     if publish:
         registry.verify(allow_missing=True)

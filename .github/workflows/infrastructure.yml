@@ -18,6 +18,7 @@ jobs:
           shellcheck -S error infrastructure/scripts/*.sh
           docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
           python3 -m unittest discover -s infrastructure/tests -p 'test_*.py'
+          node --test infrastructure/tests/bootstrap-ghcr.test.mjs
       - name: Verify benchmark runner against a synthetic redirect fixture
         env:
           RUN_K6_SMOKE: 'true'

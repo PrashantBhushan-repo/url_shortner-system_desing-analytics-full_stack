@@ -99,6 +99,9 @@ jobs:
           cache-to: type=gha,scope=backend,mode=max
           provenance: ${{ env.PUBLISH_IMAGES == 'true' }}
           sbom: ${{ env.PUBLISH_IMAGES == 'true' }}
+      - name: Verify backend privacy before continuing
+        if: env.PUBLISH_IMAGES == 'true'
+        run: python3 infrastructure/scripts/ci-images.py verify --kind backend
       - name: Build migration tools
         id: migration
         if: steps.images.outputs.migration_build == 'true'
@@ -120,6 +123,9 @@ jobs:
           cache-to: type=gha,scope=migration,mode=max
           provenance: ${{ env.PUBLISH_IMAGES == 'true' }}
           sbom: ${{ env.PUBLISH_IMAGES == 'true' }}
+      - name: Verify migration privacy before continuing
+        if: env.PUBLISH_IMAGES == 'true'
+        run: python3 infrastructure/scripts/ci-images.py verify --kind migration
       - name: Build static Nginx frontend
         id: frontend
         if: steps.images.outputs.frontend_build == 'true'
@@ -140,6 +146,9 @@ jobs:
           cache-to: type=gha,scope=frontend,mode=max
           provenance: ${{ env.PUBLISH_IMAGES == 'true' }}
           sbom: ${{ env.PUBLISH_IMAGES == 'true' }}
+      - name: Verify frontend privacy before smoke tests
+        if: env.PUBLISH_IMAGES == 'true'
+        run: python3 infrastructure/scripts/ci-images.py verify --kind frontend
       - name: Select exact images
         env:
           PREFIX: ${{ steps.images.outputs.prefix }}

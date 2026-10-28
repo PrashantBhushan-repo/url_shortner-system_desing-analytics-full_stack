@@ -31,7 +31,28 @@ This separates production publishing from older packages that were made public. 
 
 Docker login, Buildx setup and build/push actions use SHA-pinned Node.js 24 releases. This action runtime is separate from the Node.js version used inside application images.
 
-If a package in the `-private-` namespace has also been made public, use a fresh namespace rather than deleting it or bypassing the privacy check. In **Settings → Secrets and variables → Actions → Variables**, add the **repository variable** `GHCR_PACKAGE_NAMESPACE` with a new unused prefix, for example `pburls-production-v2`. Use only that prefix, without `ghcr.io`, a username or an image suffix. The workflow then consistently uses `ghcr.io/<owner>/pburls-production-v2-{backend,migration,frontend,ops}` for checks, builds, smoke tests and the complete release bundle. Start a **new run on main** after the updated workflow is present; re-running an old commit uses its old workflow code. Leave the new packages private and grant this repository Actions access in package settings if needed. The existing EC2 pull-token owner must be able to read these new packages; no EC2 image-name edit is needed. The original namespace remains the default when the variable is absent.
+If a package has become public, do not keep renaming and rebuilding application images. Use the [controlled private-package setup](#recover-from-a-public-package-conflict) below first. `GHCR_PACKAGE_NAMESPACE` is an optional repository variable containing only the package prefix, without `ghcr.io`, username or image suffix. All four release images consistently use the chosen prefix. The original namespace remains the default when the variable is absent. No EC2 image-name edit is needed because the complete release manifest contains exact references.
+
+### Recover from a public package conflict
+
+The error `visibility='public', expected private` is a registry configuration failure. A public package cannot be made private again. The source-repository access inheritance checkbox does not itself prove why a package became public; it controls permissions, not visibility. Keep existing public packages unchanged while creating and verifying separate private packages.
+
+1. On the repository owner's GitHub account, create a short-lived **classic PAT** with `write:packages` (and its included read permission). Avoid unnecessary `repo` and `delete:packages` scopes. This is a one-time setup token; do not put it in AWS, commit it or replace EC2's read-only token with it.
+2. Start Docker Desktop. From the repository root on your laptop, run:
+
+   ```powershell
+   node infrastructure/scripts/bootstrap-ghcr.mjs --repository PrashantBhushan-repo/url_shortner-system_desing-analytics-full_stack
+   ```
+
+   Paste the setup PAT when prompted; input is hidden. The script chooses a random unused prefix (or accepts `--namespace YOUR_UNUSED_PREFIX`). It verifies the token owner's identity and all four candidate names before publishing. It pushes only an empty `scratch` placeholder, with no application files or source-repository label, then confirms each package is private. Temporary Docker credentials are removed on success or failure; your normal Docker login is not changed. Keep the printed namespace if you need to resume with `--namespace` after an interruption.
+
+3. Follow the four package links printed by the script. In **each package → Package settings → Manage Actions access**, add this repository and select **Write**. Keep inherited access disabled; a repository source link can be added after the first private publication without opting into inherited permissions. Leave visibility **Private**. Explicit Actions access is what allows normal CI to publish using its built-in `GITHUB_TOKEN`.
+4. In **Repository Settings → Secrets and variables → Actions → Variables**, set `GHCR_PACKAGE_NAMESPACE` to the exact prefix printed by the script. Do not reuse the public `pburls-production-v2` prefix. Confirm the owner of EC2's existing read-only pull token can read all four private packages.
+5. Revoke the setup PAT after granting Actions access. Start a **new** `Test, Build and Deploy` run on `main`. Do not rerun an old workflow revision when applying workflow changes. Normal publishing continues with `GITHUB_TOKEN`, not the setup PAT.
+
+The workflow now verifies each runtime package immediately after its build/push, before the long smoke tests, and verifies all four packages after publishing the ops bundle. Privacy remains a deployment requirement. If the local setup itself reports public visibility after publication, stop and inspect account/package settings or contact GitHub support; it deliberately refuses to continue. Creating placeholders does not deploy application code or modify AWS resources, GitHub variables, repository access settings, old packages or existing versions.
+
+References: [GHCR authentication and private-by-default first publication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry), [package permissions, inheritance and Actions access](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility).
 
 Only ports 80 and 443 are public. PostgreSQL, Redis, backend, metrics, and worker have no published production ports. Nginx overwrites forwarded headers; Express trusts only the configured Docker subnet. The backend still has outbound access for email, OAuth, payments, and link checks.
 
