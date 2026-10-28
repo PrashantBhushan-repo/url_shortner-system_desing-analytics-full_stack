@@ -21,6 +21,23 @@ def aws(*args):
     return json.loads(subprocess.check_output(['aws', *args, '--region', region(), '--output', 'json'], text=True))
 
 
+def check_configuration(rollback=False):
+    instance = os.environ.get('EC2_INSTANCE_ID', '').strip()
+    if not re.fullmatch(r'i-(?:[0-9a-f]{8}|[0-9a-f]{17})', instance):
+        raise ValueError('Missing or invalid EC2_INSTANCE_ID. In GitHub repository Settings > Secrets and variables > Actions > Variables, '
+                         'set repository VARIABLE EC2_INSTANCE_ID to the AWS instance ID (i- followed by 8 or 17 hexadecimal characters), '
+                         'not an ARN, IP address or secret. Check production-environment variables for a conflicting override.')
+    region()
+    if not rollback:
+        username = os.environ.get('GHCR_PULL_USERNAME', '').strip()
+        if not re.fullmatch(r'[A-Za-z0-9-]+', username):
+            raise ValueError('Set GitHub repository variable GHCR_PULL_USERNAME to the owner of the EC2 read-only package token.')
+        prefix = os.environ.get('PARAMETER_PREFIX') or '/pburls/production'
+        if not re.fullmatch(r'/[A-Za-z0-9_./-]+', prefix) or '..' in prefix:
+            raise ValueError('Set PARAMETER_PREFIX to a valid Parameter Store path, for example /pburls/production.')
+    return instance
+
+
 def deployment_commands(image, sha, username, prefix):
     if not re.fullmatch(r'ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}', image):
         raise ValueError('Use a GHCR deployment image pinned by digest')
@@ -60,12 +77,14 @@ def main():
     parser.add_argument('--image')
     parser.add_argument('--sha')
     parser.add_argument('--rollback', action='store_true')
+    parser.add_argument('--check-config', action='store_true', help='Validate GitHub deployment variables without AWS calls')
     args = parser.parse_args()
-    instance = os.environ.get('EC2_INSTANCE_ID', '')
-    if not re.fullmatch(r'i-[0-9a-f]{8,17}', instance):
-        raise ValueError('Set EC2_INSTANCE_ID to the production instance ID')
+    instance = check_configuration(rollback=args.rollback)
+    if args.check_config:
+        print(f'Deployment variables valid: EC2 target {instance}, region {region()}. No AWS calls made.')
+        return
     commands = [f'AWS_REGION={shlex.quote(region())} AWS_DEFAULT_REGION={shlex.quote(region())} bash /opt/pburls/current/infrastructure/scripts/rollback.sh'] if args.rollback else deployment_commands(
-        args.image or '', args.sha or '', os.environ['GHCR_PULL_USERNAME'], os.environ.get('PARAMETER_PREFIX', '/pburls/production'))
+        args.image or '', args.sha or '', os.environ['GHCR_PULL_USERNAME'].strip(), os.environ.get('PARAMETER_PREFIX') or '/pburls/production')
     sent = aws('ssm', 'send-command', '--instance-ids', instance, '--document-name', 'AWS-RunShellScript',
                '--parameters', json.dumps({'commands': commands, 'executionTimeout': ['1800']}), '--timeout-seconds', '600',
                '--comment', 'PBUrls GitHub deployment' if not args.rollback else 'PBUrls application rollback')

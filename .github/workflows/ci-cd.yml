@@ -37,6 +37,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 infrastructure/scripts/ci-plan.py plan
+      - name: Check deployment variables before building a production release
+        if: steps.plan.outputs.release == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event_name != 'schedule' && vars.PROD_DEPLOY_ENABLED == 'true'
+        env:
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          GHCR_PULL_USERNAME: ${{ vars.GHCR_PULL_USERNAME }}
+          PARAMETER_PREFIX: ${{ vars.PARAMETER_PREFIX || '/pburls/production' }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+        run: python3 infrastructure/scripts/dispatch.py --check-config
   backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
@@ -263,15 +271,19 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    env:
-      EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
-      GHCR_PULL_USERNAME: ${{ vars.GHCR_PULL_USERNAME }}
-      PARAMETER_PREFIX: ${{ vars.PARAMETER_PREFIX || '/pburls/production' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Skip a runtime release superseded on main
         id: current
         run: python3 infrastructure/scripts/ci-plan.py deploy
+      - name: Validate effective production deployment variables
+        if: steps.current.outputs.current == 'true'
+        env:
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          GHCR_PULL_USERNAME: ${{ vars.GHCR_PULL_USERNAME }}
+          PARAMETER_PREFIX: ${{ vars.PARAMETER_PREFIX || '/pburls/production' }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+        run: python3 infrastructure/scripts/dispatch.py --check-config
       - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         if: steps.current.outputs.current == 'true'
         with:
@@ -282,4 +294,7 @@ jobs:
         if: steps.current.outputs.current == 'true'
         env:
           BUNDLE_IMAGE: ${{ needs.build.outputs.bundle_image }}
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          GHCR_PULL_USERNAME: ${{ vars.GHCR_PULL_USERNAME }}
+          PARAMETER_PREFIX: ${{ vars.PARAMETER_PREFIX || '/pburls/production' }}
         run: python3 infrastructure/scripts/dispatch.py --sha "$GITHUB_SHA" --image "$BUNDLE_IMAGE"
