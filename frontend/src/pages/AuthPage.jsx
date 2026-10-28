@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, Link2, Loader2, Moon, QrCode, Sun } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, Check, Link2, Loader2, Moon, QrCode, Sun } from "lucide-react";
 import ForgotPasswordModal from "../components/auth/ForgotPasswordModal";
 import { PasswordField, PasswordRequirements, ProviderIcon } from "../components/auth/AuthFields";
 import { loginUser, registerUser, resendOtp, verifyEmail, verifyLoginOtp, forceChangePassword } from "../services/authApi";
@@ -26,7 +26,6 @@ export default function AuthPage() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(() => searchParams.get('recover') === '1');
-  const [moreProviders, setMoreProviders] = useState(false);
   const [resending, setResending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [providers, setProviders] = useState([]);
@@ -245,7 +244,6 @@ export default function AuthPage() {
     setMode(newMode);
     setSearchParams(previous => { const params = new URLSearchParams(previous); params.set('mode', newMode); params.delete('error'); params.delete('recover'); return params; }, { replace: true });
     setShowPassword(false);
-    setMoreProviders(false);
     setError("");
     setMessage("");
     setResending(false);
@@ -295,7 +293,7 @@ export default function AuthPage() {
         </form>
         {isCodeMode && loginUsesTwoFactor && <p className="auth-resend"><button type="button" disabled={submitting} onClick={() => { setUseBackupCode(value => !value); setForm(prev => ({ ...prev, otp: "" })); setError(""); }}>{useBackupCode ? "Use authenticator code" : "Use a backup code"}</button></p>}
         {isCodeMode && !loginUsesTwoFactor && <p className="auth-resend">Didn’t get a code? <button type="button" onClick={handleResendOtp} disabled={submitting || resending || resendAfter > 0 || !pendingUserId}>{resending ? "Sending…" : resendAfter ? `Resend in ${resendAfter}s` : "Resend code"}</button></p>}
-        {isCredentialsMode && providers.length > 0 && <><div className="auth-divider"><span>or continue with</span></div><div className="auth-providers">{providers.filter(item => ["google", "github"].includes(item.id)).map(({ id: provider }) => <button key={provider} type="button" onClick={() => handleOAuthLogin(provider)} disabled={submitting}><ProviderIcon provider={provider} /><span>{provider === "google" ? "Google" : "GitHub"}</span></button>)}</div>{providers.some(item => ["microsoft", "amazon"].includes(item.id)) && <button className="auth-more-providers" type="button" aria-expanded={moreProviders} aria-controls="other-providers" onClick={() => setMoreProviders(!moreProviders)}>More sign-in options<ChevronDown size={14} style={{ transform: moreProviders ? "rotate(180deg)" : undefined }} /></button>}{moreProviders && <div className="auth-providers auth-other-providers" id="other-providers">{providers.filter(item => ["microsoft", "amazon"].includes(item.id)).map(({ id: provider }) => <button key={provider} type="button" onClick={() => handleOAuthLogin(provider)} disabled={submitting}><ProviderIcon provider={provider} /><span>{provider === "microsoft" ? "Microsoft" : "Amazon"}</span></button>)}</div>}</>}
+        {isCredentialsMode && providers.length > 0 && <><div className="auth-divider"><span>or continue with</span></div><div className="auth-providers">{providers.filter(item => ["google", "github", "amazon", "microsoft"].includes(item.id)).map(({ id: provider }) => <button key={provider} type="button" onClick={() => handleOAuthLogin(provider)} disabled={submitting}><ProviderIcon provider={provider} /><span>{{ google: "Google", github: "GitHub", amazon: "Amazon", microsoft: "Microsoft" }[provider]}</span></button>)}</div></>}
         {isCredentialsMode && providerError && <p className="auth-field-note">Additional sign-in options could not load. <button type="button" onClick={() => setOptionsVersion(value => value + 1)}>Try again</button></p>}
         <div className="auth-switch">{isCredentialsMode ? <>{isRegister ? "Already have an account?" : "New to PBUrls?"} <button type="button" onClick={() => switchMode(isRegister ? "login" : "register")} disabled={submitting}>{isRegister ? "Sign in" : "Create an account"}</button></> : <button type="button" onClick={() => switchMode("login")} disabled={submitting}><ArrowLeft size={14} /> Back to sign in</button>}</div>
       <p className="auth-demo-entry">Just looking around? <Link to="/demo">Explore the read-only demo <ArrowRight size={13} /></Link></p></div><footer className="auth-form-footer"><span>© {new Date().getFullYear()} PBUrls</span><Link to="/help">Help & FAQs <ArrowRight size={13} /></Link></footer></section>
