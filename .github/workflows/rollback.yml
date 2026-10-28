@@ -15,12 +15,17 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    env:
-      EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Validate rollback target
+        env:
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+        run: python3 infrastructure/scripts/dispatch.py --rollback --check-config
       - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
       - run: python3 infrastructure/scripts/dispatch.py --rollback
+        env:
+          EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}

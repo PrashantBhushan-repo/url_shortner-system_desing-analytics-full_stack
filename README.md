@@ -223,6 +223,81 @@ See [infrastructure/DEPLOYMENT.md](infrastructure/DEPLOYMENT.md) for infrastruct
 
 Environment templates and mode-selection rules are documented in [ENVIRONMENT.md](ENVIRONMENT.md).
 
+### CI/CD explained: from your first push to a production deployment
+
+**Two runs are expected: one checks your pull request before merging, and another prepares the accepted version of `main` for release.** A successful pull-request check does not mean the application has been deployed.
+
+Think of the project as a restaurant: your branch is where you try a new recipe, a pull request asks someone to check it, and `main` holds the accepted recipe. **CI (continuous integration)** checks that the proposed recipe works. **CD (continuous deployment, when enabled here)** delivers the approved version to customers.
+
+#### 1. Follow the push, check, merge and deploy flow
+
+```mermaid
+flowchart TB
+    Edit["1. Change code on your branch"] --> Commit["2. Commit<br/>Save the changes locally"]
+    Commit --> Push["3. Push<br/>Upload your branch to GitHub"]
+    Push --> PR["4. Create or update a pull request<br/>Your branch → main"]
+    PR --> Before["FIRST RUN — Pull request checks<br/>Run affected component checks<br/>Verify the complete runtime release when needed"]
+    Before --> Gate{"CI gate passes?"}
+    Gate -->|"No"| Fix["Fix the problem<br/>Commit and push to the same branch"]
+    Fix --> Before
+    Gate -->|"Yes"| Merge["5. Merge the pull request into main"]
+    Merge --> After["SECOND RUN — Accepted main version<br/>Run selected checks<br/>Build or reuse images for executable changes<br/>Publish verified release to private GHCR"]
+    After --> Ready{"Release checks pass<br/>and deployment is enabled?"}
+    Ready -->|"Yes"| AWS["6. Deploy through GitHub OIDC and AWS SSM"]
+    AWS --> EC2["EC2 pulls exact images and runtime settings<br/>Runs migrations and updates containers<br/>Verifies readiness and HTTPS"]
+    Ready -->|"No"| Stop["Production deployment does not run<br/>Inspect failed checks or deployment settings"]
+```
+
+Pushing a feature branch uploads code. In this repository, the main pipeline starts when that branch has an open pull request targeting `main`, or when you create that pull request. A feature-branch push without a pull request does not trigger this coordinator. Pushing more fixes updates the same pull request and starts another check; you do not need to create a new pull request for each fix.
+
+#### 2. Understand the two runs
+
+| Stage | What GitHub checks or prepares | Publishes production images? | Deploys to EC2? |
+|---|---|---|---|
+| Pull request targeting `main` | Proposed changes: affected component tests and complete runtime image smoke tests/scans when required | No; images are built locally on the runner | No |
+| Merge or push to `main` | Accepted version: selected checks, source-matched image reuse/builds, smoke tests, scans and a complete digest-pinned release | Yes, for executable releases | Yes, when checks pass and deployment is enabled |
+| Known documentation-only changes | Planner tests and the always-reporting `CI gate` | No | No |
+| Manual run on `main` | Full checks and refreshed image builds | Yes | Yes, when enabled and verified |
+| Weekly scheduled run on `main` | Full checks and image refresh | Yes | No |
+
+The first run asks, **“Would this proposed change work with `main`?”** The second asks, **“Can we release this accepted version of `main`?”** The merged commit is the release candidate. BuildKit caching and reuse of unchanged private image digests avoid unnecessary rebuilding, while the selected images are still verified together for executable releases.
+
+The coordinator calls the reusable `backend.yml`, `frontend.yml` and `infrastructure.yml` checks according to the complete Git diff. Backend changes also run the frontend Socket.IO contract checks. Shared workflow/configuration changes select all checks. Missing reliable history selects full validation. See the [change-selection details](infrastructure/DEPLOYMENT.md#how-the-pipeline-selects-work) for the precise rules.
+
+**`CI gate` is the required summary check.** It rejects any failed or unexpectedly skipped required job. A red build followed by a red gate usually means the gate is reporting the earlier build failure; inspect the first failed step. A grey deployment job means it was skipped, which is expected on pull requests, scheduled runs, documentation-only runs, or when deployment is disabled.
+
+#### 3. Know what GitHub does and what EC2 does
+
+GitHub runners install build/test dependencies, run checks, compile the static frontend, build container images, verify HTTPS/routing/redirects/worker persistence/telemetry, run benchmark smoke tests and scan runtime images. A verified release manifest records exact image digests and travels through the private ops image.
+
+EC2 pulls the finished images and reads secrets from Parameter Store using its instance role. The deployment scripts prepare persistent storage when required, run migrations, update the Nginx/backend/worker/database/Redis services and verify application readiness and HTTPS. Nginx serves static files, routes requests and terminates TLS. The EC2 host does not compile React or install application npm dependencies.
+
+#### 4. Prepare the settings once
+
+| Place | Required setup | Purpose |
+|---|---|---|
+| GitHub branch protection | Require a pull request and the `CI gate` status check | Check changes before accepting them into `main` |
+| Private GHCR packages | All four packages Private; repository Actions access set to Write | Allow GitHub to publish the release |
+| GitHub repository variables | `GHCR_PACKAGE_NAMESPACE`, `GHCR_PULL_USERNAME`, `AWS_REGION`, `EC2_INSTANCE_ID`, `AWS_DEPLOY_ROLE_ARN`, `PARAMETER_PREFIX` | Identify the intended packages, AWS target and configuration |
+| GitHub repository variable | `PROD_DEPLOY_ENABLED=true` when ready | Enable the automatic deployment job |
+| GitHub `production` environment | Permit deployment from `main`; satisfy any configured environment requirements | Match the AWS OIDC trust policy and release controls |
+| AWS | Correct OIDC/deployment role, SSM-managed EC2, persistent EBS, public ports 80/443 | Authorize and run the deployment |
+| AWS Parameter Store | Runtime secrets, private-image pull token, data-volume setting and optional observability secrets | Supply private runtime configuration |
+| GoDaddy and external providers | DNS to EC2, registered production OAuth callbacks, configured SMTP and Razorpay test-mode settings for the hosted demo | Make HTTPS and integrations work on the public hostname |
+
+The one-time package-setup token is separate from the EC2 read-only pull token. After package setup, normal CI publishing uses `GITHUB_TOKEN`. Changing a GitHub variable or a Parameter Store secret does not itself restart the application or start this workflow. After required configuration changes, start a new manual deployment run to load them. Production OAuth callbacks must use the production hostname; copying localhost callbacks will not work.
+
+#### 5. Your normal routine
+
+1. Make changes on your feature branch.
+2. Commit and push the changes.
+3. Create a pull request to `main`, or open the existing pull request for that branch.
+4. Wait for `CI gate` to pass and satisfy any remaining review requirements.
+5. Click **Merge pull request → Confirm merge**.
+6. Open **Actions → Test, Build and Deploy** and watch the new `main` run through **Deploy verified release**.
+
+**You normally do not need to click Run workflow after merging.** Merging starts the `main` pipeline automatically. When you need a manual run, open **Actions → Test, Build and Deploy → Run workflow**, choose **`main`**, and click the green **Run workflow** button. This starts a new run using the workflow on the selected branch; **Re-run jobs** repeats an existing run's workflow revision.
+
 ### How GitHub, AWS and Grafana Cloud work together
 
 There are two separate flows: **deployment delivers the application**, and **observability reports how it behaves**. Think of GitHub Actions as the factory, GHCR as the warehouse, EC2 as the place the application runs, and Grafana Cloud as the monitoring room. This diagram describes the configured production architecture after its credentials, permissions and deployment settings are ready.

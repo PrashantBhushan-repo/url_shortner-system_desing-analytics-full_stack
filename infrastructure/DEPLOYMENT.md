@@ -205,6 +205,8 @@ This script does not set or upload application secrets. If environment policies 
 
 Allow Actions to write packages. No Docker Hub password, AWS access key, EC2 private SSH key, or application secret belongs in the workflow. In branch protection or repository rulesets, require **`CI gate`**. Remove obsolete required check names from the previous pipeline: component jobs intentionally skip when unaffected, while this gate always reports and rejects failed or unexpectedly skipped checks.
 
+If deployment reports `Missing or invalid EC2_INSTANCE_ID`, open **Repository Settings → Secrets and variables → Actions → Variables → Repository variables** and create or edit `EC2_INSTANCE_ID`. Its value is the EC2 instance ID from the stack output, such as `i-0123456789abcdef0`, with no quotes, ARN or IP address. This value is not read from `.env`, Parameter Store or GitHub Secrets. Verify that `AWS_REGION` matches the instance's region and that the `production` environment does not contain a stale same-named override. Set `GHCR_PULL_USERNAME` at repository scope too. The planner now validates these repository variables before production builds when deployment is enabled; deployment and rollback validate the effective target again before AWS authentication. Missing configuration never falls back to a hardcoded instance. After correcting variables, start a new run on `main`.
+
 ### 5. First release
 
 Commit the reviewed application and DevOps changes and push to `main`. The workflow tests and builds before any deployment. With deployment disabled, it still publishes private images and a digest-pinned ops bundle. GitHub's Actions summary and release artifact identify the built version.

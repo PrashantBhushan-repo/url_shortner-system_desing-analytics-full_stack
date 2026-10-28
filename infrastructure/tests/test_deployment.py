@@ -19,6 +19,31 @@ dispatch = module('dispatch')
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_deployment_config_rejects_bad_target_without_aws_calls(self):
+        for value in ['', '52.65.189.62', 'arn:aws:ec2:region:account:instance/i-12345678', 'i-123456789', 'i-1234567890123456', 'i-12345678; command']:
+            with patch.dict(dispatch.os.environ, {'EC2_INSTANCE_ID': value}, clear=True), patch.object(dispatch, 'aws') as aws:
+                with self.assertRaisesRegex(ValueError, 'repository VARIABLE EC2_INSTANCE_ID'):
+                    dispatch.check_configuration()
+                aws.assert_not_called()
+
+    def test_config_only_accepts_valid_targets_without_dispatch_or_bundle(self):
+        for instance in ['i-12345678', 'i-0123456789abcdef0']:
+            env = {'EC2_INSTANCE_ID': ' ' + instance + '\n', 'GHCR_PULL_USERNAME': 'owner', 'AWS_REGION': 'ap-southeast-2'}
+            with patch.dict(dispatch.os.environ, env, clear=True), patch('sys.argv', ['dispatch.py', '--check-config']), patch.object(dispatch, 'aws') as aws, patch('builtins.print'):
+                dispatch.main()
+                aws.assert_not_called()
+
+    def test_rollback_validation_does_not_require_pull_username(self):
+        with patch.dict(dispatch.os.environ, {'EC2_INSTANCE_ID': 'i-0123456789abcdef0'}, clear=True):
+            self.assertEqual(dispatch.check_configuration(rollback=True), 'i-0123456789abcdef0')
+            with self.assertRaisesRegex(ValueError, 'GHCR_PULL_USERNAME'):
+                dispatch.check_configuration()
+
+    def test_bad_parameter_prefix_fails_before_any_cloud_command(self):
+        with patch.dict(dispatch.os.environ, {'EC2_INSTANCE_ID': 'i-0123456789abcdef0', 'GHCR_PULL_USERNAME': 'owner', 'PARAMETER_PREFIX': '/pburls/../other'}, clear=True):
+            with self.assertRaisesRegex(ValueError, 'PARAMETER_PREFIX'):
+                dispatch.check_configuration()
+
     def test_aws_dispatch_uses_selected_region(self):
         with patch.dict(dispatch.os.environ, {'AWS_REGION': 'ap-southeast-2'}), patch.object(dispatch.subprocess, 'check_output', return_value='{}') as execute:
             self.assertEqual(dispatch.aws('ssm', 'describe-instance-information'), {})
