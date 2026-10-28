@@ -156,6 +156,16 @@ class ImageReuseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "visibility='public'.*GHCR_PACKAGE_NAMESPACE"):
                 registry.verify(True)
 
+    def test_immediate_post_push_check_does_not_require_unbuilt_packages(self):
+        registry = images.Registry('owner/repo')
+        with patch.object(registry, 'api', side_effect=lambda path: {'owner': {'type': 'User'}} if path.startswith('repos/') else {'visibility': 'private'}) as api:
+            registry.verify(False, kinds=('backend',))
+        self.assertEqual(len(api.call_args_list), 2)
+        self.assertTrue(api.call_args_list[-1].args[0].endswith('-backend'))
+        with patch.dict(os.environ, {'GITHUB_REPOSITORY': 'owner/repo'}), patch('sys.argv', ['ci-images.py', 'verify', '--kind', 'migration']), patch.object(images.Registry, 'verify') as verify, patch('sys.stdout', new_callable=io.StringIO):
+            images.main()
+        verify.assert_called_once_with(allow_missing=False, kinds=('migration',))
+
     def test_all_four_packages_must_be_private_after_publication(self):
         registry = images.Registry('owner/repo')
         for state in ['private', 'public', None]:
